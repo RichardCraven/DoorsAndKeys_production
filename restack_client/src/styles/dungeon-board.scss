@@ -2819,6 +2819,43 @@
     100% { opacity: 0;   transform: translate(-50%, -50%) rotate(65deg) scale(0.9); }
 }
 
+/* ── Monk Straight Linear Punch Out & Retract ── */
+.monk-punch-straight {
+    transform-origin: center center;
+    border-radius: 50%;
+    animation: monkPunchWrapperFade 0.45s ease-out forwards;
+
+    .monk-punch-icon {
+        animation: monkPunchLinear 0.45s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    }
+}
+
+@keyframes monkPunchWrapperFade {
+    0%   { opacity: 0;   transform: translate(-50%, -50%) rotate(var(--base-rot, 0deg)); }
+    15%  { opacity: 1.0; }
+    85%  { opacity: 0.9; }
+    100% { opacity: 0;   transform: translate(-50%, -50%) rotate(var(--base-rot, 0deg)); }
+}
+
+@keyframes monkPunchLinear {
+    0% {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(0.6);
+    }
+    40% {
+        opacity: 1;
+        transform: translate(calc(-50% + 42px), -50%) scale(1.3);
+    }
+    65% {
+        opacity: 0.9;
+        transform: translate(calc(-50% + 44px), -50%) scale(1.15);
+    }
+    100% {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(0.7);
+    }
+}
+
 
 .pocket-entity-sprite {
     will-change: transform;

@@ -219,9 +219,16 @@ class CrewManagerPage extends React.Component {
             selectedMonsterKey: 'mummy',
             selectedMinionKeys: ['skeleton', 'skeleton', 'skeleton', null],
             selectedEnemyForInfo: null,
+            // PvP selection
+            selectedPvPSlots: [null, null, null, null, null],
+            isPvP: false,
+            isPvPMode: false,
+            opponentCrew: null,
             lord: false,
             loadingSimulator: false,
             randomTierPoints: 6,
+            isRealCrewCloned: false,
+            realCrewNotice: null,
             currentLoadingGif: (() => {
                 const rand = Math.random();
                 if (rand < 0.33) return gifOne;
@@ -319,6 +326,19 @@ class CrewManagerPage extends React.Component {
             if (restoredCrew.length > 0) selectedCrew = restoredCrew;
         }
 
+        // Restore saved PvP squad if present
+        let selectedPvPSlots = [null, null, null, null, null];
+        if (savedDefaults?.selectedPvPTypes && Array.isArray(savedDefaults.selectedPvPTypes)) {
+            const restoredPvP = savedDefaults.selectedPvPTypes.map(type => {
+                if (!type) return null;
+                return options.find(m => m.type === type) || null;
+            });
+            if (restoredPvP.length < 5) {
+                while (restoredPvP.length < 5) restoredPvP.push(null);
+            }
+            selectedPvPSlots = restoredPvP.slice(0, 5);
+        }
+
         const initialMonsterKey = enemyState.selectedMonsterKey || 'mummy';
         const initialMonster = this.props.monsterManager.getMonster(initialMonsterKey);
 
@@ -326,6 +346,7 @@ class CrewManagerPage extends React.Component {
             options,
             selectedCrew,
             selectedCrewMember: selectedCrew[0],
+            selectedPvPSlots,
             ...(savedDefaults?.fighterLevels ? { fighterLevels: savedDefaults.fighterLevels } : {}),
             ...(savedDefaults?.fighterSkillTiers ? { fighterSkillTiers: savedDefaults.fighterSkillTiers } : {}),
             ...enemyState,
@@ -422,7 +443,8 @@ class CrewManagerPage extends React.Component {
             if (crew.length === 4) return;
             if (!crew.includes(crewMember)) crew.push(crewMember);
             this.setState({
-                selectedCrew: crew
+                selectedCrew: crew,
+                isRealCrewCloned: false
             });
         } else {
             this.timer = setTimeout(() => this.singleClick(crewMember), 200);
@@ -437,7 +459,8 @@ class CrewManagerPage extends React.Component {
         if (crew.length >= 4) return
         if (!crew.includes(member)) crew.push(member)
         this.setState({
-            selectedCrew: crew
+            selectedCrew: crew,
+            isRealCrewCloned: false
         })
     }
     setMonster = (monsterKey, minionKeys) => {
@@ -494,6 +517,7 @@ class CrewManagerPage extends React.Component {
         meta.simulatorDefaults = {
             selectedMonsterKey: this.state.selectedMonsterKey,
             selectedMinionKeys: this.state.selectedMinionKeys,
+            selectedPvPTypes: (this.state.selectedPvPSlots || []).map(u => u ? u.type : null),
             selectedCrewTypes: this.state.selectedCrew.filter(Boolean).map(m => m.type),
             fighterLevels: this.state.fighterLevels,
             fighterSkillTiers: this.state.fighterSkillTiers,
@@ -529,11 +553,64 @@ class CrewManagerPage extends React.Component {
         }
     }
 
+    // ── PvP Slot Helpers ──────────────────────────────────────────────────────
+    addPvPUnit = (unit) => {
+        if (!unit) return;
+        const slots = [...(this.state.selectedPvPSlots || [null, null, null, null, null])];
+        const emptyIndex = slots.findIndex(s => s === null);
+        if (emptyIndex !== -1) {
+            slots[emptyIndex] = clone(unit);
+        } else {
+            slots[slots.length - 1] = clone(unit);
+        }
+        this.setState({
+            selectedPvPSlots: slots,
+            selectedEnemyForInfo: unit
+        });
+    }
+
+    removePvPSlot = (index) => {
+        const slots = [...(this.state.selectedPvPSlots || [null, null, null, null, null])];
+        slots[index] = null;
+        this.setState({ selectedPvPSlots: slots });
+    }
+
+    clearPvPSlots = () => {
+        this.setState({ selectedPvPSlots: [null, null, null, null, null] });
+    }
+
+    handlePvPRosterClick = (event, unit) => {
+        if (!unit) return;
+        const now = Date.now();
+        const isQuickDoubleTap = this._lastPvPTapType === unit.type && (now - (this._lastPvPTapTime || 0) < 400);
+        this._lastPvPTapType = unit.type;
+        this._lastPvPTapTime = now;
+
+        // If double-clicking, ignore the second click so single or double click yields only one entry
+        if (isQuickDoubleTap || (event && event.detail > 1)) {
+            return;
+        }
+
+        // If unit is already in a slot, clicking it toggles it off
+        const slots = [...(this.state.selectedPvPSlots || [null, null, null, null, null])];
+        const existingIndex = slots.findIndex(s => s && s.type === unit.type);
+        if (existingIndex !== -1) {
+            slots[existingIndex] = null;
+            this.setState({
+                selectedPvPSlots: slots,
+                selectedEnemyForInfo: unit
+            });
+            return;
+        }
+
+        this.addPvPUnit(unit);
+    }
+
     // ── Random encounter: build a monster + minions lineup from a tier budget ─
     startRandomCombat = async () => {
         const { monsterManager } = this.props;
         const budget = this.state.randomTierPoints;
-        const allRosterKeys = ['sobek', 'skeleton', 'goblin_thief', 'goblin_warrior', 'goblin_warchief', 'goblin_chef', 'ogre', 'troll', 'mummy', 'wraith', 'vampire', 'gorgon', 'witch', 'beholder', 'kabuki_demon', 'djinn', 'dragon', 'sphinx', 'goat_demon', 'cyclops', 'high_priest_of_the_basilisk', 'shade', 'hashmallim', 'hagigah', 'blalok', 'qlippoth', 'eidolon'];
+        const allRosterKeys = ['sobek', 'skeleton', 'goblin_thief', 'goblin_warrior', 'goblin_warchief', 'goblin_chef', 'ogre', 'troll', 'mummy', 'wraith', 'vampire', 'gorgon', 'witch', 'beholder', 'kabuki_demon', 'djinn', 'vallgorguina_djinn', 'dragon', 'sphinx', 'goat_demon', 'cyclops', 'high_priest_of_the_basilisk', 'shade', 'hashmallim', 'hagigah', 'blalok', 'qlippoth', 'eidolon'];
         const rosterMonsters = allRosterKeys
             .map(k => monsterManager.getMonster(k))
             .filter(m => m && m.tier && !m.isMinion);
@@ -592,6 +669,10 @@ class CrewManagerPage extends React.Component {
         this.setState({
             selectedMonsterKey: chosenMonsterKey,
             selectedMinionKeys: chosenMinionKeys,
+            selectedPvPSlots: [null, null, null, null, null],
+            isPvP: false,
+            isPvPMode: false,
+            opponentCrew: null,
             lord: false,
         }, () => {
             this.submit();
@@ -649,6 +730,147 @@ class CrewManagerPage extends React.Component {
         this.setState(prev => ({
             fighterSkillTiers: { ...prev.fighterSkillTiers, [type]: tier }
         }));
+    }
+
+    /**
+     * Retrieve the user's currently selected real active crew,
+     * strictly excluding anyone in the infirmary (patients or committed Sage),
+     * dead units, and benched units (alternateCrew).
+     */
+    getRealActiveCrew = () => {
+        const meta = getMeta() || {};
+        const adventurers = (this.props.crewManager && this.props.crewManager.adventurers) || this.state.options || [];
+
+        // Infirmary patients and committed Sage
+        const infirmaryPatients = (meta.infirmary && Array.isArray(meta.infirmary.patients)) ? meta.infirmary.patients : [];
+        const sageCommitted = !!(meta.infirmary && meta.infirmary.sageCommitted);
+        const assignedSageId = meta.infirmary?.assignedSage?.id;
+
+        // Bench (alternateCrew) exclusions
+        const alternateCrew = Array.isArray(meta.alternateCrew) ? meta.alternateCrew : [];
+        const benchIds = alternateCrew.map(c => c && c.id).filter(Boolean);
+        const benchNames = alternateCrew.map(c => c && c.name).filter(Boolean);
+
+        // Active crew source: this.props.crewManager.crew or meta.crew
+        let candidates = [];
+        if (this.props.crewManager && Array.isArray(this.props.crewManager.crew) && this.props.crewManager.crew.length > 0) {
+            candidates = this.props.crewManager.crew;
+        } else if (Array.isArray(meta.crew) && meta.crew.length > 0) {
+            candidates = meta.crew;
+        }
+
+        const eligible = candidates.filter(member => {
+            if (!member) return false;
+            // Check if dead or zero HP
+            if (member.dead || (typeof member.hp === 'number' && member.hp <= 0)) return false;
+            // Check if on bench
+            if (member.id && benchIds.includes(member.id)) return false;
+            if (member.name && benchNames.includes(member.name)) return false;
+            // Check if in infirmary
+            if (infirmaryPatients.some(p => p && (p.id === member.id || (p.name && p.name === member.name)))) return false;
+            // Check if committed sage
+            if (sageCommitted && (member.type === 'sage' || (assignedSageId && member.id === assignedSageId))) return false;
+            return true;
+        });
+
+        // Re-hydrate any missing fields from adventurer templates and deep clone
+        return eligible.map(member => {
+            let mObj = typeof member === 'string' || typeof member === 'number'
+                ? (adventurers.find(a => a && (a.id === member || a.type === member)) || { id: member })
+                : member;
+            const cloned = clone(mObj);
+            const template = adventurers.find(a =>
+                a && (
+                    (cloned.id && a.id === cloned.id) ||
+                    (cloned.type && a.type === cloned.type) ||
+                    (cloned.image && a.image === cloned.type) ||
+                    (cloned.name && a.name === cloned.name)
+                )
+            );
+            if (template) {
+                if (!cloned.portrait) cloned.portrait = template.portrait;
+                if (!cloned.portraitOptions && template.portraitOptions) cloned.portraitOptions = template.portraitOptions;
+                if (!cloned.type) cloned.type = template.type;
+                if (!cloned.stats && template.stats) cloned.stats = clone(template.stats);
+                if (!cloned.skills && !cloned.attacks && template.skills) cloned.skills = clone(template.skills);
+                if (!cloned.passives && template.passives) cloned.passives = clone(template.passives);
+                if (!cloned.weaknesses && template.weaknesses) cloned.weaknesses = clone(template.weaknesses);
+                if (!cloned.description && template.description) cloned.description = template.description;
+            }
+            return cloned;
+        });
+    }
+
+    /**
+     * Clones the real active crew into the simulator roster,
+     * setting isRealCrewCloned to true.
+     */
+    cloneRealCrew = () => {
+        const realCrew = this.getRealActiveCrew();
+        if (!realCrew || realCrew.length === 0) {
+            this.setState({
+                realCrewNotice: 'No active real crew available (check infirmary/bench).'
+            });
+            setTimeout(() => {
+                this.setState(prev => prev.realCrewNotice ? { realCrewNotice: null } : null);
+            }, 3500);
+            return;
+        }
+
+        const cloned = clone(realCrew.slice(0, 4));
+
+        // Sync cloned members into tempCrewManager
+        if (this.tempCrewManager) {
+            cloned.forEach(cm => {
+                const idx = this.tempCrewManager.crew.findIndex(m => m && (m.id === cm.id || m.type === cm.type));
+                if (idx !== -1) {
+                    this.tempCrewManager.crew[idx] = clone(cm);
+                } else {
+                    this.tempCrewManager.crew.push(clone(cm));
+                }
+            });
+        }
+
+        // Align fighter levels to the real crew members' actual levels
+        const nextFighterLevels = { ...this.state.fighterLevels };
+        cloned.forEach(m => {
+            if (m && m.type && typeof m.level === 'number') {
+                nextFighterLevels[m.type] = m.level;
+            }
+        });
+
+        this.setState({
+            selectedCrew: cloned,
+            selectedCrewMember: cloned[0] || null,
+            fighterLevels: nextFighterLevels,
+            isRealCrewCloned: true,
+            realCrewNotice: null
+        });
+    }
+
+    /**
+     * Toggles between cloned real crew mode and standard simulator custom roster.
+     */
+    toggleRealCrewClone = () => {
+        if (this.state.isRealCrewCloned) {
+            // Revert back to custom simulator crew
+            const options = (this.tempCrewManager && this.tempCrewManager.crew) || this.state.options || [];
+            const defaultCrew = [
+                options.find(m => m && m.type === 'wizard'),
+                options.find(m => m && m.type === 'soldier'),
+                options.find(m => m && m.type === 'barbarian'),
+                options.find(m => m && m.type === 'monk')
+            ].filter(Boolean);
+
+            this.setState({
+                isRealCrewCloned: false,
+                selectedCrew: defaultCrew.length > 0 ? defaultCrew : options.slice(0, 4),
+                selectedCrewMember: defaultCrew[0] || options[0] || null,
+                realCrewNotice: null
+            });
+        } else {
+            this.cloneRealCrew();
+        }
     }
 
     /**
@@ -732,63 +954,66 @@ class CrewManagerPage extends React.Component {
                         try { this.tempCrewManager.levelUp(member); } catch (e) { }
                     }
 
-                    // Filter specials by selected skill tier
-                    const selectedTier = this.getSimSkillTier(member.type);
+                    // Filter specials by selected skill tier (only when not using cloned real crew)
+                    if (!this.state.isRealCrewCloned) {
+                        const selectedTier = this.getSimSkillTier(member.type);
 
-                    if (member.skills) {
-                        const BASIC_ATTACK_KEYS = [
-                            'slash', 'magic_missile', 'monk_punch', 'heal', 'loose', 
-                            'barbarian_slash', 'sword_swing', 'axe_throw', 'summon_skeleton', 
-                            'claw_strike', 'claws', 'rake', 'gore_horns', 'snake_strike', 
-                            'grasp', 'void_lance', 'crush', 'tackle', 'major_magic_missile', 'greater_magic_missile',
-                            'vampiric_bite', 'induce_madness', 'lightning', 'bite'
-                        ];
-                        const basics = member.skills.filter(s => BASIC_ATTACK_KEYS.includes(s));
-                        let specials = member.skills.filter(s => !BASIC_ATTACK_KEYS.includes(s));
-                        specials = filterSpecialsByTier(specials, selectedTier);
+                        if (member.skills) {
+                            const BASIC_ATTACK_KEYS = [
+                                'slash', 'magic_missile', 'monk_punch', 'heal', 'loose', 
+                                'barbarian_slash', 'sword_swing', 'axe_throw', 'summon_skeleton', 
+                                'claw_strike', 'claws', 'rake', 'gore_horns', 'snake_strike', 
+                                'grasp', 'void_lance', 'crush', 'tackle', 'major_magic_missile', 'greater_magic_missile',
+                                'vampiric_bite', 'induce_madness', 'lightning', 'bite'
+                            ];
+                            const basics = member.skills.filter(s => BASIC_ATTACK_KEYS.includes(s));
+                            let specials = member.skills.filter(s => !BASIC_ATTACK_KEYS.includes(s));
+                            specials = filterSpecialsByTier(specials, selectedTier);
 
-                        if (member.type === 'ranger') {
-                            if (!specials.includes('notch')) specials.push('notch');
-                            if (!basics.includes('loose')) basics.push('loose');
-                        } else if (member.type === 'sage') {
-                            if (!basics.includes('heal')) basics.push('heal');
-                        } else if (member.type === 'soldier') {
-                            if (!basics.includes('slash')) basics.push('slash');
-                        } else if (member.type === 'barbarian') {
-                            if (!basics.includes('barbarian_slash')) basics.push('barbarian_slash');
-                        } else if (member.type === 'monk') {
-                            if (!basics.includes('monk_punch')) basics.push('monk_punch');
-                            if (!specials.includes('monk_twin_finger_authority')) specials.push('monk_twin_finger_authority');
-                        }
-                        member.skills = [...basics, ...specials];
-                    } else {
-                        member.specials = filterSpecialsByTier(member.specials || [], selectedTier);
+                            if (member.type === 'ranger') {
+                                if (!specials.includes('notch')) specials.push('notch');
+                                if (!basics.includes('loose')) basics.push('loose');
+                            } else if (member.type === 'sage') {
+                                if (!basics.includes('heal')) basics.push('heal');
+                            } else if (member.type === 'soldier') {
+                                if (!basics.includes('slash')) basics.push('slash');
+                            } else if (member.type === 'barbarian') {
+                                if (!basics.includes('barbarian_slash')) basics.push('barbarian_slash');
+                            } else if (member.type === 'monk') {
+                                if (!basics.includes('monk_punch')) basics.push('monk_punch');
+                                if (!specials.includes('monk_twin_finger_authority')) specials.push('monk_twin_finger_authority');
+                            }
+                            member.skills = [...basics, ...specials];
+                        } else {
+                            member.specials = filterSpecialsByTier(member.specials || [], selectedTier);
 
-                        // Ensure fundamental abilities are always available
-                        if (member.type === 'ranger') {
-                            member.specials = member.specials || [];
-                            if (!member.specials.includes('notch')) member.specials.push('notch');
-                            member.attacks = member.attacks || [];
-                            if (!member.attacks.includes('loose')) member.attacks.push('loose');
-                        } else if (member.type === 'sage') {
-                            member.attacks = member.attacks || [];
-                            if (!member.attacks.includes('heal')) member.attacks.push('heal');
-                        } else if (member.type === 'soldier') {
-                            member.attacks = member.attacks || [];
-                            if (!member.attacks.includes('slash')) member.attacks.push('slash');
-                        } else if (member.type === 'barbarian') {
-                            member.attacks = member.attacks || [];
-                            if (!member.attacks.includes('barbarian_slash')) member.attacks.push('barbarian_slash');
-                        } else if (member.type === 'monk') {
-                            member.specials = member.specials || [];
-                            if (!member.specials.includes('monk_twin_finger_authority')) member.specials.push('monk_twin_finger_authority');
-                            member.attacks = member.attacks || [];
-                            if (!member.attacks.includes('monk_punch')) member.attacks.push('monk_punch');
+                            // Ensure fundamental abilities are always available
+                            if (member.type === 'ranger') {
+                                member.specials = member.specials || [];
+                                if (!member.specials.includes('notch')) member.specials.push('notch');
+                                member.attacks = member.attacks || [];
+                                if (!member.attacks.includes('loose')) member.attacks.push('loose');
+                            } else if (member.type === 'sage') {
+                                member.attacks = member.attacks || [];
+                                if (!member.attacks.includes('heal')) member.attacks.push('heal');
+                            } else if (member.type === 'soldier') {
+                                member.attacks = member.attacks || [];
+                                if (!member.attacks.includes('slash')) member.attacks.push('slash');
+                            } else if (member.type === 'barbarian') {
+                                member.attacks = member.attacks || [];
+                                if (!member.attacks.includes('barbarian_slash')) member.attacks.push('barbarian_slash');
+                            } else if (member.type === 'monk') {
+                                member.specials = member.specials || [];
+                                if (!member.specials.includes('monk_twin_finger_authority')) member.specials.push('monk_twin_finger_authority');
+                                member.attacks = member.attacks || [];
+                                if (!member.attacks.includes('monk_punch')) member.attacks.push('monk_punch');
+                            }
                         }
                     }
 
-                    // Gear assignment
-                    if (this.state.outfitWithEquipment) {
+                    // Gear assignment: preserve existing weapon if cloned from real crew
+                    const hasRealWeapon = this.state.isRealCrewCloned && member.inventory && member.inventory.some(i => i && i.type === 'weapon');
+                    if (this.state.outfitWithEquipment && !hasRealWeapon) {
                         const tier = targetLevel >= 20 ? 3 : targetLevel >= 10 ? 2 : 1;
                         try {
                             const allWeapons = this.props.inventoryManager.weapons;
@@ -832,92 +1057,238 @@ class CrewManagerPage extends React.Component {
             // Automatically equip archaic_rune on the first PC unit of the group that has a pet slot
             const firstPC = clonedCrew.find(member => member);
             if (firstPC) {
-                try {
-                    const archaicRuneBase = this.props.inventoryManager.runes['archaic_rune'];
-                    if (archaicRuneBase) {
-                        const archaicRune = clone(archaicRuneBase);
-                        archaicRune._im_key = 'archaic_rune';
-                        archaicRune.equippedBy = firstPC.id;
-                        archaicRune.equippedSlot = 'pet';
-                        firstPC.inventory = firstPC.inventory || [];
-                        firstPC.inventory = firstPC.inventory.filter(i => !i || i.equippedSlot !== 'pet');
-                        firstPC.inventory.push(archaicRune);
+                const hasPetSlotItem = firstPC.inventory && firstPC.inventory.some(i => i && i.equippedSlot === 'pet');
+                if (!hasPetSlotItem) {
+                    try {
+                        const archaicRuneBase = this.props.inventoryManager.runes['archaic_rune'];
+                        if (archaicRuneBase) {
+                            const archaicRune = clone(archaicRuneBase);
+                            archaicRune._im_key = 'archaic_rune';
+                            archaicRune.equippedBy = firstPC.id;
+                            archaicRune.equippedSlot = 'pet';
+                            firstPC.inventory = firstPC.inventory || [];
+                            firstPC.inventory = firstPC.inventory.filter(i => !i || i.equippedSlot !== 'pet');
+                            firstPC.inventory.push(archaicRune);
+                        }
+                    } catch (e) {
+                        console.warn('Simulator archaic rune default assignment failed', e);
                     }
-                } catch (e) {
-                    console.warn('Simulator archaic rune default assignment failed', e);
                 }
             }
         }
 
-        // Calculate monster and minions synchronously
-        const useMonsterKey = this.state.selectedMonsterKey || 'mummy';
-        const useMinionKeys = this.state.selectedMinionKeys || [];
-        let monster = this.props.monsterManager.getMonster(useMonsterKey);
-        if (!monster) monster = this.props.monsterManager.getRandomMonster();
-        let monsterName = this.pickRandom(monster.monster_names) || (monster.type ? monster.type.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : 'Unknown');
-        monster.name = monsterName
-        monster.inventory = [];
-        if (this.state.lord) {
-            monster.isLord = true;
+        // If only 1 unit is chosen for the crew (solo testing), set its HP to 5x normal HP
+        const activeCrewMembers = clonedCrew.filter(Boolean);
+        if (activeCrewMembers.length === 1) {
+            const soloUnit = activeCrewMembers[0];
+            if (soloUnit) {
+                if (typeof soloUnit.hp === 'number') soloUnit.hp *= 5;
+                if (typeof soloUnit.max_hp === 'number') soloUnit.max_hp *= 5;
+                if (typeof soloUnit.maxHp === 'number') soloUnit.maxHp *= 5;
+                if (typeof soloUnit.starting_hp === 'number') soloUnit.starting_hp *= 5;
+                if (soloUnit.stats) {
+                    if (typeof soloUnit.stats.hp === 'number') soloUnit.stats.hp *= 5;
+                    if (typeof soloUnit.stats.max_hp === 'number') soloUnit.stats.max_hp *= 5;
+                    if (typeof soloUnit.stats.maxHp === 'number') soloUnit.stats.maxHp *= 5;
+                }
+            }
         }
 
-        let minions = [];
-        useMinionKeys.forEach((key, i) => {
-            if (!key) return;
-            const minion = this.props.monsterManager.getMonster(key);
-            if (!minion) return;
-            minion.id = minion.id + (i * 10) + 700;
-            minion.name = this.pickRandom(minion.monster_names) || (minion.type ? minion.type.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : 'Unknown');
-            minion.inventory = [];
-            minions.push(minion);
-        });
+        // Check if PvP mode is active (player units selected in PvP slots)
+        const selectedPvPUnits = (this.state.selectedPvPSlots || []).filter(Boolean);
+        const isPvP = selectedPvPUnits.length > 0;
 
-        if (this.state.useReduxCombat) {
+        let opponentCrew = null;
+        let monster = null;
+        let minions = [];
+
+        if (isPvP) {
+            opponentCrew = selectedPvPUnits.map((u, idx) => {
+                const pvpMember = clone(u);
+                pvpMember.id = pvpMember.id ? `pvp_${pvpMember.id}_${idx}` : `pvp_opponent_${pvpMember.type || 'fighter'}_${idx}_${Date.now()}`;
+                pvpMember.isOpponent = true;
+                pvpMember.isMonster = true;
+                pvpMember.facing = 'left';
+
+                if (this.tempCrewManager) {
+                    const targetLevel = this.getSimLevel(pvpMember.type);
+                    const currentLevel = typeof pvpMember.level === 'number' ? pvpMember.level : 0;
+                    for (let i = currentLevel; i < targetLevel; i++) {
+                        try { this.tempCrewManager.levelUp(pvpMember); } catch (e) { }
+                    }
+
+                    const selectedTier = this.getSimSkillTier(pvpMember.type);
+                    if (pvpMember.skills) {
+                        const BASIC_ATTACK_KEYS = [
+                            'slash', 'magic_missile', 'monk_punch', 'heal', 'loose', 
+                            'barbarian_slash', 'sword_swing', 'axe_throw', 'summon_skeleton', 
+                            'claw_strike', 'claws', 'rake', 'gore_horns', 'snake_strike', 
+                            'grasp', 'void_lance', 'crush', 'tackle', 'major_magic_missile', 'greater_magic_missile',
+                            'vampiric_bite', 'induce_madness', 'lightning', 'bite'
+                        ];
+                        const basics = pvpMember.skills.filter(s => BASIC_ATTACK_KEYS.includes(s));
+                        let specials = pvpMember.skills.filter(s => !BASIC_ATTACK_KEYS.includes(s));
+                        specials = filterSpecialsByTier(specials, selectedTier);
+
+                        if (pvpMember.type === 'ranger') {
+                            if (!specials.includes('notch')) specials.push('notch');
+                            if (!basics.includes('loose')) basics.push('loose');
+                        } else if (pvpMember.type === 'sage') {
+                            if (!basics.includes('heal')) basics.push('heal');
+                        } else if (pvpMember.type === 'soldier') {
+                            if (!basics.includes('slash')) basics.push('slash');
+                        } else if (pvpMember.type === 'barbarian') {
+                            if (!basics.includes('barbarian_slash')) basics.push('barbarian_slash');
+                        } else if (pvpMember.type === 'monk') {
+                            if (!basics.includes('monk_punch')) basics.push('monk_punch');
+                            if (!specials.includes('monk_twin_finger_authority')) specials.push('monk_twin_finger_authority');
+                        }
+                        pvpMember.skills = [...basics, ...specials];
+                    }
+
+                    if (this.state.outfitWithEquipment) {
+                        const tier = targetLevel >= 20 ? 3 : targetLevel >= 10 ? 2 : 1;
+                        try {
+                            const allWeapons = this.props.inventoryManager.weapons;
+                            let tierWeapons = Object.entries(allWeapons)
+                                .filter(([key, w]) => w && w.tier === tier)
+                                .map(([key, w]) => {
+                                    const cloned = clone(w);
+                                    if (cloned) cloned._im_key = key;
+                                    return cloned;
+                                });
+
+                            const isBow = (w) => {
+                                const k = w._im_key || '';
+                                return k.endsWith('_bow') || k === 'merklins_peacekeeper' || w.range === 'far';
+                            };
+                            const isMartial = (w) => {
+                                const k = w._im_key || '';
+                                return k.endsWith('_sword') || k.endsWith('_axe') || w.range === 'close';
+                            };
+
+                            if (pvpMember.type === 'ranger') {
+                                tierWeapons = tierWeapons.filter(isBow);
+                            } else if (pvpMember.type === 'soldier' || pvpMember.type === 'barbarian') {
+                                tierWeapons = tierWeapons.filter(isMartial);
+                            } else {
+                                tierWeapons = tierWeapons.filter(w => !isBow(w));
+                            }
+
+                            if (tierWeapons.length > 0) {
+                                const weapon = clone(tierWeapons[Math.floor(Math.random() * tierWeapons.length)]);
+                                weapon.equippedBy = pvpMember.id;
+                                pvpMember.inventory = pvpMember.inventory || [];
+                                pvpMember.inventory = pvpMember.inventory.filter(i => !i || i.type !== 'weapon');
+                                pvpMember.inventory.push(weapon);
+                            }
+                        } catch (e) { }
+                    }
+                }
+
+                const computedHp = pvpMember.stats?.hp || pvpMember.hp || (pvpMember.stats?.baseHp ? pvpMember.stats.baseHp * 4 : 80);
+                pvpMember.hp = computedHp;
+                pvpMember.starting_hp = computedHp;
+                pvpMember.maxHp = computedHp;
+                if (!pvpMember.stats) pvpMember.stats = {};
+                pvpMember.stats.hp = computedHp;
+
+                return pvpMember;
+            });
+
+            monster = opponentCrew[0];
+            minions = opponentCrew.slice(1);
+        } else {
+            // Calculate monster and minions synchronously
+            const useMonsterKey = this.state.selectedMonsterKey || 'mummy';
+            const useMinionKeys = this.state.selectedMinionKeys || [];
+            monster = this.props.monsterManager.getMonster(useMonsterKey);
+            if (!monster) monster = this.props.monsterManager.getRandomMonster();
+            let monsterName = this.pickRandom(monster.monster_names) || (monster.type ? monster.type.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : 'Unknown');
+            monster.name = monsterName;
+            monster.inventory = [];
+            if (this.state.lord) {
+                monster.isLord = true;
+            }
+
+            useMinionKeys.forEach((key, i) => {
+                if (!key) return;
+                const minion = this.props.monsterManager.getMonster(key);
+                if (!minion) return;
+                minion.id = minion.id + (i * 10) + 700;
+                minion.name = this.pickRandom(minion.monster_names) || (minion.type ? minion.type.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : 'Unknown');
+                minion.inventory = [];
+                minions.push(minion);
+            });
+        }
+
+        if (this.state.useReduxCombat || isPvP) {
             this.reduxCombatManager = new CombatManagerRedux();
             this.reduxCombatManager.isSimulator = true;
+            if (isPvP) {
+                this.reduxCombatManager.isPvP = true;
+                this.reduxCombatManager.isPvPMode = true;
+            }
         } else {
             this.reduxCombatManager = null;
         }
 
         // Pre-load all character and monster portraits while showing the loader
-        const startTime = Date.now();
-        const crewPortraits = clonedCrew.map(m => m && m.portrait).filter(Boolean);
-        const monsterPortraits = [monster, ...minions].map(m => m && m.portrait).filter(Boolean);
-        const allPortraits = [...new Set([...crewPortraits, ...monsterPortraits])];
+        if (process.env.NODE_ENV !== 'test') {
+            const startTime = Date.now();
+            const crewPortraits = clonedCrew.map(m => m && m.portrait).filter(Boolean);
+            const monsterPortraits = [monster, ...minions].map(m => m && m.portrait).filter(Boolean);
+            const opponentPortraits = opponentCrew ? opponentCrew.map(m => m && m.portrait).filter(Boolean) : [];
+            const allPortraits = [...new Set([...crewPortraits, ...monsterPortraits, ...opponentPortraits])];
 
-        await Promise.all(allPortraits.map(src => {
-            return new Promise((resolve) => {
-                const img = new Image();
-                img.src = src;
-                img.onload = () => resolve();
-                img.onerror = () => resolve();
-            });
-        }));
+            await Promise.all(allPortraits.map(src => {
+                return new Promise((resolve) => {
+                    const img = new Image();
+                    img.src = src;
+                    img.onload = () => resolve();
+                    img.onerror = () => resolve();
+                });
+            }));
 
-        // Enforce a minimum display time of 1.8 seconds so loading feels smooth and premium
-        const elapsed = Date.now() - startTime;
-        const minDuration = 1800;
-        if (elapsed < minDuration) {
-            await new Promise(resolve => setTimeout(resolve, minDuration - elapsed));
+            // Enforce a minimum display time of 1.8 seconds so loading feels smooth and premium
+            const elapsed = Date.now() - startTime;
+            const minDuration = 1800;
+            if (elapsed < minDuration) {
+                await new Promise(resolve => setTimeout(resolve, minDuration - elapsed));
+            }
         }
 
-        this.setState({
+        const nextState = {
             monster,
             minions,
+            opponentCrew: isPvP ? opponentCrew : null,
+            isPvP: !!isPvP,
+            isPvPMode: !!isPvP,
             preppedCrew: clonedCrew,
             crewSelected: true,
             loadingSimulator: false
-        });
+        };
+        this.state = { ...this.state, ...nextState };
+        if (typeof this.setState === 'function') {
+            try { this.setState(nextState); } catch (e) {}
+        }
     }
     clear = () => {
         // Clear only the simulator-local crew selection and temp manager; do not mutate global meta or the app's crewManager
         if (this.tempCrewManager) this.tempCrewManager.crew = [];
-        this.setState({ selectedCrew: [] })
+        this.setState({
+            selectedCrew: [],
+            selectedPvPSlots: [null, null, null, null, null],
+            isPvP: false,
+            isPvPMode: false,
+            opponentCrew: null,
+            isRealCrewCloned: false
+        });
     }
     removeMember = (index) => {
         const crew = this.state.selectedCrew.slice();
         crew.splice(index, 1);
-        this.setState({ selectedCrew: crew });
+        this.setState({ selectedCrew: crew, isRealCrewCloned: false });
     }
     goBack = () => {
         this.setState({
@@ -1018,16 +1389,40 @@ class CrewManagerPage extends React.Component {
                 this.setState({ shiftDown: true })
                 break;
             case 'ArrowUp':
-                if (this.state.selectedCrewMember) this.props.combatManager.moveFighterOneSpace('up');
+                event.preventDefault();
+                if (this.monsterBattleComponentRef.current && typeof this.monsterBattleComponentRef.current.moveFighterOneSpace === 'function') {
+                    this.monsterBattleComponentRef.current.moveFighterOneSpace('up');
+                } else {
+                    const cm = this.state.useReduxCombat ? this.reduxCombatManager : this.props.combatManager;
+                    if (cm && typeof cm.moveFighterOneSpace === 'function') cm.moveFighterOneSpace('up');
+                }
                 break;
             case 'ArrowDown':
-                if (this.state.selectedCrewMember) this.props.combatManager.moveFighterOneSpace('down');
+                event.preventDefault();
+                if (this.monsterBattleComponentRef.current && typeof this.monsterBattleComponentRef.current.moveFighterOneSpace === 'function') {
+                    this.monsterBattleComponentRef.current.moveFighterOneSpace('down');
+                } else {
+                    const cm = this.state.useReduxCombat ? this.reduxCombatManager : this.props.combatManager;
+                    if (cm && typeof cm.moveFighterOneSpace === 'function') cm.moveFighterOneSpace('down');
+                }
                 break;
             case 'ArrowLeft':
-                if (this.state.selectedCrewMember) this.props.combatManager.moveFighterOneSpace('left');
+                event.preventDefault();
+                if (this.monsterBattleComponentRef.current && typeof this.monsterBattleComponentRef.current.moveFighterOneSpace === 'function') {
+                    this.monsterBattleComponentRef.current.moveFighterOneSpace('left');
+                } else {
+                    const cm = this.state.useReduxCombat ? this.reduxCombatManager : this.props.combatManager;
+                    if (cm && typeof cm.moveFighterOneSpace === 'function') cm.moveFighterOneSpace('left');
+                }
                 break;
             case 'ArrowRight':
-                if (this.state.selectedCrewMember) this.props.combatManager.moveFighterOneSpace('right');
+                event.preventDefault();
+                if (this.monsterBattleComponentRef.current && typeof this.monsterBattleComponentRef.current.moveFighterOneSpace === 'function') {
+                    this.monsterBattleComponentRef.current.moveFighterOneSpace('right');
+                } else {
+                    const cm = this.state.useReduxCombat ? this.reduxCombatManager : this.props.combatManager;
+                    if (cm && typeof cm.moveFighterOneSpace === 'function') cm.moveFighterOneSpace('right');
+                }
                 break;
             default:
                 // nuttin
@@ -1062,6 +1457,12 @@ class CrewManagerPage extends React.Component {
     }
     render() {
         const formatMonsterType = (type) => type ? type.replace(/_/g, ' ') : '';
+        const pvpRosterUnits = (this.state.options && this.state.options.length > 0 ? this.state.options : (this.props.crewManager?.adventurers || [])).reduce((acc, current) => {
+            if (current && current.type && !acc.some(item => item.type === current.type)) {
+                acc.push(current);
+            }
+            return acc;
+        }, []);
         return (
             <div className="page-container">
                 {this.state.loadingSimulator && (
@@ -1108,18 +1509,35 @@ class CrewManagerPage extends React.Component {
                         </div>
                     </div>
                 )}
-                {!this.state.crewSelected && <div className="crew-manager">
+                {!this.state.crewSelected && <div className="crew-manager simulator-crew-manager">
                     {this.state.navToLanding && <Redirect to='/' />}
                     <div className="content-container">
                         <div className="button-row-top">
                             <button onClick={() => this.exitSimulator()}>Back</button>
                         </div>
                         <div className="title">
-                            Choose your crew
-                            <button className="enemy-section-scroll-btn" onClick={this.scrollToEnemySection} title="Jump to enemy selection">
-                                Enemies ↓
-                            </button>
+                            <span className="title-text">Choose your crew</span>
+                            <div className="title-crew-actions">
+                                <button
+                                    className={`copy-real-crew-btn ${this.state.isRealCrewCloned ? 'active' : ''}`}
+                                    onClick={this.toggleRealCrewClone}
+                                    title="Set simulator crew as an identical clone of your active real crew (not in infirmary or bench)"
+                                >
+                                    {this.state.isRealCrewCloned ? '✓ Cloned Real Crew' : 'Copy Real Crew'}
+                                </button>
+                                <span className={`real-crew-badge ${this.state.isRealCrewCloned ? 'active' : 'inactive'}`}>
+                                    {this.state.isRealCrewCloned ? '● Real Crew Cloned' : '○ Simulator Custom Roster'}
+                                </span>
+                                <button className="enemy-section-scroll-btn" onClick={this.scrollToEnemySection} title="Jump to enemy selection">
+                                    Enemies ↓
+                                </button>
+                            </div>
                         </div>
+                        {this.state.realCrewNotice && (
+                            <div className="real-crew-notice-banner">
+                                {this.state.realCrewNotice}
+                            </div>
+                        )}
                         <div className="crew-selector" ref={this.crewSelectorRef}>
                             <div className="crew-options">
                                 {this.state.options.map((e, i) => {
@@ -1197,8 +1615,11 @@ class CrewManagerPage extends React.Component {
                             <div className="crew-tray">
                                 {this.state.crewSlots.map((slot, i) => {
                                     const member = this.state.selectedCrew[i];
-                                    return <div key={i} className={`selected-crew-portrait-container ${!member ? 'empty' : 'filled'}`}>
-
+                                    const isCloned = this.state.isRealCrewCloned && !!member;
+                                    return <div key={i} className={`selected-crew-portrait-container ${!member ? 'empty' : 'filled'} ${isCloned ? 'real-crew-cloned' : ''}`}>
+                                        {isCloned && (
+                                            <div className="real-crew-slot-tag" title="Cloned from your active real crew">REAL</div>
+                                        )}
                                         <div 
                                             className={`add-button ${member ? 'occupied' : (!this.state.selectedCrewMember ? 'disabled' : '')}`} 
                                             onClick={() => member ? this.removeMember(i) : this.addMember(i)}
@@ -1264,20 +1685,92 @@ class CrewManagerPage extends React.Component {
                                     />
                                     <label htmlFor="redux-combat-cb">Use Rounds System (Redux Combat)</label>
                                 </div>
-                             </div>
+                                <div className="sim-real-crew-option" style={{ marginTop: '10px', display: 'flex', alignItems: 'center', gap: '6px', color: '#ccc', fontSize: '12px' }}>
+                                    <input
+                                        id="real-crew-clone-cb"
+                                        type="checkbox"
+                                        checked={this.state.isRealCrewCloned}
+                                        onChange={this.toggleRealCrewClone}
+                                        style={{ cursor: 'pointer' }}
+                                    />
+                                    <label htmlFor="real-crew-clone-cb" style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        Clone Real Active Crew
+                                        <span className={`real-crew-status-pill ${this.state.isRealCrewCloned ? 'active' : 'inactive'}`}>
+                                            {this.state.isRealCrewCloned ? 'ACTIVE' : 'OFF'}
+                                        </span>
+                                    </label>
+                                </div>
+                            </div>
                         </div>
 
                         {/* ── Enemy Selection Section ── */}
                         <div className="enemy-selection-section" ref={this.enemySectionRef}>
                             <div className="enemy-section-title">
-                                Choose your enemies
-                                <button
-                                    className={`save-default-enemy-btn${this.state.defaultEnemySaved ? ' saved' : ''}`}
-                                    onClick={this.saveDefaultEnemy}
-                                    title="Save current enemy selection as default"
-                                >
-                                    {this.state.defaultEnemySaved ? '✓ Saved' : 'Save as default'}
-                                </button>
+                                <span>Choose your enemies</span>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <button
+                                        id="random-combat-btn"
+                                        onClick={this.startRandomCombat}
+                                        style={{
+                                            padding: '6px 14px',
+                                            fontSize: '12px',
+                                            fontWeight: '600',
+                                            letterSpacing: '0.5px',
+                                            background: 'rgba(139, 92, 246, 0.15)',
+                                            color: '#a78bfa',
+                                            border: '1px solid rgba(139, 92, 246, 0.45)',
+                                            borderRadius: '6px',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.18s ease',
+                                        }}
+                                        onMouseEnter={e => {
+                                            e.currentTarget.style.background = 'rgba(139, 92, 246, 0.28)';
+                                            e.currentTarget.style.boxShadow = '0 0 10px rgba(139, 92, 246, 0.25)';
+                                        }}
+                                        onMouseLeave={e => {
+                                            e.currentTarget.style.background = 'rgba(139, 92, 246, 0.15)';
+                                            e.currentTarget.style.boxShadow = 'none';
+                                        }}
+                                    >
+                                        Random
+                                    </button>
+                                    <select
+                                        id="random-tier-points-select"
+                                        value={this.state.randomTierPoints}
+                                        onChange={e => {
+                                            const val = Number(e.target.value);
+                                            this.setState({ randomTierPoints: val });
+                                            const meta = getMeta();
+                                            if (!meta.simulatorDefaults) meta.simulatorDefaults = {};
+                                            meta.simulatorDefaults.randomTierPoints = val;
+                                            storeMeta(meta);
+                                        }}
+                                        title="Total tier points for random encounter"
+                                        style={{
+                                            background: '#1a1a1f',
+                                            color: '#a78bfa',
+                                            border: '1px solid rgba(139, 92, 246, 0.35)',
+                                            borderRadius: '6px',
+                                            padding: '5px 6px',
+                                            fontSize: '12px',
+                                            fontWeight: '600',
+                                            cursor: 'pointer',
+                                            width: '50px',
+                                            textAlign: 'center',
+                                        }}
+                                    >
+                                        {[1,2,3,4,5,6,7,8,9].map(n => (
+                                            <option key={n} value={n}>{n}</option>
+                                        ))}
+                                    </select>
+                                    <button
+                                        className={`save-default-enemy-btn${this.state.defaultEnemySaved ? ' saved' : ''}`}
+                                        onClick={this.saveDefaultEnemy}
+                                        title="Save current enemy selection as default"
+                                    >
+                                        {this.state.defaultEnemySaved ? '✓ Saved' : 'Save as default'}
+                                    </button>
+                                </div>
                             </div>
 
                             {/* Main monster + 4 minion slots + Info panel */}
@@ -1370,12 +1863,12 @@ class CrewManagerPage extends React.Component {
                                                 {/* Left Column: Type, Level and Stats */}
                                                 <div className="enemy-info-col-left">
                                                     <div className="enemy-info-type">{formatMonsterType(this.state.selectedEnemyForInfo.type)}</div>
-                                                    <div className="enemy-info-stat" style={{ whiteSpace: 'nowrap' }}>Level: {this.state.selectedEnemyForInfo.level} &nbsp;|&nbsp; HP: {this.state.selectedEnemyForInfo.stats?.hp} &nbsp;|&nbsp; ATK: {this.state.selectedEnemyForInfo.stats?.atk} &nbsp;|&nbsp; DEF: {this.state.selectedEnemyForInfo.stats?.def}</div>
+                                                    <div className="enemy-info-stat" style={{ whiteSpace: 'nowrap' }}>Level: {this.state.selectedEnemyForInfo.level} &nbsp;|&nbsp; HP: {this.state.selectedEnemyForInfo.stats?.hp || this.state.selectedEnemyForInfo.stats?.baseHp || this.state.selectedEnemyForInfo.hp} &nbsp;|&nbsp; ATK: {this.state.selectedEnemyForInfo.stats?.atk || this.state.selectedEnemyForInfo.stats?.str || 10} &nbsp;|&nbsp; DEF: {this.state.selectedEnemyForInfo.stats?.def || this.state.selectedEnemyForInfo.stats?.fort || 5}</div>
                                                 </div>
                                                 {/* Right Column: Skills and Weaknesses */}
                                                 <div className="enemy-info-col-right">
                                                     {((this.state.selectedEnemyForInfo.skills?.length > 0) || (this.state.selectedEnemyForInfo.specials?.length > 0)) && (
-                                                        <div className="enemy-info-stat">Skills: {((this.state.selectedEnemyForInfo.skills || this.state.selectedEnemyForInfo.specials) || []).map(s => s.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')).join(', ')}</div>
+                                                        <div className="enemy-info-stat">Skills: {((this.state.selectedEnemyForInfo.skills || this.state.selectedEnemyForInfo.specials) || []).map(s => (typeof s === 'string' ? s : (s.name || s.id || '')).split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')).join(', ')}</div>
                                                     )}
                                                     {this.state.selectedEnemyForInfo.weaknesses?.length > 0 && (
                                                         <div className="enemy-info-stat" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap' }}>Weaknesses: &nbsp; {renderWeaknessSymbols(this.state.selectedEnemyForInfo.weaknesses)}</div>
@@ -1390,7 +1883,7 @@ class CrewManagerPage extends React.Component {
                             {/* Monster roster */}
                             <div className="monster-roster-label">Monster Roster — click to select, click again to add to slot</div>
                             <div className="monster-roster">
-                                {['sobek', 'goblin_thief', 'goblin_warrior', 'goblin_warchief', 'goblin_chef', 'skeleton', 'beholder_minion', 'horned_pet', 'blalok', 'shade', 'troll', 'mummy', 'basilisk_cultists', 'wraith', 'ogre', 'gorgon', 'vampire', 'high_priest_of_the_basilisk', 'goat_demon', 'cyclops', 'witch', 'beholder', 'kabuki_demon', 'qlippoth', 'eidolon', 'djinn', 'sphinx', 'dragon', 'hagigah', 'hashmallim']
+                                {['sobek', 'goblin_thief', 'goblin_warrior', 'goblin_warchief', 'goblin_chef', 'skeleton', 'beholder_minion', 'horned_pet', 'blalok', 'shade', 'troll', 'mummy', 'basilisk_cultists', 'wraith', 'ogre', 'gorgon', 'vampire', 'high_priest_of_the_basilisk', 'goat_demon', 'cyclops', 'witch', 'beholder', 'kabuki_demon', 'qlippoth', 'eidolon', 'djinn', 'vallgorguina_djinn', 'sphinx', 'dragon', 'hagigah', 'hashmallim']
                                     .map(k => this.props.monsterManager.getMonster(k))
                                     .filter(Boolean)
                                     .map((m, i) => (
@@ -1411,78 +1904,105 @@ class CrewManagerPage extends React.Component {
                                         </ProgressiveBgImage>
                                     ))}
                             </div>
+
+                            {/* ── Player Controlled Units Subsection (PvP Opponent Squad) ── */}
+                            <div className="pvp-selection-subsection">
+                                <div className="pvp-section-title">
+                                    <span>⚔️ PvP Combat Simulator — Opposing Crew</span>
+                                    {this.state.selectedPvPSlots && this.state.selectedPvPSlots.some(Boolean) && (
+                                        <button
+                                            className="clear-pvp-btn"
+                                            onClick={this.clearPvPSlots}
+                                            title="Remove all units from PvP slots"
+                                        >
+                                            Clear PvP Slots
+                                        </button>
+                                    )}
+                                </div>
+
+                                {/* Selected PvP Slot Section */}
+                                <div className="pvp-slots-container">
+                                    <div className="pvp-slots-label">
+                                        Selected PvP Slot(s) — units will spawn on the opposing side and attack your crew (click slot to remove):
+                                    </div>
+                                    <div className="pvp-slots-row">
+                                        {[0, 1, 2, 3, 4].map(idx => {
+                                            const unit = this.state.selectedPvPSlots ? this.state.selectedPvPSlots[idx] : null;
+                                            return (
+                                                <div className="pvp-slot-group" key={idx}>
+                                                    <div className="pvp-slot-label">
+                                                        PvP Slot {idx + 1}
+                                                    </div>
+                                                    <div
+                                                        className={`pvp-slot ${!unit ? 'empty' : ''}`}
+                                                        title={unit ? `${unit.name || unit.type} (Click to remove)` : 'Select player unit from roster below'}
+                                                        onClick={() => {
+                                                            if (unit) this.removePvPSlot(idx);
+                                                        }}
+                                                    >
+                                                        {unit && <ProgressiveBgImage className="pvp-slot-portrait" src={unit.portrait} />}
+                                                        {!unit && <span className="pvp-slot-placeholder">＋</span>}
+                                                    </div>
+                                                    <div className="pvp-slot-name">
+                                                        {unit ? (unit.name || formatMonsterType(unit.type)) : '\u00a0'}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+
+                                {/* Player Controlled Units Roster */}
+                                <div className="pvp-roster-label">
+                                    Player Controlled Units Roster — click to add to selected PvP slot:
+                                </div>
+                                <div className="pvp-roster">
+                                    {pvpRosterUnits.map((u, i) => {
+                                        const isAssigned = this.state.selectedPvPSlots && this.state.selectedPvPSlots.some(s => s && s.type === u.type);
+                                        return (
+                                            <ProgressiveBgImage
+                                                key={u.type || i}
+                                                className={`pvp-roster-portrait${isAssigned ? ' assigned' : ''}`}
+                                                src={u.portrait}
+                                                title={`${u.name} (${formatMonsterType(u.type)}) — Click to add to PvP squad`}
+                                                onClick={(e) => {
+                                                    this.handlePvPRosterClick(e, u);
+                                                }}
+                                            >
+                                                <div className="pvp-roster-name">{formatMonsterType(u.type)}</div>
+                                            </ProgressiveBgImage>
+                                        );
+                                    })}
+                                </div>
+                            </div>
                         </div>
 
-                        <div className="simulator-bottom-actions" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div className="simulator-bottom-actions">
                             <div className="button-row-bottom-left">
                                 <button onClick={() => this.clear()}>Clear</button>
-                            </div>
-                            <div className="button-row" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                <button
-                                    id="random-combat-btn"
-                                    onClick={this.startRandomCombat}
-                                    style={{
-                                        padding: '7px 18px',
-                                        fontSize: '13px',
-                                        fontWeight: '600',
-                                        letterSpacing: '0.5px',
-                                        background: 'rgba(139, 92, 246, 0.15)',
-                                        color: '#a78bfa',
-                                        border: '1px solid rgba(139, 92, 246, 0.45)',
-                                        borderRadius: '6px',
-                                        cursor: 'pointer',
-                                        transition: 'all 0.18s ease',
-                                    }}
-                                    onMouseEnter={e => {
-                                        e.currentTarget.style.background = 'rgba(139, 92, 246, 0.28)';
-                                        e.currentTarget.style.boxShadow = '0 0 10px rgba(139, 92, 246, 0.25)';
-                                    }}
-                                    onMouseLeave={e => {
-                                        e.currentTarget.style.background = 'rgba(139, 92, 246, 0.15)';
-                                        e.currentTarget.style.boxShadow = 'none';
-                                    }}
-                                >
-                                    Random
-                                </button>
-                                <select
-                                    id="random-tier-points-select"
-                                    value={this.state.randomTierPoints}
-                                    onChange={e => {
-                                        const val = Number(e.target.value);
-                                        this.setState({ randomTierPoints: val });
-                                        const meta = getMeta();
-                                        if (!meta.simulatorDefaults) meta.simulatorDefaults = {};
-                                        meta.simulatorDefaults.randomTierPoints = val;
-                                        storeMeta(meta);
-                                    }}
-                                    title="Total tier points for random encounter"
-                                    style={{
-                                        background: '#1a1a1f',
-                                        color: '#a78bfa',
-                                        border: '1px solid rgba(139, 92, 246, 0.35)',
-                                        borderRadius: '6px',
-                                        padding: '6px 8px',
-                                        fontSize: '13px',
-                                        fontWeight: '600',
-                                        cursor: 'pointer',
-                                        width: '52px',
-                                        textAlign: 'center',
-                                    }}
-                                >
-                                    {[1,2,3,4,5,6,7,8,9].map(n => (
-                                        <option key={n} value={n}>{n}</option>
-                                    ))}
-                                </select>
-                                <button onClick={() => this.submit()}>Submit</button>
                             </div>
                         </div>
                     </div>
                 </div>}
 
+                {!this.state.crewSelected && (
+                    <button
+                        className="simulator-submit-floating-btn"
+                        onClick={() => this.submit()}
+                        title="Start Combat Simulation"
+                    >
+                        <span className="submit-btn-icon">⚔</span>
+                        <span className="submit-btn-text">Submit</span>
+                    </button>
+                )}
+
 
                 {this.state.crewSelected && <div style={{ height: '100%', width: '100%', overflow: 'hidden' }}>
                     <MonsterBattle
                         isSimulation={true}
+                        isPvP={!!this.state.isPvP}
+                        isPvPMode={!!this.state.isPvPMode}
+                        opponentCrew={this.state.opponentCrew}
                         exitSimulator={this.exitSimulator}
                         ref={this.monsterBattleComponentRef}
                         overlayManager={this.props.overlayManager}

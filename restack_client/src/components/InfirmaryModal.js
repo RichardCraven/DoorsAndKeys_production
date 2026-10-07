@@ -67,6 +67,18 @@ export default function InfirmaryModal({ onClose, crewManager }) {
     const allUnits = Array.from(unitMap.values());
     const availableSage = allUnits.find(u => (u.type === 'sage' || u.class === 'sage' || u.characterClass === 'sage'));
     const assignedSage = infirmary.assignedSage || availableSage;
+    const activeCrew = (crewManager && Array.isArray(crewManager.crew) && crewManager.crew.length > 0)
+        ? crewManager.crew
+        : ((meta && Array.isArray(meta.crew)) ? meta.crew : []);
+    const isHorologist = (u) => u && (u.type === 'horologist' || u.class === 'horologist' || u.characterClass === 'horologist' || u.image === 'horologist');
+    const isLive = (u) => {
+        if (!u) return false;
+        if (u.dead) return false;
+        const hp = typeof u.hp === 'number' ? u.hp : (u.stats?.hp || u.starting_hp || 100);
+        return hp > 0;
+    };
+    const liveHorologistInCrew = activeCrew.find(u => isHorologist(u) && isLive(u));
+    const horologist = liveHorologistInCrew;
     
     return (
         <div className="infirmary-modal-overlay" style={{
@@ -212,9 +224,40 @@ export default function InfirmaryModal({ onClose, crewManager }) {
                                             </div>
                                         </div>
                                     </div>
-                                    <button onClick={() => handleDischarge(p.id)} style={{ padding: '7px 14px', backgroundColor: hpPct >= 100 ? '#16a34a' : '#7f1d1d', color: '#fff', border: '1px solid ' + (hpPct >= 100 ? '#22c55e' : '#ef4444'), borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem', flexShrink: 0, boxShadow: '0 2px 6px rgba(0,0,0,0.4)', transition: 'all 0.2s ease' }}>
-                                        {hpPct >= 100 ? 'Discharge' : 'Pull Early'}
-                                    </button>
+                                    <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+                                        {horologist && hpPct < 100 && (
+                                            <button
+                                                onClick={() => {
+                                                    if (crewManager && typeof crewManager.borrowTimeInfirmary === 'function') {
+                                                        const res = crewManager.borrowTimeInfirmary(horologist, p.id);
+                                                        if (res && res.ok) {
+                                                            setInfirmary(getInfirmary());
+                                                        } else if (res && res.reason === 'over_cap') {
+                                                            alert(`Cannot borrow time: Time Debt would exceed cap (${Math.round((res.debt + res.remainingMs) / 3600000)}h / ${Math.round(res.cap / 3600000)}h)!`);
+                                                        }
+                                                    }
+                                                }}
+                                                style={{
+                                                    padding: '7px 12px',
+                                                    backgroundColor: '#d9a441',
+                                                    color: '#1c1917',
+                                                    border: '1px solid #ffe2a0',
+                                                    borderRadius: '4px',
+                                                    cursor: 'pointer',
+                                                    fontWeight: 'bold',
+                                                    fontSize: '0.85rem',
+                                                    boxShadow: '0 2px 6px rgba(0,0,0,0.4)',
+                                                    transition: 'all 0.2s ease'
+                                                }}
+                                                title="Borrow time via Horologist to instantly heal this patient"
+                                            >
+                                                ⏳ Borrow Time
+                                            </button>
+                                        )}
+                                        <button onClick={() => handleDischarge(p.id)} style={{ padding: '7px 14px', backgroundColor: hpPct >= 100 ? '#16a34a' : '#7f1d1d', color: '#fff', border: '1px solid ' + (hpPct >= 100 ? '#22c55e' : '#ef4444'), borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem', boxShadow: '0 2px 6px rgba(0,0,0,0.4)', transition: 'all 0.2s ease' }}>
+                                            {hpPct >= 100 ? 'Discharge' : 'Pull Early'}
+                                        </button>
+                                    </div>
                                 </div>
                             );
                         })}

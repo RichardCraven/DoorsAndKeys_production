@@ -123,6 +123,7 @@ export function isArcaneUnit(member) {
         searchStr.includes('wizard') ||
         searchStr.includes('summoner') ||
         searchStr.includes('summon') ||
+        searchStr.includes('glitterburn') ||
         searchStr.includes('zildjikan') ||
         searchStr.includes('arcane') ||
         searchStr.includes('spellcaster') ||

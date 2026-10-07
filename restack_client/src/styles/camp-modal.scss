@@ -1580,6 +1580,30 @@
 
 // ── Merchant & Alchemist Modals ──────────────────────────────────────────
 
+@keyframes tutorialKeyPulse {
+  0% {
+    box-shadow: 0 0 6px rgba(255, 215, 0, 0.7);
+    border-color: rgba(255, 215, 0, 0.9);
+    background: rgba(255, 215, 0, 0.15);
+  }
+  50% {
+    box-shadow: 0 0 25px rgba(255, 215, 0, 1), 0 0 40px rgba(255, 170, 0, 0.8);
+    border-color: #ffffff;
+    background: rgba(255, 215, 0, 0.35);
+  }
+  100% {
+    box-shadow: 0 0 6px rgba(255, 215, 0, 0.7);
+    border-color: rgba(255, 215, 0, 0.9);
+    background: rgba(255, 215, 0, 0.15);
+  }
+}
+
+.tutorial-key-flash {
+  animation: tutorialKeyPulse 1.2s infinite ease-in-out !important;
+  border: 2px solid #ffd700 !important;
+  border-radius: 6px !important;
+}
+
 .merchant-modal, .alchemist-modal, .dream-den-modal, .prep-complete-modal, .ritual-complete-modal, .ritual-encounter-modal, .food-complete-modal, .sharpen-blades-details-modal {
   z-index: 3000 !important;
 

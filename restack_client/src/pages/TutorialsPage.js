@@ -36,21 +36,21 @@ export default function TutorialsPage(props) {
           </div>
 
           {/* Combat Card */}
-          <div className="menu-card tutorial-menu-card">
+          <div className="menu-card tutorial-menu-card" style={{ opacity: 0.6, cursor: 'not-allowed' }}>
             <div className="card-top">
               <span className="card-title">Combat</span>
               <span className="card-desc">Master turn-based combat, queue up skills, manage stamina and resolve, and defeat monsters.</span>
             </div>
-            <span className="card-arrow">Start Combat Tutorial →</span>
+            <span className="card-arrow" style={{ color: '#555' }}>Locked</span>
           </div>
 
           {/* Card Duel Card */}
-          <div className="menu-card tutorial-menu-card">
+          <div className="menu-card tutorial-menu-card" style={{ opacity: 0.6, cursor: 'not-allowed' }}>
             <div className="card-top">
               <span className="card-title">Card Duel</span>
               <span className="card-desc">Understand card deck building, reserve mechanics, dueling cards, and battle layouts.</span>
             </div>
-            <span className="card-arrow">Start Card Tutorial →</span>
+            <span className="card-arrow" style={{ color: '#555' }}>Locked</span>
           </div>
 
           {/* TBD Card */}

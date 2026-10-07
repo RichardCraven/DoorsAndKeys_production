@@ -174,7 +174,7 @@ export default function ReaperOfferModal({
                     boxShadow: phase === 'spared'
                         ? '0 25px 70px rgba(0, 0, 0, 0.95), 0 0 45px rgba(74, 222, 128, 0.35), inset 0 0 25px rgba(0, 0, 0, 0.8)'
                         : '0 25px 70px rgba(0, 0, 0, 0.95), 0 0 45px rgba(138, 92, 170, 0.45), inset 0 0 25px rgba(0, 0, 0, 0.8)',
-                    padding: 'min(32px, 3vh) min(28px, 4vw) min(24px, 3vh)',
+                    padding: '24px 28px',
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'center',
@@ -299,7 +299,17 @@ export default function ReaperOfferModal({
                 )}
 
                 {phase === 'spared' && (
-                    <div data-testid="reaper-outcome-spared" style={{ animation: 'reaperResultFadeIn 0.35s ease-out', width: '100%' }}>
+                    <div
+                        data-testid="reaper-outcome-spared"
+                        style={{
+                            animation: 'reaperResultFadeIn 0.35s ease-out',
+                            width: '100%',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            boxSizing: 'border-box'
+                        }}
+                    >
                         {/* Dice Result Badge */}
                         <div style={{
                             display: 'inline-flex',
@@ -340,6 +350,8 @@ export default function ReaperOfferModal({
                         {/* Narrative Lore Text */}
                         <div
                             style={{
+                                width: '100%',
+                                boxSizing: 'border-box',
                                 fontFamily: "'Cinzel', serif",
                                 fontSize: 'clamp(11px, 2.5vw, 13px)',
                                 lineHeight: '1.55',
@@ -364,8 +376,9 @@ export default function ReaperOfferModal({
                         <button
                             onClick={onSpare}
                             style={{
+                                boxSizing: 'border-box',
                                 width: '100%',
-                                padding: 'min(12px, 1.8vh) 24px',
+                                padding: '12px 24px',
                                 borderRadius: '10px',
                                 border: '1px solid rgba(74, 222, 128, 0.6)',
                                 background: 'linear-gradient(180deg, rgba(74, 222, 128, 0.15) 0%, rgba(34, 197, 94, 0.05) 100%)',
@@ -402,7 +415,17 @@ export default function ReaperOfferModal({
                 )}
 
                 {phase === 'duel' && (
-                    <div data-testid="reaper-outcome-duel" style={{ animation: 'reaperResultFadeIn 0.35s ease-out', width: '100%' }}>
+                    <div
+                        data-testid="reaper-outcome-duel"
+                        style={{
+                            animation: 'reaperResultFadeIn 0.35s ease-out',
+                            width: '100%',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            boxSizing: 'border-box'
+                        }}
+                    >
                         {/* Dice Result Badge */}
                         <div style={{
                             display: 'inline-flex',
@@ -443,6 +466,8 @@ export default function ReaperOfferModal({
                         {/* Narrative Lore Text */}
                         <div
                             style={{
+                                width: '100%',
+                                boxSizing: 'border-box',
                                 fontFamily: "'Cinzel', serif",
                                 fontSize: 'clamp(11px, 2.5vw, 13px)',
                                 lineHeight: '1.55',
@@ -467,8 +492,9 @@ export default function ReaperOfferModal({
                         <button
                             onClick={onAccept}
                             style={{
+                                boxSizing: 'border-box',
                                 width: '100%',
-                                padding: 'min(12px, 1.8vh) 24px',
+                                padding: '12px 24px',
                                 borderRadius: '10px',
                                 border: '1px solid rgba(168, 85, 247, 0.5)',
                                 background: 'transparent',

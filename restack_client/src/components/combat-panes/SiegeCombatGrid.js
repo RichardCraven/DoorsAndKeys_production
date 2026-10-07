@@ -653,6 +653,48 @@ const formatDamageValue = (value) => {
     return value;
 };
 
+const isDamageIndicator = (ind) => {
+    if (!ind) return false;
+    if (ind.isMiss) return false;
+    if (ind.type === 'heal' || ind.type === 'buff' || ind.type === 'status' || ind.type === 'robbed') return false;
+    const strVal = String(ind.value !== undefined ? ind.value : '').trim();
+    if (strVal.includes('MISS') || strVal.includes('DODGE') || strVal.includes('PARRY') || strVal.includes('IMMUNE') || strVal.includes('BLOCKED')) return false;
+    if (strVal.startsWith('+')) return false;
+    if (strVal.includes('Stamina')) return false;
+    if (ind.type === 'damage') return true;
+    if (strVal.startsWith('-')) return true;
+    if (ind.isCrit) return true;
+    const num = parseFloat(strVal);
+    if (!isNaN(num) && num > 0) return true;
+    return false;
+};
+
+const getRecoilDirection = (entity, indicators = [], combatManager = null) => {
+    if (!entity) return 'left';
+    const hitInd = Array.isArray(indicators) ? indicators.find(ind => ind && ind.sourceDirection) : null;
+    const srcDir = (hitInd && hitInd.sourceDirection) || (entity.wounded && entity.wounded.sourceDirection);
+    if (srcDir) {
+        switch (srcDir) {
+            case 'left': return 'right';
+            case 'right': return 'left';
+            case 'up':
+            case 'top': return 'down';
+            case 'down':
+            case 'bottom': return 'up';
+            default: break;
+        }
+    }
+
+    const facing = entity.facing || combatManager?.getCombatant?.(entity.id)?.facing;
+    if (facing === 'left') return 'right';
+    if (facing === 'right') return 'left';
+    if (facing === 'up') return 'down';
+    if (facing === 'down') return 'up';
+
+    const isPlayer = !entity.isMonster && !entity.isMinion && !entity.isOpponent;
+    return isPlayer ? 'left' : 'right';
+};
+
 // ── Hit animation CSS variable helpers ───────────────────────────────────────
 const DEBUG_FORCE_BIG_BULGE = true;
 const MINION_DEBUG_FACTOR = 0.3;
@@ -1005,20 +1047,28 @@ export default function SiegeCombatGrid(props) {
         };
     }, []);
 
-    // ── Damage indicator system ───────────────────────────────────────────────
+    // ── Damage indicator & damaged animation system ─────────────────────────────
     const [visibleDamageIndicators, setVisibleDamageIndicators] = React.useState({});
     const [indicatorQueues, setIndicatorQueues] = React.useState({});
     const indicatorTimeouts = React.useRef({});
     const STAGGER_DELAY = 150;
     const processedIndicatorsRef = React.useRef(new Set());
+    const [damagedUnits, setDamagedUnits] = React.useState({});
+    const prevHpRef = React.useRef({});
+    const damageAnimTimeouts = React.useRef({});
 
     React.useEffect(() => {
+        const newDamaged = {};
+
         Object.values(battleData).forEach(entity => {
-            if (!entity || !Array.isArray(entity.damageIndicators)) return;
+            if (!entity) return;
             const id = entity.id;
-            setIndicatorQueues(prev => {
-                const prevQueue = prev[id] || [];
-                const newIndicators = entity.damageIndicators
+
+            let hasNewDamage = false;
+            let newIndicators = [];
+
+            if (Array.isArray(entity.damageIndicators)) {
+                newIndicators = entity.damageIndicators
                     .map((e, index) => {
                         if (!e) return null;
                         const stableId = e.id || `${id}_indicator_${index}`;
@@ -1026,13 +1076,56 @@ export default function SiegeCombatGrid(props) {
                     })
                     .filter(e => e && !processedIndicatorsRef.current.has(e.id))
                     .map(e => e.timestamp ? e : { ...e, timestamp: Date.now() });
-                if (newIndicators.length === 0) return prev;
 
-                newIndicators.forEach(e => processedIndicatorsRef.current.add(e.id));
+                if (newIndicators.length > 0) {
+                    newIndicators.forEach(e => processedIndicatorsRef.current.add(e.id));
+                    setIndicatorQueues(prev => {
+                        const prevQueue = prev[id] || [];
+                        return { ...prev, [id]: [...prevQueue, ...newIndicators] };
+                    });
+                    if (newIndicators.some(isDamageIndicator)) {
+                        hasNewDamage = true;
+                    }
+                }
+            }
 
-                return { ...prev, [id]: [...prevQueue, ...newIndicators] };
-            });
+            const prevHp = prevHpRef.current[id];
+            if (typeof prevHp === 'number' && typeof entity.hp === 'number' && entity.hp < prevHp) {
+                hasNewDamage = true;
+            }
+            prevHpRef.current[id] = entity.hp;
+
+            if (entity.wounded) {
+                hasNewDamage = true;
+            }
+
+            const isUnitDead = !!(entity.dead || (typeof entity.hp === 'number' && entity.hp <= 0 && !entity.isVCT && !entity.isTrialIcon));
+            if (hasNewDamage && !isUnitDead) {
+                const recoilDirection = getRecoilDirection(entity, newIndicators, combatManager);
+                newDamaged[id] = {
+                    key: Date.now() + Math.random(),
+                    direction: recoilDirection
+                };
+            }
         });
+
+        if (Object.keys(newDamaged).length > 0) {
+            setDamagedUnits(prev => ({ ...prev, ...newDamaged }));
+            Object.keys(newDamaged).forEach(id => {
+                if (damageAnimTimeouts.current[id]) {
+                    clearTimeout(damageAnimTimeouts.current[id]);
+                }
+                damageAnimTimeouts.current[id] = setTimeout(() => {
+                    setDamagedUnits(prev => {
+                        if (!prev[id]) return prev;
+                        const copy = { ...prev };
+                        delete copy[id];
+                        return copy;
+                    });
+                    delete damageAnimTimeouts.current[id];
+                }, 300);
+            });
+        }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [battleData]);
 
@@ -1040,6 +1133,8 @@ export default function SiegeCombatGrid(props) {
         return () => {
             // eslint-disable-next-line react-hooks/exhaustive-deps
             Object.values(indicatorTimeouts.current).forEach(clearTimeout);
+            // eslint-disable-next-line react-hooks/exhaustive-deps
+            Object.values(damageAnimTimeouts.current).forEach(clearTimeout);
         };
     }, []);
 
@@ -1338,6 +1433,7 @@ export default function SiegeCombatGrid(props) {
         const details = getFighterDetails(fighter);
         const liveFighter = getLiveCombatant(fighter.id) || details || fighter;
         const isFighterDead = !!(fighter.dead || details?.dead || (typeof fighter.hp === 'number' && fighter.hp <= 0) || (typeof liveFighter?.hp === 'number' && liveFighter?.hp <= 0));
+        const isDamagedFighter = !isFighterDead && damagedUnits[fighter.id];
         if (showSummaryPanel && (isFighterDead || showDeathAnimation[fighter.id] || fullyDead[fighter.id])) {
             return null;
         }
@@ -1401,7 +1497,7 @@ export default function SiegeCombatGrid(props) {
             details?.rocked ? 'rocked' : '',
             details?.wounded ? 'hit' : '',
             details?.wounded ? (getHitAnimation ? getHitAnimation(details) : '') : '',
-            details?.wounded ? 'hit-flash' : '',
+            (details?.wounded || isDamagedFighter) ? 'hit-flash' : '',
             facingClass,
             (details?.stunned && !isAsleepFighter) ? 'stunned' : '',
             isDisintegrating ? 'disintegrate-shaking' : '',
@@ -1411,6 +1507,7 @@ export default function SiegeCombatGrid(props) {
         const portraitClasses = [
             'portrait', 'fighter-portrait',
             isUltimateCasting ? 'ultimate-casting' : '',
+            isDamagedFighter ? 'hit-flash' : '',
             isTelep ? 'teleporting' : '',
             selectedFighter?.id === fighter.id && !fighter.dead ? 'selected' : '',
             details?.dead ? 'dead fighterDeadAnimation' : '',
@@ -1598,7 +1695,18 @@ export default function SiegeCombatGrid(props) {
                         />
                     )}
                     <div
-                        className={portraitClasses}
+                        key={isDamagedFighter ? isDamagedFighter.key : 'rest'}
+                        className={`unit-damaged-recoil-wrapper${isDamagedFighter ? ` damaged-jerk-${isDamagedFighter.direction}` : ''}`}
+                        style={{
+                            position: 'relative',
+                            width: '100%',
+                            height: '100%',
+                            overflow: 'visible',
+                            pointerEvents: 'auto'
+                        }}
+                    >
+                        <div
+                            className={portraitClasses}
                         style={{
                             backgroundImage: `url("${resolvePortrait(
                                 (fighter.type === 'archaic_familiar' && activeAnimations.some(a => a.sourceUnitId === fighter.id))
@@ -1789,7 +1897,7 @@ export default function SiegeCombatGrid(props) {
                             animation: 'scaleUp 0.2s ease-out'
                         }} />
                     )}
-                    {details?.wounded && <div className="hit-flash-overlay" />}
+                    {(details?.wounded || isDamagedFighter) && <div className="hit-flash-overlay" style={{ zIndex: 320 }} />}
                     {/* Ensnare Visual Overlay – green vine corners matching Sandbox */}
                     {details?.ensnared && !details?.dead && (
                         details.ensnaredSourceAbility === 'bind' ? (
@@ -2002,6 +2110,7 @@ export default function SiegeCombatGrid(props) {
                             pointerEvents: 'none'
                         }} />
                     )}
+                    </div>
                     {!details?.dead && fighter.type !== 'darkness_sphere' && (
                         <div className="indicators-wrapper" style={{
                             zIndex: 310,
@@ -2291,6 +2400,7 @@ export default function SiegeCombatGrid(props) {
         const isMonster = unit.isMonster;
         const isMinion = unit.isMinion;
         const isDead = !!(unit.dead || (typeof unit.hp === 'number' && unit.hp <= 0));
+        const isDamagedMonster = !isDead && damagedUnits[unit.id];
         if (showSummaryPanel && (isDead || showDeathAnimation[unit.id] || fullyDead[unit.id])) {
             return null;
         }
@@ -2381,7 +2491,7 @@ export default function SiegeCombatGrid(props) {
             unit.rocked ? 'rocked' : '',
             unit.wounded ? 'hit' : '',
             unit.wounded ? hitAnim : '',
-            unit.wounded ? 'hit-flash' : '',
+            (unit.wounded || isDamagedMonster) ? 'hit-flash' : '',
             effectiveFacing === 'right' ? 'reversed' : '',
             (unit.stunned && !isAsleepMonster) ? 'stunned' : '',
             isDisintegrating ? 'disintegrate-shaking' : '',
@@ -2391,6 +2501,7 @@ export default function SiegeCombatGrid(props) {
         const portraitClasses = [
             'portrait',
             isMinion ? 'minion-portrait' : 'monster-portrait',
+            isDamagedMonster ? 'hit-flash' : '',
             isHuge ? 'huge-portrait' : (isLarge ? 'large-portrait' : ''),
             showEnlarged ? 'enlarged' : '',
             unit.active ? 'active' : '',
@@ -2495,7 +2606,18 @@ export default function SiegeCombatGrid(props) {
                     }}
                 >
                     <div
-                        className={portraitClasses}
+                        key={isDamagedMonster ? isDamagedMonster.key : 'rest'}
+                        className={`unit-damaged-recoil-wrapper${isDamagedMonster ? ` damaged-jerk-${isDamagedMonster.direction}` : ''}`}
+                        style={{
+                            position: 'relative',
+                            width: '100%',
+                            height: '100%',
+                            overflow: 'visible',
+                            pointerEvents: (unit.opacity === 0) ? 'none' : 'auto'
+                        }}
+                    >
+                        <div
+                            className={portraitClasses}
                         style={{
                             backgroundImage: unit.portrait ? `url("${getCombatantPortrait(unit, greetingInProcess, activeAnimations)}")` : 'none',
                             backgroundSize: undefined,
@@ -2579,7 +2701,7 @@ export default function SiegeCombatGrid(props) {
                                 }}
                             />
                         )}
-                        {unit.wounded && <div className="hit-flash-overlay" />}
+                        {(unit.wounded || isDamagedMonster) && <div className="hit-flash-overlay" style={{ zIndex: 320 }} />}
                         {unit.type === 'darkness_sphere' && (
                             <div
                                 style={{
@@ -2771,6 +2893,7 @@ export default function SiegeCombatGrid(props) {
                                 ))}
                             </>
                         )}
+                    </div>
                     </div>
                     {liveMonster?.marked && !isDead && (
                         <div style={{

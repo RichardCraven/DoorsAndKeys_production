@@ -21,7 +21,7 @@ import { useEffect } from 'react';
 import { updateUserRequest } from '../src/utils/api-handler'
 
 import { getAllUsersRequest } from './utils/api-handler';
-import { storeSessionData, clearSessionData, getUserId, getUserName, getMeta } from './utils/session-handler';
+import { storeSessionData, clearSessionData, getUserId, getUserName, getMeta, storeMeta } from './utils/session-handler';
 import { useHistory } from "react-router";
 import gifOne from './assets/highres-gifs/gifOne.gif';
 import gifTwo from './assets/highres-gifs/gifTwo.gif';
@@ -337,6 +337,25 @@ function App(props) {
   }
   const endDeathSequence = () => {
     setShowToolbar(true);
+    try {
+      const meta = getMeta() || {};
+      meta.crew = [];
+      meta.alternateCrew = [];
+      delete meta.lockedRoster;
+      delete meta.rosterLocked;
+      delete meta.dungeonEntered;
+      meta.dungeonId = null;
+      meta.location = null;
+      meta.selectedDungeon = null;
+      delete meta.selectedDungeonTemplateId;
+      delete meta.selectedDungeonTemplateName;
+      storeMeta(meta);
+      if (props.crewManager) {
+        props.crewManager.crew = [];
+      }
+    } catch (e) {
+      console.warn('endDeathSequence cleanup failed', e);
+    }
   }
   const toggleMenuTray = () => {
     let expanded = menuTrayExpanded;

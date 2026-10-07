@@ -206,10 +206,22 @@ export const TABS = [
 ];
 
 class BuildMenuModal extends Component {
+    getInitialTab = (props) => {
+        const meta = getMeta() || {};
+        const crew = (props.crew && props.crew.length > 0)
+            ? props.crew
+            : ((props.crewManager && props.crewManager.crew) || meta.crew || []);
+        const selectedCrewMember = props.selectedCrewMember || crew.find(c => c && c.selected);
+        if (selectedCrewMember && isArcaneUnit(selectedCrewMember)) {
+            return 'arcane';
+        }
+        return 'earthly';
+    };
+
     constructor(props) {
         super(props);
         this.state = {
-            activeTab: 'earthly',
+            activeTab: this.getInitialTab(props),
             errorMessage: null,
         };
     }
@@ -400,7 +412,20 @@ class BuildMenuModal extends Component {
                     onClick={e => e.stopPropagation()}
                 >
                     {/* Header */}
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(229, 181, 79, 0.3)', paddingBottom: '14px' }}>
+                    <div style={{
+                        position: 'sticky',
+                        top: 0,
+                        zIndex: 25,
+                        background: 'rgba(17, 18, 20, 0.98)',
+                        marginTop: '-24px',
+                        marginLeft: '-28px',
+                        marginRight: '-28px',
+                        padding: '24px 28px 14px 28px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        borderBottom: '1px solid rgba(229, 181, 79, 0.3)'
+                    }}>
                         <div>
                             <div style={{ fontFamily: "'Cinzel', serif", fontSize: '22px', fontWeight: '700', color: '#f9b115', letterSpacing: '0.08em', display: 'flex', alignItems: 'center', gap: '8px' }}>
                                 <span>🏗️</span> CONSTRUCTION & BUILDINGS

@@ -82,8 +82,8 @@ export const USER_PERKS_POOL = [
     {
         id: 'reaper_auto_win',
         name: 'Banishment Aura',
-        shortDesc: '10% Reaper Auto-Win Chance',
-        desc: 'Grants a 10% chance to automatically win and banish the Reaper instantly at the start of a Card Duel.',
+        shortDesc: '50% Reaper Auto-Win Chance',
+        desc: 'Grants a 50% chance to automatically win and banish the Reaper instantly at the start of a Card Duel.',
         icon: '',
         iconImage: 'whiteskull',
         badge: 'Reaper'

@@ -835,7 +835,7 @@ export default function LandingPage(props) {
           return updated;
         });
       }
-    } catch (err) {}
+    } catch (err) { }
   };
 
   const refreshValidDungeons = async () => {
@@ -1221,9 +1221,9 @@ export default function LandingPage(props) {
       {navToTutorials && <Redirect to='/tutorials' />}
 
       <header className="landing-header">
-        <div className="header-logo" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div className="header-logo" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '2px' }}>
           <span className="logo-title">Dream Tower</span>
-          <span className="logo-subtitle">v 0.8.1  BETA</span>
+          <span className="logo-subtitle" style={{ textAlign: 'left', alignSelf: 'flex-start' }}>v 0.9.1  BETA</span>
           {serverWarming && (
             <span style={{
               marginLeft: '8px',
@@ -1265,7 +1265,7 @@ export default function LandingPage(props) {
                     display: 'flex',
                     alignItems: 'center',
                     gap: '6px',
-                    transition: 'all 0.2s ease'
+                    transition: 'all 0.1s ease-out'
                   }}
                 >
                   <span>📜 Lore</span>
@@ -1286,7 +1286,7 @@ export default function LandingPage(props) {
                     display: 'flex',
                     alignItems: 'center',
                     gap: '6px',
-                    transition: 'all 0.2s ease',
+                    transition: 'all 0.1s ease-out',
                     boxShadow: unreadCount > 0 ? '0 0 12px rgba(229, 181, 79, 0.4)' : 'none'
                   }}
                 >
@@ -1891,7 +1891,7 @@ export default function LandingPage(props) {
                   The Monad & Hikaron
                 </h3>
                 <p style={{ margin: 0, textAlign: 'left' }}>
-                  The tower is actually a fabrication of an omnipresent omni-temporal being called <strong>The Monad</strong>. It sends its influence out into the world and draws ‘adventurers’ and fortune seekers to its manifested ‘tower’.
+                  The tower is a fabrication of an omnipresent omni-temporal being called <strong>The Monad</strong>. It sends its influence out into the world and draws ‘adventurers’ and fortune seekers to its manifested ‘tower’.
                 </p>
                 <p style={{ margin: 0, textAlign: 'left' }}>
                   Long ago it lured a mad wizard named <strong>Hikaron</strong> into its tower and he got lost in his own machinations and is embedded in the substrate of the tower. Hikaron then sends out his own influence to try luring would-be liberators into the tower, which is where your story starts.

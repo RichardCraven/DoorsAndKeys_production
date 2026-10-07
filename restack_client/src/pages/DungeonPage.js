@@ -4,7 +4,7 @@ import gifTwo from '../assets/highres-gifs/gifTwo.gif';
 import gifThree from '../assets/highres-gifs/gifThree.gif';
 
 import socketHandler from '../utils/socket-handler';
-import { INTERVALS, MONSTER_RESPAWN_MINUTES, ITEM_RESPAWN_MINUTES } from '../utils/shared-constants';
+import { INTERVALS, MONSTER_RESPAWN_MINUTES, ITEM_RESPAWN_MINUTES, KEY_RESPAWN_MINUTES } from '../utils/shared-constants';
 import '../styles/dungeon-board.scss'
 import Tile, { isTerritoryLanternItem, getTileTerritoryAffiliationHelper } from '../components/tile'
 import ProjectileCanvas from '../components/ProjectileCanvas'
@@ -46,6 +46,7 @@ import * as CampManager from '../utils/camp-manager';
 import { getCrewRangeRingSpecs } from '../utils/crew-range-helper';
 import Typewriter from '../utils/typewriter';
 import { getNextNarrativePayload } from '../utils/narrative-manager';
+import hikaronImg from '../assets/Hikaron.jpg';
 import { cilCaretRight, cilCaretLeft, cilMenu } from '@coreui/icons';
 import CIcon from '@coreui/icons-react';
 
@@ -340,7 +341,7 @@ function hexToRgba(hex, alpha = 1) {
 }
 
 // Small subcomponent to render modal header + body based on modalType
-const ModalInner = ({ modalType, showModal = true, updates, crew, tileSize, handleMemberClickRitual, handleCrewTileHover, setMemberRitualOptions, onLearnRitual, inventoryManager, saveUserData, onForceUpdate, onClose, onDreamDenSelect }) => {
+const ModalInner = ({ modalType, showModal = true, updates, crew, tileSize, handleMemberClickRitual, handleCrewTileHover, setMemberRitualOptions, onLearnRitual, inventoryManager, saveUserData, onForceUpdate, onClose, onDreamDenSelect, onSpawnPygmy, tutorialMerchantHighlight }) => {
     const [merchantStock, setMerchantStock] = React.useState([]);
     const [buybackStock, setBuybackStock] = React.useState([]);
     const [feedbackMsg, setFeedbackMsg] = React.useState('');
@@ -985,36 +986,76 @@ const ModalInner = ({ modalType, showModal = true, updates, crew, tileSize, hand
                         <div className="vendor-panel">
                             <h3 className="panel-title">Merchant's Stock</h3>
                             <div className="item-list scroll-container">
-                                {[...merchantStock, ...buybackStock].map((item, idx) => (
-                                    <div key={idx} className={`item-card ${item.isBuyback ? 'buyback-item-card' : ''}`}>
+                                {[...merchantStock, ...buybackStock].map((item, idx) => {
+                                    const isTutorialKey = tutorialMerchantHighlight && (
+                                        item._im_key === 'minor_key' ||
+                                        item.icon === 'minor_key' ||
+                                        item.id === 'key_minor' ||
+                                        (item.name && item.name.toLowerCase().includes('key'))
+                                    );
+                                    return (
                                         <div
-                                            className="merchant-item-icon-btn"
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                setInspectedItem({ ...item, isStock: true });
+                                            key={idx}
+                                            className={`item-card ${item.isBuyback ? 'buyback-item-card' : ''} ${isTutorialKey ? 'tutorial-key-highlight-card' : ''}`}
+                                            style={{
+                                                ...(isTutorialKey ? {
+                                                    border: '2px solid #ffd700',
+                                                    boxShadow: '0 0 25px rgba(255, 215, 0, 0.95), inset 0 0 15px rgba(255, 215, 0, 0.4)',
+                                                    backgroundColor: 'rgba(255, 215, 0, 0.18)',
+                                                    transform: 'scale(1.03)',
+                                                    transition: 'all 0.3s ease',
+                                                    position: 'relative'
+                                                } : {})
                                             }}
-                                            title={`Inspect ${item.name}`}
                                         >
-                                            {renderItemIcon(item.icon)}
-                                            <span className="merchant-icon-inspect-cue">🔍</span>
-                                        </div>
-                                        <div className="item-details">
-                                            <div className="item-name" style={{ display: 'flex', alignItems: 'center' }}>
-                                                <span>{item.name}</span>
-                                                {item.isBuyback && (
-                                                    <span style={{ fontSize: '10px', fontWeight: '700', padding: '2px 6px', borderRadius: '4px', background: 'rgba(249, 177, 21, 0.2)', color: '#f9b115', border: '1px solid rgba(249, 177, 21, 0.4)', marginLeft: '8px' }}>
-                                                        Buyback
-                                                    </span>
-                                                )}
+                                            {isTutorialKey && (
+                                                <div style={{
+                                                    position: 'absolute',
+                                                    top: '-12px',
+                                                    right: '12px',
+                                                    background: 'linear-gradient(135deg, #ffd700, #ff8c00)',
+                                                    color: '#000',
+                                                    fontWeight: '900',
+                                                    fontSize: '11px',
+                                                    letterSpacing: '0.8px',
+                                                    padding: '3px 10px',
+                                                    borderRadius: '12px',
+                                                    boxShadow: '0 0 12px rgba(255, 215, 0, 0.9)',
+                                                    zIndex: 10,
+                                                    textTransform: 'uppercase'
+                                                }}>
+                                                    ★ TUTORIAL KEY ★
+                                                </div>
+                                            )}
+                                            <div
+                                                className="merchant-item-icon-btn"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setInspectedItem({ ...item, isStock: true });
+                                                }}
+                                                title={`Inspect ${item.name}`}
+                                            >
+                                                {renderItemIcon(item.icon)}
+                                                <span className="merchant-icon-inspect-cue">🔍</span>
                                             </div>
-                                            <div className="item-description">{item.description || item.type}</div>
+                                            <div className="item-details">
+                                                <div className="item-name" style={{ display: 'flex', alignItems: 'center' }}>
+                                                    <span>{item.name}</span>
+                                                    {item.isBuyback && (
+                                                        <span style={{ fontSize: '10px', fontWeight: '700', padding: '2px 6px', borderRadius: '4px', background: 'rgba(249, 177, 21, 0.2)', color: '#f9b115', border: '1px solid rgba(249, 177, 21, 0.4)', marginLeft: '8px' }}>
+                                                            Buyback
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <div className="item-description">{item.description || item.type}</div>
+                                            </div>
+                                            <button className="buy-btn" onClick={() => handleBuyItem(item)}>
+                                                <span>{item.isBuyback ? 'Buy Back' : 'Buy'}</span>
+                                                <span className="price-tag"><span style={{ color: '#ffd700', marginRight: '4px' }}>◆</span> {item.price}</span>
+                                            </button>
                                         </div>
-                                        <button className="buy-btn" onClick={() => handleBuyItem(item)}>
-                                            <span>{item.isBuyback ? 'Buy Back' : 'Buy'}</span>
-                                            <span className="price-tag"><span style={{ color: '#ffd700', marginRight: '4px' }}>◆</span> {item.price}</span>
-                                        </button>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         </div>
 
@@ -1586,6 +1627,51 @@ const ModalInner = ({ modalType, showModal = true, updates, crew, tileSize, hand
                 </div>
             )}
 
+            {modalType === 'War Camp' && (
+                <div className="war-camp-screen" style={{
+                    padding: '30px',
+                    textAlign: 'center',
+                    background: 'rgba(20, 18, 24, 0.95)',
+                    border: '1px solid #d4a844',
+                    borderRadius: '8px',
+                    color: '#f0ede5',
+                    fontFamily: "'Cinzel', serif"
+                }}>
+                    <h2 style={{ color: '#e5b54f', margin: '0 0 16px 0', fontSize: '2rem', letterSpacing: '2px' }}>War Camp</h2>
+                    <p style={{ color: '#a7a3b3', margin: '0 0 24px 0', fontSize: '1.05rem', lineHeight: 1.6 }}>
+                        Recruit a loyal Pygmy Companion to assist your party. The Pygmy will follow your steps across the board, but will not travel off the board and departs after your next combat encounter or rest.
+                    </p>
+                    <div style={{ marginBottom: '24px', fontSize: '1.1rem' }}>
+                        <span>Available Dust: <strong style={{ color: '#b388ff' }}>✦ {inventoryManager?.shimmering_dust || 0}</strong></span>
+                    </div>
+                    <button
+                        className="c-btn"
+                        disabled={(inventoryManager?.shimmering_dust || 0) < 5}
+                        style={{
+                            background: (inventoryManager?.shimmering_dust || 0) >= 5 ? 'rgba(212, 168, 68, 0.2)' : 'rgba(50, 50, 50, 0.3)',
+                            color: (inventoryManager?.shimmering_dust || 0) >= 5 ? '#fcd34d' : '#7e6b99',
+                            border: (inventoryManager?.shimmering_dust || 0) >= 5 ? '1px solid #d4a844' : '1px solid #555',
+                            padding: '12px 28px',
+                            fontSize: '1rem',
+                            borderRadius: '4px',
+                            cursor: (inventoryManager?.shimmering_dust || 0) >= 5 ? 'pointer' : 'not-allowed',
+                            fontFamily: '"Cinzel", serif',
+                            letterSpacing: '1.5px',
+                            transition: 'all 0.3s ease'
+                        }}
+                        onClick={() => {
+                            if ((inventoryManager?.shimmering_dust || 0) >= 5) {
+                                inventoryManager.shimmering_dust -= 5;
+                                if (typeof onSpawnPygmy === 'function') onSpawnPygmy();
+                                if (typeof onClose === 'function') onClose();
+                            }
+                        }}
+                    >
+                        {(inventoryManager?.shimmering_dust || 0) >= 5 ? 'Spawn Pygmy Companion (5 Dust)' : 'Insufficient Dust (Needs 5 ✦)'}
+                    </button>
+                </div>
+            )}
+
             {modalType === 'SharpenBladesDetails' && (
                 <div className="sharpen-blades-details-zone" style={{
                     padding: '24px',
@@ -2093,6 +2179,41 @@ class DungeonPage extends React.Component {
                 ],
             });
         }
+        if (character.type === 'glitterburn') {
+            const hasLurePrepping = (character.specialActions || []).some(a => a && a.type === 'phosphor_lure' && !a.available);
+            const hasFlashPrepping = (character.specialActions || []).some(a => a && a.type === 'flashbang_powder' && !a.available);
+            const hasDecoyPrepping = (character.specialActions || []).some(a => a && a.type === 'mirror_decoy' && !a.available);
+
+            actions.push({
+                type: 'pyrotechnics',
+                name: 'Pyrotechnics',
+                iconUrl: images['glitter_burst'] || images['glitter_burst_glitterburn'] || '',
+                noMaxCap: true,
+                subTypes: [
+                    {
+                        type: 'craft_phosphor_lure',
+                        name: 'Phosphor Lure (30m)',
+                        iconUrl: images['prism_snare'] || images['prism_snare_glitterburn'] || '',
+                        available: !hasLurePrepping,
+                        count: (character.specialActions || []).filter(a => a && a.type === 'phosphor_lure' && a.available).length
+                    },
+                    {
+                        type: 'brew_flashbang',
+                        name: 'Flashbang Powder (1h)',
+                        iconUrl: images['glitter_burst'] || images['glitter_burst_glitterburn'] || '',
+                        available: !hasFlashPrepping,
+                        count: (character.specialActions || []).filter(a => a && a.type === 'flashbang_powder' && a.available).length
+                    },
+                    {
+                        type: 'assemble_mirror_decoy',
+                        name: 'Mirror Decoy (2h)',
+                        iconUrl: images['starlight_decoy'] || images['starlight_decoy_glitterburn'] || '',
+                        available: !hasDecoyPrepping,
+                        count: (character.specialActions || []).filter(a => a && a.type === 'mirror_decoy' && a.available).length
+                    }
+                ]
+            });
+        }
         // Add other class logic here as needed
 
         // Compute per-action maximum: only count subtypes belonging to that action type.
@@ -2118,7 +2239,8 @@ class DungeonPage extends React.Component {
                         a.type === action.type ||
                         (action.type === 'glyph' && (a.type === 'spell' || a.type === 'glyph')) ||
                         (action.type === 'prepare_poison' && a.type === 'acid_bomb') ||
-                        (action.type === 'deploy_animal' && a.type === 'rat_agent');
+                        (action.type === 'deploy_animal' && a.type === 'rat_agent') ||
+                        (action.type === 'pyrotechnics' && (a.type === 'phosphor_lure' || a.type === 'flashbang_powder' || a.type === 'mirror_decoy'));
                     if (!typeMatches) return false;
                     const start = new Date(a.startDate);
                     const end = new Date(a.endDate);
@@ -2903,12 +3025,14 @@ class DungeonPage extends React.Component {
         }
 
         this.state = {
+            activePygmyCompanion: null,
             generatorUpgradeState: null,
             pocketInfluence: 0,
             pocketFreeWill: 50,
             showReaperOfferModal: false,
             showTrophiesModal: false,
             showPerformanceOverlay: false,
+            aggroOn: (typeof initMeta.aggroOn === 'boolean') ? initMeta.aggroOn : (typeof localStorage !== 'undefined' && localStorage.getItem('aggroOn') === 'true'),
             trapVisionEnabled: initialTrapVision,
             isLoadingDungeon: true,
             currentLoadingGif: (() => {
@@ -2991,6 +3115,7 @@ class DungeonPage extends React.Component {
             updates: [],
             timeToRespawn: '',
             itemTimeToRespawn: '',
+            keyTimeToRespawn: '',
             relockTimeToRespawn: '',
             dungeonInscriptionPicker: null,
             showDungeonInscriptionModal: false,
@@ -3487,8 +3612,8 @@ class DungeonPage extends React.Component {
                 // The interval will show it once the dungeon is loaded.
                 modalType: '',
                 showModal: false,
-                showDebugLevelUpScreen: pendingQueue.length > 0 ? true : false,
-                showUserLevelUpModal: getPendingUserPerkLevels() > 0,
+                showDebugLevelUpScreen: (isTutorial || this._isTutorialSession) ? false : (pendingQueue.length > 0 ? true : false),
+                showUserLevelUpModal: (isTutorial || this._isTutorialSession) ? false : (getPendingUserPerkLevels() > 0),
                 debugLevelUpQueue: pendingQueue,
                 popoutResources: meta?.popoutResources || false
             };
@@ -3683,17 +3808,53 @@ class DungeonPage extends React.Component {
         delete meta.disabledOutposts;
         delete meta.failedMonolithActivations;
         delete meta.activatedLoci;
-        delete meta.activatedLocusRecords;
-        if (this.props.crewManager && Array.isArray(this.props.crewManager.crew)) {
-            this.props.crewManager.crew.forEach(c => {
-                if (c) {
-                    c.hp = c.starting_hp || (c.stats ? c.stats.hp : 10);
-                    c.dead = false;
-                }
+        // Roll back crew members that were on the roster in this session where they died
+        const sessionRosterMembers = [];
+        const seenRosterIds = new Set();
+        const addSessionMember = (m) => {
+            if (!m) return;
+            const mid = m.id || m.name || m.type;
+            if (mid && !seenRosterIds.has(mid)) {
+                seenRosterIds.add(mid);
+                sessionRosterMembers.push(m);
+            }
+        };
+
+        if (Array.isArray(meta.crew)) meta.crew.forEach(addSessionMember);
+        if (Array.isArray(meta.alternateCrew)) meta.alternateCrew.forEach(addSessionMember);
+        if (Array.isArray(meta.lockedRoster) && this.props.crewManager && Array.isArray(this.props.crewManager.adventurers)) {
+            meta.lockedRoster.forEach(id => {
+                const adv = this.props.crewManager.adventurers.find(a => a && a.id === id);
+                if (adv) addSessionMember(adv);
             });
-            meta.crew = this.props.crewManager.crew;
-            this.props.crewManager.initializeCrew(meta.crew);
         }
+        if (this.props.crewManager && Array.isArray(this.props.crewManager.crew)) {
+            this.props.crewManager.crew.forEach(addSessionMember);
+        }
+
+        sessionRosterMembers.forEach(member => {
+            if (this.props.crewManager && typeof this.props.crewManager.rollbackCrewMemberToHalfLevel === 'function') {
+                this.props.crewManager.rollbackCrewMemberToHalfLevel(member);
+            }
+        });
+
+        // Clear active crew and session roster locks
+        meta.crew = [];
+        meta.alternateCrew = [];
+        delete meta.lockedRoster;
+        delete meta.rosterLocked;
+        delete meta.dungeonEntered;
+        if (this.props.crewManager) {
+            this.props.crewManager.crew = [];
+        }
+
+        // Clear selected dungeon
+        meta.dungeonId = null;
+        meta.location = null;
+        meta.selectedDungeon = null;
+        delete meta.selectedDungeonTemplateId;
+        delete meta.selectedDungeonTemplateName;
+
         meta.deathTracker = 0;
         storeMeta(meta);
 
@@ -5727,9 +5888,35 @@ class DungeonPage extends React.Component {
             }, () => {
                 this.checkMobileViewportCentering(coords);
                 this.sendLocationSocketUpdate(coords);
+                this.checkDebtCollectorAmbush();
             });
         } catch (e) {
             console.warn('updateFloatingPlayerPosition failed', e);
+        }
+    }
+
+    checkDebtCollectorAmbush = () => {
+        if (this.state.inMonsterBattle || this.state.inTowerSiege || this._isDebtCollectorTriggering) return;
+        const crew = (this.props.crewManager && Array.isArray(this.props.crewManager.crew))
+            ? this.props.crewManager.crew
+            : [];
+        const horo = crew.find(m => m && ((m.type || '').toLowerCase() === 'horologist' || (m.image || '').toLowerCase() === 'horologist'));
+        if (!horo) return;
+
+        const strainTier = this.props.crewManager?.getTemporalStrainTier ? this.props.crewManager.getTemporalStrainTier(horo) : 0;
+        if (strainTier >= 3) {
+            if (Math.random() < 0.20) {
+                this._isDebtCollectorTriggering = true;
+                const debtCollector = (this.props.monsterManager && typeof this.props.monsterManager.getMonster === 'function')
+                    ? this.props.monsterManager.getMonster('debt_collector')
+                    : { type: 'debt_collector', key: 'debt_collector', name: 'The Debt Collector', portrait: images['qlippoth'] };
+
+                this.displayMessage("⚖️ The Debt Collector manifests from the Temporal Strain! The Ledger demands payment!");
+                setTimeout(() => {
+                    this._isDebtCollectorTriggering = false;
+                    this.setState({ monster: debtCollector, inMonsterBattle: true, keysLocked: true });
+                }, 1000);
+            }
         }
     }
 
@@ -6344,6 +6531,21 @@ class DungeonPage extends React.Component {
         }
 
         return null;
+    };
+
+    handleSpawnPygmyCompanion = () => {
+        const bm = this.props.boardManager;
+        const playerLoc = bm?.playerTile?.location ? [...bm.playerTile.location] : [0, 0];
+        const currentBoardIndex = bm?.boardIndex || 0;
+        this.setState({
+            activePygmyCompanion: {
+                id: 'pygmy_companion',
+                name: 'Pygmy Companion',
+                location: playerLoc,
+                boardIndex: currentBoardIndex
+            }
+        });
+        this.displayMessage('A friendly Pygmy Companion has joined your party!');
     };
 
     enterSuperboardPocketDimension = (type) => {
@@ -10160,23 +10362,15 @@ class DungeonPage extends React.Component {
                     return;
                 }
 
+                const { isVendor: isVendorTile, vendorType: detectedVendorType } = this.getVendorInfo(destTileObj);
                 let targetVendorTile = null;
-                const cType = (destTileObj && typeof destTileObj.contains === 'object' && destTileObj.contains !== null) ? destTileObj.contains.type : (destTileObj?.contains || null);
-                const cSub = (destTileObj && typeof destTileObj.contains === 'object' && destTileObj.contains !== null) ? (destTileObj.contains.subtype || destTileObj.contains.building || destTileObj.contains.name) : (destTileObj?.building || null);
-                const rawKey = String(cSub || cType || destTileObj?.image || '').toLowerCase();
-                const isVendorTile = cType === 'vendor' || cType === 'merchant' || cType === 'alchemist' ||
-                    ['merchant', 'alchemist', 'vendor', 'dream_den', 'dream den', 'fungal_nursery'].some(k => rawKey.includes(k)) ||
-                    (((destTileObj?.contains && typeof destTileObj.contains === 'object' && (destTileObj.contains.vendorGroupId || destTileObj.contains.vendorCell)) ||
-                    !!(destTileObj?.vendorGroupId || destTileObj?.vendorCell)) && ['merchant', 'alchemist', 'vendor', 'dream_den', 'dream den', 'fungal_nursery'].some(k => rawKey.includes(k)));
 
                 if (!hasPassageWallBetween && isVendorTile) {
                     targetVendorTile = destTileObj;
                 }
 
                 if (targetVendorTile) {
-                    const vendorType = (rawKey.includes('alchemist') || cSub === 'alchemist' || cType === 'alchemist') ? 'alchemist' :
-                                       (rawKey.includes('fungal_nursery') || cSub === 'fungal_nursery' || cType === 'fungal_nursery') ? 'fungal_nursery' :
-                                       (rawKey.includes('dream_den') || rawKey.includes('dream den')) ? 'dream_den' : 'merchant';
+                    const vendorType = detectedVendorType || 'merchant';
                     this._isMoving = false;
                     this._processingQueuedMove = false;
                     this._movementQueue = [];
@@ -10410,7 +10604,13 @@ class DungeonPage extends React.Component {
                             const updated = (meta.crew || []).find(c => c && c.id === this.state.selectedCrewMember.id);
                             return updated ? { selectedCrewMember: { ...updated } } : {};
                         } catch (e) { return {}; }
-                    })() : {})
+                    })() : {}),
+                    ...(playerMoved && this.state.activePygmyCompanion ? {
+                        activePygmyCompanion: this.state.activePygmyCompanion.boardIndex === (bm.boardIndex || 0) ? {
+                            ...this.state.activePygmyCompanion,
+                            location: originCoords
+                        } : null
+                    } : {})
                 }, () => {
                     this.checkMobileViewportCentering(bm.playerTile.location);
                     this.sendLocationSocketUpdate(bm.playerTile.location);
@@ -10466,7 +10666,13 @@ class DungeonPage extends React.Component {
                         const updated = (meta.crew || []).find(c => c && c.id === this.state.selectedCrewMember.id);
                         return updated ? { selectedCrewMember: { ...updated } } : {};
                     } catch (e) { return {}; }
-                })() : {})
+                })() : {}),
+                ...(playerMoved && this.state.activePygmyCompanion ? {
+                    activePygmyCompanion: this.state.activePygmyCompanion.boardIndex === (bm.boardIndex || 0) ? {
+                        ...this.state.activePygmyCompanion,
+                        location: originCoords
+                    } : null
+                } : {})
             }, () => {
                 if (ambushTriggered) {
                     this.ambushTimeout = setTimeout(() => {
@@ -11906,9 +12112,10 @@ class DungeonPage extends React.Component {
     }
     handleRespawnTime = async () => {
         const meta = getMeta() || {};
-        // Ensure both monster and item respawn dates exist
+        // Ensure monster, item, and key respawn dates exist
         if (!meta.respawnDate) this.setNewRespawnDate();
         if (!meta.itemRespawnDate) this.setNewItemRespawnDate();
+        if (!meta.keyRespawnDate) this.setNewKeyRespawnDate();
 
         // Monster respawn timer
         try {
@@ -11949,6 +12156,27 @@ class DungeonPage extends React.Component {
             }
             if (!this.state.inSuperboard) {
                 this.setState({ itemTimeToRespawn: itemRespawnString });
+            }
+        } catch (e) { }
+
+        // Key respawn timer (175% of item respawn = 35 minutes)
+        try {
+            let krespawn = new Date(meta.keyRespawnDate);
+            let now3 = new Date();
+            let kdiffInMinutes = diff_minutes(krespawn, now3);
+            let kdiffInSeconds = diff_seconds(krespawn, now3);
+            let keyRespawnString = '';
+            if (kdiffInMinutes > 1) {
+                keyRespawnString = `${kdiffInMinutes} m`;
+            } else if (kdiffInMinutes < 2 && kdiffInSeconds > 1) {
+                keyRespawnString = `${kdiffInSeconds} s`;
+            } else {
+                this.respawnKeys();
+                keyRespawnString = '';
+                this.setNewKeyRespawnDate();
+            }
+            if (!this.state.inSuperboard) {
+                this.setState({ keyTimeToRespawn: keyRespawnString });
             }
         } catch (e) { }
 
@@ -12014,6 +12242,20 @@ class DungeonPage extends React.Component {
         let respawnString = `${diffInMinutes} m`
         this.setState({ itemTimeToRespawn: respawnString });
     }
+
+    setNewKeyRespawnDate = () => {
+        // Key respawn interval: 35 minutes (175% of ITEM_RESPAWN_MINUTES)
+        let soon = new Date().addMinutes(KEY_RESPAWN_MINUTES);
+        let meta = getMeta() || {};
+        meta.keyRespawnDate = soon;
+        try { storeMeta(meta); } catch (e) { }
+
+        let respawn = new Date(soon);
+        let now = new Date();
+        let diffInMinutes = diff_minutes(respawn, now);
+        let respawnString = `${diffInMinutes} m`;
+        this.setState({ keyTimeToRespawn: respawnString });
+    };
     respawnMonsters = async () => {
         let dungeons = [],
             selectedDungeon;
@@ -12137,6 +12379,57 @@ class DungeonPage extends React.Component {
             }
         } catch (e) {
             console.warn('Error triggering respawnItems', e);
+        }
+    }
+    respawnKeys = async () => {
+        let dungeons = [],
+            selectedDungeon = null;
+        const allDungeons = await loadAllDungeonsRequest();
+        const dungeonList = (allDungeons && Array.isArray(allDungeons.data)) ? allDungeons.data : [];
+
+        dungeonList.forEach((e) => {
+            try {
+                let d = JSON.parse(e.content);
+                d.id = e._id;
+                dungeons.push(d);
+            } catch (err) { }
+        });
+
+        const activeDungeon = (this.props && this.props.boardManager && this.props.boardManager.dungeon) || this.dungeon || null;
+        let meta = null;
+        try { meta = getMeta(); } catch (e) { }
+        const selectedTemplateName = meta ? meta.selectedDungeon : null;
+        const activeDungeonName = activeDungeon ? activeDungeon.name : null;
+
+        const candidateTemplates = dungeons.filter((d) => d && !d.isSavedState);
+        if (selectedTemplateName) {
+            selectedDungeon = candidateTemplates.find((d) => d && d.name === selectedTemplateName) || null;
+        }
+        if (!selectedDungeon && activeDungeonName) {
+            const prefixMatches = candidateTemplates
+                .filter((d) => d && d.name && activeDungeonName.startsWith(`${d.name}_`))
+                .sort((a, b) => b.name.length - a.name.length);
+            selectedDungeon = prefixMatches[0] || null;
+        }
+        if (!selectedDungeon) {
+            selectedDungeon = activeDungeon || dungeons[0] || null;
+        }
+
+        try {
+            if (this.props.boardManager && typeof this.props.boardManager.respawnKeys === 'function') {
+                this.props.boardManager.respawnKeys(selectedDungeon);
+            }
+            try {
+                const meta = getMeta();
+                storeMeta(meta);
+            } catch (e) { }
+            if (this.props.saveUserData) {
+                try {
+                    this.props.saveUserData();
+                } catch (e) { }
+            }
+        } catch (e) {
+            console.warn('Error triggering respawnKeys', e);
         }
     }
     componentWillUnmount() {
@@ -17595,7 +17888,7 @@ class DungeonPage extends React.Component {
         this._pygmiesMoving = true;
 
         // Sneak: player is hidden from pygmies — skip movement tick
-        if (this.state.isSneaking) return;
+        if (this.state.isSneaking || Date.now() < (this.state.stopwatchFrozenUntil || 0)) return;
 
         try {
             if (this.state.inSuperboard) {
@@ -18727,28 +19020,33 @@ class DungeonPage extends React.Component {
             ].filter(Boolean);
 
             let weaponIconSrc = null;
-            try {
-                const inv = Array.isArray(selectedCrewMember.inventory) ? selectedCrewMember.inventory : [];
-                const equippedWeapon = inv.find(i =>
-                    i && (i.type === 'weapon' || i.itemType === 'weapon') &&
-                    (i.equippedSlot === 'right' || i.equippedSlot === 'left' || i.equippedBy === selectedCrewMember.id || i.equipped)
-                );
-                const rawIcon = equippedWeapon && (equippedWeapon.icon || equippedWeapon.image || equippedWeapon.img);
-                if (rawIcon) {
-                    weaponIconSrc = this.resolveWeaponIconSrc(rawIcon);
-                }
-            } catch (e2) { /* ignore */ }
+            const isMonkClass = mType.includes('monk') || mType.includes('tian') || mType.includes('chi') || mType.includes('martial');
+            if (isMonkClass) {
+                weaponIconSrc = unwrap(images.monk_punch) || unwrap(images.monk_force_punch) || unwrap(images.fist_punch);
+            } else {
+                try {
+                    const inv = Array.isArray(selectedCrewMember.inventory) ? selectedCrewMember.inventory : [];
+                    const equippedWeapon = inv.find(i =>
+                        i && (i.type === 'weapon' || i.itemType === 'weapon') &&
+                        (i.equippedSlot === 'right' || i.equippedSlot === 'left' || i.equippedBy === selectedCrewMember.id || i.equipped)
+                    );
+                    const rawIcon = equippedWeapon && (equippedWeapon.icon || equippedWeapon.image || equippedWeapon.img);
+                    if (rawIcon) {
+                        weaponIconSrc = this.resolveWeaponIconSrc(rawIcon);
+                    }
+                } catch (e2) { /* ignore */ }
 
-            if (!weaponIconSrc && tier1Fallbacks.length > 0) {
-                const pick = Math.floor(Math.random() * tier1Fallbacks.length);
-                weaponIconSrc = tier1Fallbacks[pick];
-            }
-            if (!weaponIconSrc) {
-                weaponIconSrc = this.resolveWeaponIconSrc(null);
+                if (!weaponIconSrc && tier1Fallbacks.length > 0) {
+                    const pick = Math.floor(Math.random() * tier1Fallbacks.length);
+                    weaponIconSrc = tier1Fallbacks[pick];
+                }
+                if (!weaponIconSrc) {
+                    weaponIconSrc = this.resolveWeaponIconSrc(null);
+                }
             }
 
             const arcId = Date.now();
-            this.setState({ swingArc: { id: arcId, facing: playerFacing || 'right', weaponIcon: weaponIconSrc } });
+            this.setState({ swingArc: { id: arcId, facing: playerFacing || 'right', weaponIcon: weaponIconSrc, isMonk: isMonkClass } });
             setTimeout(() => {
                 this.setState(prev => (prev.swingArc && prev.swingArc.id === arcId) ? { swingArc: null } : null);
             }, 500);
@@ -19198,6 +19496,35 @@ class DungeonPage extends React.Component {
         }
     };
 
+    handleToggleAggroOn = () => {
+        const nextMode = !this.state.aggroOn;
+        this.state.aggroOn = nextMode;
+        this.setState({ aggroOn: nextMode });
+        if (nextMode) {
+            this.checkAggroMonsters();
+        }
+        let meta = getMeta() || {};
+        meta.aggroOn = nextMode;
+        storeMeta(meta);
+        if (typeof localStorage !== 'undefined') {
+            try { localStorage.setItem('aggroOn', String(nextMode)); } catch (e) {}
+        }
+        if (!nextMode && this.props.boardManager && this.props.boardManager.tiles) {
+            this.props.boardManager.tiles.forEach(t => {
+                if (t && t.isPursuing && !this.isAggroMonsterObj(t.contains, t)) {
+                    if (t.pursuitInterval) clearInterval(t.pursuitInterval);
+                    t.isPursuing = false;
+                }
+            });
+        }
+        if (this.props.boardManager && typeof this.props.boardManager.refreshTiles === 'function') {
+            try { this.props.boardManager.refreshTiles(); } catch (e) {}
+        }
+        if (typeof this.forceUpdate === 'function') {
+            try { this.forceUpdate(); } catch (e) {}
+        }
+    };
+
     handleToggleDebugMode = () => {
         const nextMode = !this.state.debugMode;
         this.setState({ debugMode: nextMode });
@@ -19415,7 +19742,7 @@ class DungeonPage extends React.Component {
                                 ritual_efficiency: { name: 'Ritual Efficiency', desc: 'Ritual prep time -25%' },
                                 revive: { name: 'Revive', desc: 'Once per run: fallen member revived at 25% HP' },
                                 fortify: { name: 'Fortify', desc: 'Resolve does not decay while camping' },
-                                breacher: { name: 'Breacher', desc: 'Force open a Minor Key gate once per level' },
+                                breacher: { name: 'Breacher', desc: 'Force open any Major or Minor Gate' },
                                 rally: { name: 'Rally', desc: '+5 bonus Resolve on combat victory' },
                                 iron_will: { name: 'Iron Will', desc: 'Party Resolve never drops below 20 from deaths' },
                                 arcane_sense: { name: 'Arcane Sense', desc: 'Identifies chest tier before opening' },
@@ -21612,7 +21939,8 @@ class DungeonPage extends React.Component {
                                                     const defaultExpSkills = {
                                                         sage: ['healing_ground', 'sing'],
                                                         ranger: ['sneak_attack', 'spike_trap'],
-                                                        soldier: ['soldier_shield', 'breacher']
+                                                        soldier: ['soldier_shield', 'breacher'],
+                                                        summoner: ['wandering_eye']
                                                     };
                                                     const memberClass = ((currentMember && (currentMember.type || currentMember.image)) || '').toLowerCase();
                                                     const expSkills = (currentMember && Array.isArray(currentMember.expeditionSkills) && currentMember.expeditionSkills.length > 0)
@@ -21625,9 +21953,9 @@ class DungeonPage extends React.Component {
                                                     const skillName = skillDef ? skillDef.name : (skillKey ? skillKey.replace(/_/g, ' ') : null);
                                                     let slotTitle = skillName ? `${skillName} (Expedition Skill Slot ${slotIdx + 1}` : `Expedition Skill Slot ${slotIdx + 1}`;
                                                     if (isSelected && isSlotSelected) {
-                                                        slotTitle += skillName ? ` - Selected - Press Shift+Space to trigger)` : ` - Selected - Press Shift+Space to trigger`;
+                                                        slotTitle += skillName ? ` - Selected - Click or Press Shift+Space to trigger)` : ` - Selected - Click or Press Shift+Space to trigger`;
                                                     } else if (skillName) {
-                                                        slotTitle += `)`;
+                                                        slotTitle += ` - Click or Press Shift+Space to trigger)`;
                                                     }
 
                                                     return (
@@ -21639,6 +21967,7 @@ class DungeonPage extends React.Component {
                                                             onClick={() => {
                                                                 if (isSelected) {
                                                                     this.selectExpeditionSkillSlot(slotIdx);
+                                                                    this.triggerSelectedExpeditionSkill(slotIdx);
                                                                 }
                                                             }}
                                                         >
@@ -21910,6 +22239,50 @@ class DungeonPage extends React.Component {
                                         position: 'absolute',
                                         top: '2px',
                                         left: this.state.trapVisionEnabled ? '18px' : '2px',
+                                        transition: 'left 0.25s ease'
+                                    }} />
+                                </div>
+                            </div>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                            <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#ccc', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Aggro On</span>
+                            <div
+                                className="aggro-on-toggle-inline"
+                                style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px',
+                                    background: 'rgba(0, 0, 0, 0.3)',
+                                    border: this.state.aggroOn ? '1px solid #ff3333' : '1px solid rgba(255, 255, 255, 0.25)',
+                                    boxShadow: this.state.aggroOn ? '0 0 10px rgba(255, 51, 51, 0.35)' : 'none',
+                                    borderRadius: '20px',
+                                    padding: '4px 12px',
+                                    cursor: 'pointer',
+                                    userSelect: 'none',
+                                    transition: 'all 0.25s ease'
+                                }}
+                                onClick={this.handleToggleAggroOn}
+                                title="Toggle Aggro On (All in-dungeon monsters default to aggro: true and pursue within radius)"
+                            >
+                                <span style={{ fontSize: '11px', fontWeight: 'bold', color: this.state.aggroOn ? '#ff3333' : '#ccc', letterSpacing: '0.5px' }}>
+                                    {this.state.aggroOn ? 'ON' : 'OFF'}
+                                </span>
+                                <div style={{
+                                    width: '32px',
+                                    height: '16px',
+                                    borderRadius: '9px',
+                                    background: this.state.aggroOn ? '#ff3333' : '#444',
+                                    position: 'relative',
+                                    transition: 'background 0.25s ease'
+                                }}>
+                                    <div style={{
+                                        width: '12px',
+                                        height: '12px',
+                                        borderRadius: '50%',
+                                        background: '#fff',
+                                        position: 'absolute',
+                                        top: '2px',
+                                        left: this.state.aggroOn ? '18px' : '2px',
                                         transition: 'left 0.25s ease'
                                     }} />
                                 </div>
@@ -25048,6 +25421,7 @@ class DungeonPage extends React.Component {
         }
         if (bool) {
             this.reduxCombatManager = new CombatManagerRedux();
+            this.setState({ activePygmyCompanion: null });
         } else {
             this.reduxCombatManager = null;
         }
@@ -25165,6 +25539,28 @@ class DungeonPage extends React.Component {
                     }
                 }
             }
+            if (bool && monsterObj) {
+                if (monsterObj._pursuitOrigin) {
+                    const targetTileId = typeof tileId === 'object' ? tileId.id : tileId;
+                    this._activePursuitMonsterInfo = {
+                        pursuitTileId: targetTileId,
+                        originTileId: monsterObj._pursuitOrigin.originTileId,
+                        originMonsterData: monsterObj._pursuitOrigin.originMonsterData,
+                        originImage: monsterObj._pursuitOrigin.originImage
+                    };
+                } else {
+                    const bm = this.props.boardManager || this.boardManager;
+                    const tile = typeof tileId === 'number' ? (bm?.tiles?.[tileId]) : (typeof tileId === 'object' ? tileId : null);
+                    if (tile && tile.contains && typeof tile.contains === 'object' && tile.contains._pursuitOrigin) {
+                        this._activePursuitMonsterInfo = {
+                            pursuitTileId: tileId,
+                            originTileId: tile.contains._pursuitOrigin.originTileId,
+                            originMonsterData: tile.contains._pursuitOrigin.originMonsterData,
+                            originImage: tile.contains._pursuitOrigin.originImage
+                        };
+                    }
+                }
+            }
             if (bool && this.state.isSneaking && tileId !== 'pvp_match') {
                 const selectedMember = this.state.selectedCrewMember || (this.props.crewManager && this.props.crewManager.crew && this.props.crewManager.crew[0]);
                 const playerDex = Number((selectedMember && selectedMember.stats && (selectedMember.stats.dex || selectedMember.stats.dexterity)) || selectedMember?.dex || selectedMember?.dexterity || 10);
@@ -25224,6 +25620,7 @@ class DungeonPage extends React.Component {
 
     isAggroMonsterObj = (containsObj, tile) => {
         if (!containsObj && !tile) return false;
+        if (this.state && this.state.aggroOn && this.isMonsterObj(tile, containsObj)) return true;
         if (tile && (tile.aggro === true || tile.isAggro === true)) return true;
         if (containsObj) {
             if (typeof containsObj === 'object') {
@@ -25271,6 +25668,8 @@ class DungeonPage extends React.Component {
         if (this.state.inMonsterBattle || this.state.inTowerSiege || this._isAggroAttacking || this.state.keysLocked) {
             return false;
         }
+
+        const AGGRO_RADIUS = 4;
 
         if (this.state.inSuperboard && this.state.superboardPlayerPos && this.state.dungeon && this.state.superboardType) {
             const { superboardPlayerPos, dungeon, superboardType } = this.state;
@@ -25335,13 +25734,39 @@ class DungeonPage extends React.Component {
                 const mIdx = bm.getIndexFromCoordinates([mRow, mCol]);
                 const mTile = bm.tiles && bm.tiles[mIdx];
                 if (!mTile) continue;
-                if (mTile.color === 'black') continue; // Hidden in fog of war
+                if (mTile.color === 'black' || mTile.fog === true) continue; // Hidden in fog of war
 
                 if (this.isAggroMonsterObj(mTile.contains, mTile)) {
                     const attackRow = pRow - mRow;
                     const attackCol = pCol - mCol;
                     this.triggerAggroMonsterAttack(mTile, attackRow, attackCol);
                     return true;
+                }
+            }
+
+            // Radius check for pursuit: if monsters are within AGGRO_RADIUS (and not orthogonally adjacent)
+            for (let dRow = -AGGRO_RADIUS; dRow <= AGGRO_RADIUS; dRow++) {
+                for (let dCol = -AGGRO_RADIUS; dCol <= AGGRO_RADIUS; dCol++) {
+                    if (dRow === 0 && dCol === 0) continue;
+                    if (Math.abs(dRow) + Math.abs(dCol) === 1) continue; // Orthogonal adjacency already handled above
+
+                    const mRow = pRow + dRow;
+                    const mCol = pCol + dCol;
+                    if (mRow < 0 || mRow >= 30 || mCol < 0 || mCol >= 30) continue;
+
+                    const mIdx = bm.getIndexFromCoordinates([mRow, mCol]);
+                    const mTile = bm.tiles && bm.tiles[mIdx];
+                    if (!mTile) continue;
+                    if (mTile.color === 'black' || mTile.fog === true) continue; // Hidden in fog of war
+
+                    if (this.isAggroMonsterObj(mTile.contains, mTile)) {
+                        const mObj = mTile.contains;
+                        const radius = (typeof mObj === 'object' && mObj?.aggroRadius) || AGGRO_RADIUS;
+                        const dist = Math.max(Math.abs(dRow), Math.abs(dCol));
+                        if (dist <= radius && !mTile.isPursuing) {
+                            this.startMonsterPursuit(mTile);
+                        }
+                    }
                 }
             }
         }
@@ -25414,13 +25839,13 @@ class DungeonPage extends React.Component {
     };
 
     hasRangedWeaponEquipped = () => {
+        const selectedMember = this.getSelectedCrewMember();
+        if (selectedMember) {
+            return this.isRangedMember(selectedMember);
+        }
         if (this.state?.equippedRangedWeapon) return true;
         if (this.state?.hasRangedWeapon) return true;
-        const selectedMember = this.getSelectedCrewMember();
-        if (this.isRangedMember(selectedMember)) return true;
-
-        const crew = this.state?.crew || (this.props.crewManager && this.props.crewManager.crew) || [];
-        return crew.some(m => this.isRangedMember(m));
+        return false;
     };
 
     resolveMonsterTileStats = (targetTile) => {
@@ -25788,6 +26213,8 @@ class DungeonPage extends React.Component {
         let projectileType = 'magic_missile';
         if (attackerType.includes('ranger') || attackerType.includes('dormund') || attackerType.includes('archer') || attackerType.includes('rogue') || attackerType.includes('hunter')) {
             projectileType = 'arrow';
+        } else if (attackerType.includes('monk') || attackerType.includes('tian') || attackerType.includes('chi') || attackerType.includes('martial')) {
+            projectileType = 'monk_punch';
         } else if (attackerType.includes('wizard') || attackerType.includes('zildjikan')) {
             projectileType = 'magic_missile';
         }
@@ -25888,6 +26315,75 @@ class DungeonPage extends React.Component {
         let currentTile = monsterTile;
         let steps = 0;
 
+        // Record origin tile info before monster starts moving away from its origin tile
+        if (monsterTile && monsterTile.contains) {
+            const originTileId = monsterTile.id !== undefined ? monsterTile.id : boardManager.tiles.indexOf(monsterTile);
+            let originData = null;
+            if (typeof monsterTile.contains === 'object' && monsterTile.contains) {
+                originData = JSON.parse(JSON.stringify(monsterTile.contains));
+            } else {
+                originData = { type: monsterTile.contains, subtype: monsterTile.contains };
+            }
+
+            if (typeof originData === 'object' && originData) {
+                const maxHp = originData.maxHp || originData.starting_hp || originData.hp || 100;
+                originData.hp = maxHp;
+                originData.starting_hp = maxHp;
+                originData.maxHp = maxHp;
+                delete originData.inDungeonDamaged;
+            }
+
+            const pursuitOrigin = {
+                originTileId,
+                originMonsterData: originData,
+                originImage: monsterTile.image || (typeof originData === 'object' ? (originData.subtype || originData.type) : originData)
+            };
+
+            if (typeof monsterTile.contains === 'object' && monsterTile.contains) {
+                monsterTile.contains._pursuitOrigin = pursuitOrigin;
+            } else {
+                monsterTile.contains = {
+                    type: monsterTile.contains,
+                    subtype: monsterTile.contains,
+                    _pursuitOrigin: pursuitOrigin
+                };
+            }
+        }
+
+        const isMonsterPassableTile = (tile, curTile) => {
+            if (!tile) return false;
+            if (tile === curTile) return true;
+            if (tile.isVoid || tile.type === 'void' || tile.color === 'black' || tile.fog === true) return false;
+            if (tile.passThrough === false || tile.terrain === 'wall' || tile.contains === 'wall') return false;
+            if (boardManager && typeof boardManager.isImpassableBuildingTile === 'function' && boardManager.isImpassableBuildingTile(tile)) return false;
+
+            const type = boardManager && typeof boardManager.getContainsType === 'function'
+                ? boardManager.getContainsType(tile.contains)
+                : (typeof tile.contains === 'string' ? tile.contains : tile.contains?.type);
+            const subtype = boardManager && typeof boardManager.getContainsSubtype === 'function'
+                ? boardManager.getContainsSubtype(tile.contains)
+                : (typeof tile.contains === 'object' ? tile.contains?.subtype : tile.subtype);
+
+            const gateType = boardManager && typeof boardManager.getGateTypeFromTile === 'function' ? boardManager.getGateTypeFromTile(tile) : null;
+            if (gateType && boardManager.isLockedGateTile && boardManager.isLockedGateTile(tile)) return false;
+
+            const IMPASSABLE_TYPES = [
+                'building', 'door', 'gate', 'wall', 'shrine', 'way_up', 'way_down',
+                'vendor', 'merchant', 'alchemist', 'fungal_nursery', 'dream_den', 'dream den',
+                'spawn', 'stairs', 'chest', 'altar', 'portal', 'dead_campfire', 'narrative', 'locus'
+            ];
+
+            const rawSub = String(
+                subtype || tile.building || (tile.contains && typeof tile.contains === 'object' ? (tile.contains.subtype || tile.contains.name || tile.contains.type) : '') || tile.image || type || ''
+            ).toLowerCase();
+
+            if (IMPASSABLE_TYPES.some(k => type === k || rawSub.includes(k))) return false;
+
+            if (this.isMonsterObj(tile, tile.contains)) return false;
+
+            return true;
+        };
+
         const pursuitInterval = setInterval(() => {
             if (this.state.inMonsterBattle || !currentTile || !currentTile.contains) {
                 clearInterval(pursuitInterval);
@@ -25918,38 +26414,81 @@ class DungeonPage extends React.Component {
                 return;
             }
 
-            // Determine candidate next tile coordinates closer to player
+            // Determine candidate next tile coordinates closer to player using BFS pathfinding around impassable tiles
             let targetRow = mRow;
             let targetCol = mCol;
 
-            if (mRow !== pRow && mCol !== pCol) {
-                const tryRow = mRow + (pRow > mRow ? 1 : -1);
-                const tryRowIdx = tryRow * 15 + mCol;
-                const tryRowTile = boardManager.tiles[tryRowIdx];
-                if (tryRowTile && !tryRowTile.isVoid && tryRowTile.color !== 'black') {
-                    targetRow = tryRow;
-                } else {
-                    targetCol = mCol + (pCol > mCol ? 1 : -1);
+            const totalTiles = boardManager.tiles.length;
+            const cols = 15;
+            const rows = Math.ceil(totalTiles / cols);
+
+            const queue = [[[mRow, mCol], []]];
+            const visited = new Set();
+            visited.add(`${mRow},${mCol}`);
+
+            const dirs = [
+                [-1, 0], // North
+                [1, 0],  // South
+                [0, -1], // West
+                [0, 1]   // East
+            ];
+
+            let pathFound = null;
+            while (queue.length > 0) {
+                const [[currR, currC], path] = queue.shift();
+
+                if (Math.abs(currR - pRow) + Math.abs(currC - pCol) <= 1) {
+                    pathFound = path;
+                    break;
                 }
-            } else if (mRow !== pRow) {
-                targetRow = mRow + (pRow > mRow ? 1 : -1);
-            } else if (mCol !== pCol) {
-                targetCol = mCol + (pCol > mCol ? 1 : -1);
+
+                for (const [dR, dC] of dirs) {
+                    const nR = currR + dR;
+                    const nC = currC + dC;
+                    if (nR < 0 || nR >= rows || nC < 0 || nC >= cols) continue;
+
+                    const nKey = `${nR},${nC}`;
+                    if (visited.has(nKey)) continue;
+
+                    const nIdx = nR * cols + nC;
+                    const nTile = boardManager.tiles[nIdx];
+
+                    const isPlayerPos = (nR === pRow && nC === pCol);
+                    if (isPlayerPos || isMonsterPassableTile(nTile, currentTile)) {
+                        visited.add(nKey);
+                        queue.push([[nR, nC], [...path, [nR, nC]]]);
+                    }
+                }
+            }
+
+            if (pathFound && pathFound.length > 0) {
+                targetRow = pathFound[0][0];
+                targetCol = pathFound[0][1];
             }
 
             const nextIdx = targetRow * 15 + targetCol;
             const nextTile = boardManager.tiles[nextIdx];
 
-            if (nextTile && nextTile !== currentTile && !nextTile.isVoid && nextTile.color !== 'black') {
+            if (nextTile && nextTile !== currentTile && isMonsterPassableTile(nextTile, currentTile)) {
                 const monsterObj = currentTile.contains;
                 const monsterImg = currentTile.image;
                 const monsterIcon = currentTile.icon;
                 const wasAggro = currentTile.isAggro || currentTile.aggro;
 
-                // Completely clear the old tile so no monster portrait remains behind
-                currentTile.contains = null;
-                currentTile.image = null;
-                if (currentTile.icon) currentTile.icon = null;
+                // Restore previous underlying content on vacated tile if it was preserved
+                if (currentTile._underlyingContent) {
+                    currentTile.contains = currentTile._underlyingContent.contains;
+                    currentTile.image = currentTile._underlyingContent.image;
+                    currentTile.icon = currentTile._underlyingContent.icon;
+                    if (currentTile._underlyingContent.type) currentTile.type = currentTile._underlyingContent.type;
+                    if (currentTile._underlyingContent.subtype) currentTile.subtype = currentTile._underlyingContent.subtype;
+                    delete currentTile._underlyingContent;
+                } else {
+                    currentTile.contains = null;
+                    currentTile.image = null;
+                    if (currentTile.icon) currentTile.icon = null;
+                }
+
                 currentTile.isPursuing = false;
                 delete currentTile.pursuitInterval;
                 if (currentTile.isAggro) currentTile.isAggro = false;
@@ -25957,31 +26496,49 @@ class DungeonPage extends React.Component {
                 if (currentTile.hp !== undefined) delete currentTile.hp;
                 if (currentTile.maxHp !== undefined) delete currentTile.maxHp;
 
-                // Ensure vacated tile is restored as a clean passable floor tile, not a void space
-                currentTile.isVoid = false;
-                if (currentTile.type === 'void') currentTile.type = 'empty_space';
-                if (currentTile.original === 'void') delete currentTile.original;
-                try { delete currentTile.terrain; } catch (e) {}
+                if (!currentTile.contains) {
+                    currentTile.isVoid = false;
+                    if (currentTile.type === 'void') currentTile.type = 'empty_space';
+                    if (currentTile.original === 'void') delete currentTile.original;
+                    try { delete currentTile.terrain; } catch (e) {}
 
-                const isValidFloorColor = (c) => c && c !== 'black' && c !== 'white' && c !== 'null';
-                const boardColor = boardManager.currentBoard && boardManager.currentBoard.tiles && boardManager.currentBoard.tiles[currentTile.id] && boardManager.currentBoard.tiles[currentTile.id].color;
-                currentTile.color = isValidFloorColor(boardColor) ? boardColor : (isValidFloorColor(currentTile.color) ? currentTile.color : '#6b6057');
+                    const isValidFloorColor = (c) => c && c !== 'black' && c !== 'white' && c !== 'null';
+                    const boardColor = boardManager.currentBoard && boardManager.currentBoard.tiles && boardManager.currentBoard.tiles[currentTile.id] && boardManager.currentBoard.tiles[currentTile.id].color;
+                    currentTile.color = isValidFloorColor(boardColor) ? boardColor : (isValidFloorColor(currentTile.color) ? currentTile.color : '#6b6057');
+                }
 
                 if (boardManager.currentBoard && boardManager.currentBoard.tiles) {
                     if (boardManager.currentBoard.tiles[currentTile.id]) {
-                        boardManager.currentBoard.tiles[currentTile.id].contains = null;
-                        boardManager.currentBoard.tiles[currentTile.id].image = null;
-                        boardManager.currentBoard.tiles[currentTile.id].isVoid = false;
-                        if (boardManager.currentBoard.tiles[currentTile.id].type === 'void') {
-                            boardManager.currentBoard.tiles[currentTile.id].type = 'empty_space';
+                        boardManager.currentBoard.tiles[currentTile.id].contains = currentTile.contains;
+                        boardManager.currentBoard.tiles[currentTile.id].image = currentTile.image;
+                        if (!currentTile.contains) {
+                            boardManager.currentBoard.tiles[currentTile.id].isVoid = false;
+                            if (boardManager.currentBoard.tiles[currentTile.id].type === 'void') {
+                                boardManager.currentBoard.tiles[currentTile.id].type = 'empty_space';
+                            }
+                            if (boardManager.currentBoard.tiles[currentTile.id].original === 'void') {
+                                delete boardManager.currentBoard.tiles[currentTile.id].original;
+                            }
+                            boardManager.currentBoard.tiles[currentTile.id].color = currentTile.color;
+                            if (boardManager.currentBoard.tiles[currentTile.id].icon) {
+                                boardManager.currentBoard.tiles[currentTile.id].icon = null;
+                            }
                         }
-                        if (boardManager.currentBoard.tiles[currentTile.id].original === 'void') {
-                            delete boardManager.currentBoard.tiles[currentTile.id].original;
-                        }
-                        boardManager.currentBoard.tiles[currentTile.id].color = currentTile.color;
-                        if (boardManager.currentBoard.tiles[currentTile.id].icon) {
-                            boardManager.currentBoard.tiles[currentTile.id].icon = null;
-                        }
+                    }
+                }
+
+                // Preserve nextTile's underlying content before moving monster onto it
+                if (nextTile._underlyingContent === undefined) {
+                    if (nextTile.contains && !this.isMonsterObj(nextTile, nextTile.contains)) {
+                        nextTile._underlyingContent = {
+                            contains: nextTile.contains,
+                            image: nextTile.image,
+                            icon: nextTile.icon,
+                            type: nextTile.type,
+                            subtype: nextTile.subtype
+                        };
+                    } else {
+                        nextTile._underlyingContent = null;
                     }
                 }
 
@@ -26726,8 +27283,11 @@ class DungeonPage extends React.Component {
     handleMobileDirectionalInput = (direction) => {
         if (!direction) return;
         if (this.state.inMonsterBattle || this.state.inTowerSiege) {
-            if (this.state.selectedCrewMember) {
-                this.props.combatManager.moveFighterOneSpace(direction);
+            if (this.monsterBattleComponentRef.current && typeof this.monsterBattleComponentRef.current.moveFighterOneSpace === 'function') {
+                this.monsterBattleComponentRef.current.moveFighterOneSpace(direction);
+            } else {
+                const cm = this.reduxCombatManager || this.props.combatManager;
+                if (cm && typeof cm.moveFighterOneSpace === 'function') cm.moveFighterOneSpace(direction);
             }
         } else {
             if (this.state.keysLocked || this.state.showModal || this.state.dungeonInscriptionPicker || this.state.showGeneratorModal) return;
@@ -27198,9 +27758,9 @@ class DungeonPage extends React.Component {
             return;
         }
 
-        if (this.state.keysLocked && (this.state.inMonsterBattle || this.state.inTowerSiege)) {
+        if (this.state.inMonsterBattle || this.state.inTowerSiege) {
             this.combatKeyDownHandler(event);
-            return
+            return;
         }
 
         if (this.state.keysLocked) return
@@ -27326,16 +27886,40 @@ class DungeonPage extends React.Component {
                 this.setState({ shiftDown: true })
                 break;
             case 'ArrowUp':
-                if (this.state.selectedCrewMember) this.props.combatManager.moveFighterOneSpace('up');
+                event.preventDefault();
+                if (this.monsterBattleComponentRef.current && typeof this.monsterBattleComponentRef.current.moveFighterOneSpace === 'function') {
+                    this.monsterBattleComponentRef.current.moveFighterOneSpace('up');
+                } else {
+                    const cm = this.reduxCombatManager || this.props.combatManager;
+                    if (cm && typeof cm.moveFighterOneSpace === 'function') cm.moveFighterOneSpace('up');
+                }
                 break;
             case 'ArrowDown':
-                if (this.state.selectedCrewMember) this.props.combatManager.moveFighterOneSpace('down');
+                event.preventDefault();
+                if (this.monsterBattleComponentRef.current && typeof this.monsterBattleComponentRef.current.moveFighterOneSpace === 'function') {
+                    this.monsterBattleComponentRef.current.moveFighterOneSpace('down');
+                } else {
+                    const cm = this.reduxCombatManager || this.props.combatManager;
+                    if (cm && typeof cm.moveFighterOneSpace === 'function') cm.moveFighterOneSpace('down');
+                }
                 break;
             case 'ArrowLeft':
-                if (this.state.selectedCrewMember) this.props.combatManager.moveFighterOneSpace('left');
+                event.preventDefault();
+                if (this.monsterBattleComponentRef.current && typeof this.monsterBattleComponentRef.current.moveFighterOneSpace === 'function') {
+                    this.monsterBattleComponentRef.current.moveFighterOneSpace('left');
+                } else {
+                    const cm = this.reduxCombatManager || this.props.combatManager;
+                    if (cm && typeof cm.moveFighterOneSpace === 'function') cm.moveFighterOneSpace('left');
+                }
                 break;
             case 'ArrowRight':
-                if (this.state.selectedCrewMember) this.props.combatManager.moveFighterOneSpace('right');
+                event.preventDefault();
+                if (this.monsterBattleComponentRef.current && typeof this.monsterBattleComponentRef.current.moveFighterOneSpace === 'function') {
+                    this.monsterBattleComponentRef.current.moveFighterOneSpace('right');
+                } else {
+                    const cm = this.reduxCombatManager || this.props.combatManager;
+                    if (cm && typeof cm.moveFighterOneSpace === 'function') cm.moveFighterOneSpace('right');
+                }
                 break;
             default:
                 // nuttin
@@ -27630,8 +28214,7 @@ class DungeonPage extends React.Component {
                     const cSub = (targetTileObj && typeof targetTileObj.contains === 'object' && targetTileObj.contains !== null) ? (targetTileObj.contains.subtype || targetTileObj.contains.building || targetTileObj.contains.name) : (targetTileObj?.building || null);
                     const rawKey = String(cSub || cType || targetTileObj?.image || '').toLowerCase();
 
-                    const isVendorInSb = cType === 'vendor' || cType === 'merchant' || cType === 'alchemist' || cSub === 'merchant' || cSub === 'alchemist' ||
-                        ['merchant', 'alchemist', 'vendor', 'dream_den', 'dream den', 'fungal_nursery'].some(k => rawKey.includes(k));
+                    const { isVendor: isVendorInSb, vendorType: sbVendorType } = this.getVendorInfo(targetTileObj);
                     const isDreamDen = isVendorInSb;
                     const isLocusInSb = targetTileObj && this.getIsLocusHelper(targetTileObj);
                     const largeBldg = superboard ? this.getLargeBuildingAtSuperboardCoord(superboard, clickedGx, clickedGy) : null;
@@ -27718,9 +28301,7 @@ class DungeonPage extends React.Component {
                             }
                             if (isVendorInSb) {
                                 const targetTile = targetTileObj || tile;
-                                const vType = (rawKey.includes('alchemist') || cSub === 'alchemist' || cType === 'alchemist') ? 'alchemist' :
-                                              (rawKey.includes('fungal_nursery') || cSub === 'fungal_nursery' || cType === 'fungal_nursery') ? 'fungal_nursery' :
-                                              (rawKey.includes('dream_den') || rawKey.includes('dream den')) ? 'dream_den' : 'merchant';
+                                const vType = sbVendorType || 'merchant';
                                 this.illuminateBuildingTile(targetTile);
                                 this.triggerVendorEncounter(vType, targetTile);
                             } else if (isEnemySpawn) {
@@ -27876,16 +28457,11 @@ class DungeonPage extends React.Component {
         const now = Date.now();
         this._lastTileClickInfo = { tileIdx: tileIndex, ts: now };
 
-        const isVendorTileClick = cType === 'vendor' || cType === 'merchant' || cType === 'alchemist' ||
-            ['merchant', 'alchemist', 'vendor', 'dream_den', 'dream den', 'fungal_nursery'].some(k => rawKey.includes(k)) ||
-            (((actualTile?.contains && typeof actualTile.contains === 'object' && (actualTile.contains.vendorGroupId || actualTile.contains.vendorCell)) ||
-            !!(actualTile?.vendorGroupId || actualTile?.vendorCell)) && ['merchant', 'alchemist', 'vendor', 'dream_den', 'dream den', 'fungal_nursery'].some(k => rawKey.includes(k)));
+        const { isVendor: isVendorTileClick, vendorType: detectedVendorType } = this.getVendorInfo(actualTile || tile);
 
 
         if (isVendorTileClick) {
-            const vendorType = (rawKey.includes('alchemist') || cSub === 'alchemist' || cType === 'alchemist') ? 'alchemist' :
-                               (rawKey.includes('fungal_nursery') || cSub === 'fungal_nursery' || cType === 'fungal_nursery') ? 'fungal_nursery' :
-                               (rawKey.includes('dream_den') || rawKey.includes('dream den')) ? 'dream_den' : 'merchant';
+            const vendorType = detectedVendorType || 'merchant';
 
             const playerIdx = bm.getIndexFromCoordinates(startCoords);
             const playerRow = Math.floor(playerIdx / 15);
@@ -28110,9 +28686,7 @@ class DungeonPage extends React.Component {
                 }
 
                 const subStr = typeof subtype === 'string' ? subtype : (typeof t.building === 'string' ? t.building : (t.contains && typeof t.contains === 'object' ? (t.contains.subtype || t.contains.building || t.contains.name || t.contains.type) : ''));
-                const rawBldgKey = String(subStr || t.image || '').toLowerCase();
-                const isVendor = type === 'vendor' || type === 'merchant' || type === 'alchemist' || type === 'dream den' || type === 'dream_den' ||
-                    ['merchant', 'alchemist', 'vendor', 'dream_den', 'fungal_nursery'].some(k => rawBldgKey.includes(k));
+                const { isVendor } = this.getVendorInfo(t);
 
                 if (isVendor) {
                     return true;
@@ -29510,6 +30084,8 @@ class DungeonPage extends React.Component {
                 tiles: this.props.boardManager.tiles,
                 minimap,
                 levelTracker,
+                showUserLevelUpModal: false,
+                showDebugLevelUpScreen: false,
                 leftPanelExpanded: false,
                 rightPanelExpanded: false
             }, () => {
@@ -29531,10 +30107,43 @@ class DungeonPage extends React.Component {
     };
 
     runDungeonTutorialSequence = () => {
-        const moveStep = (direction, ms = 250) => new Promise(resolve => {
-            this._setTimeout(() => {
+        const getLocalCoords = () => {
+            const loc = this.props.boardManager?.playerTile?.location;
+            if (!loc || !Array.isArray(loc)) return { x: -1, y: -1 };
+            return { x: ((loc[1] % 15) + 15) % 15, y: ((loc[0] % 15) + 15) % 15 };
+        };
+
+        const stepTo = async (direction, expectedX, expectedY, maxAttempts = 6) => {
+            for (let attempt = 0; attempt < maxAttempts; attempt++) {
+                this._isMoving = false;
                 this.handleDirectionalMove(direction, { fromQueue: false, fromTutorial: true });
-                this._setTimeout(resolve, ms);
+
+                for (let poll = 0; poll < 8; poll++) {
+                    await new Promise(r => this._setTimeout(r, 45));
+                    const { x, y } = getLocalCoords();
+                    if (x === expectedX && y === expectedY) {
+                        this._isMoving = false;
+                        return true;
+                    }
+                }
+            }
+            this._isMoving = false;
+            return false;
+        };
+
+        const bumpDirection = async (direction, ms = 320) => {
+            this._isMoving = false;
+            this.handleDirectionalMove(direction, { fromQueue: false, fromTutorial: true });
+            await new Promise(r => this._setTimeout(r, ms));
+            this._isMoving = false;
+        };
+
+        const moveStep = (direction, ms = 320) => new Promise(resolve => {
+            this._isMoving = false;
+            this.handleDirectionalMove(direction, { fromQueue: false, fromTutorial: true });
+            this._setTimeout(() => {
+                this._isMoving = false;
+                resolve();
             }, ms);
         });
 
@@ -29572,10 +30181,10 @@ class DungeonPage extends React.Component {
 
             // 1. Move towards Gate at (8, 6)
             await pauseStep('Dungeon Tutorial: Moving to Gate at (8,6)', 200);
-            await moveStep('up', 200);    // (5, 6)
-            await moveStep('right', 200); // (6, 6)
-            await moveStep('right', 200); // (7, 6)
-            await moveStep('right', 200); // (8, 6) - Bumps into locked gate at (8,6), sets pending
+            await moveStep('up', 320);    // (5, 6)
+            await moveStep('right', 320); // (6, 6)
+            await moveStep('right', 320); // (7, 6)
+            await moveStep('right', 320); // (8, 6) - Bumps into locked gate at (8,6), sets pending
 
             // Step 1. You will encounter locked gates that need keys to progress. (user is taken to the first locked gate)
             await pauseStep('🔒 Gate at (8,6) is LOCKED!', 400);
@@ -29583,19 +30192,19 @@ class DungeonPage extends React.Component {
 
             // 2. Move to pick up Key at (8, 4) & return to unlock Gate at (8,6)
             await pauseStep('Tutorial: Moving to (8,4) to collect Minor Key...', 200);
-            await moveStep('left', 200);  // (6, 6) [from 7,6]
-            await moveStep('up', 200);    // (6, 5)
-            await moveStep('up', 200);    // (6, 4)
-            await moveStep('right', 200); // (7, 4)
-            await moveStep('right', 200); // (8, 4) - Picks up Minor Key into inventory!
+            await moveStep('left', 320);  // (6, 6) [from 7,6]
+            await moveStep('up', 320);    // (6, 5)
+            await moveStep('up', 320);    // (6, 4)
+            await moveStep('right', 320); // (7, 4)
+            await moveStep('right', 320); // (8, 4) - Picks up Minor Key into inventory!
 
             await pauseStep('🔑 Minor Key Acquired! Returning to Gate...', 400);
-            await moveStep('left', 200);  // (7, 4)
-            await moveStep('left', 200);  // (6, 4)
-            await moveStep('down', 200);  // (6, 5)
-            await moveStep('down', 200);  // (6, 6)
-            await moveStep('right', 200); // (7, 6)
-            await moveStep('right', 200); // Bumps into Gate, unlocks it (archway)
+            await moveStep('left', 320);  // (7, 4)
+            await moveStep('left', 320);  // (6, 4)
+            await moveStep('down', 320);  // (6, 5)
+            await moveStep('down', 320);  // (6, 6)
+            await moveStep('right', 320); // (7, 6)
+            await moveStep('right', 320); // Bumps into Gate, unlocks it (archway)
 
             if (this.props.boardManager) {
                 try {
@@ -29609,14 +30218,14 @@ class DungeonPage extends React.Component {
             await playTutorialNarrativeStep('collect keys to ensure free will');
 
             // 3. Move through open gate & to Chest at (10, 7) via (11, 6)
-            await moveStep('right', 200); // Walks through open archway onto (8, 6)
-            await moveStep('right', 200); // Walks onto (9, 6)
-            await moveStep('right', 200); // Walks onto (10, 6)
+            await moveStep('right', 320); // Walks through open archway onto (8, 6)
+            await moveStep('right', 320); // Walks onto (9, 6)
+            await moveStep('right', 320); // Walks onto (10, 6)
 
             await pauseStep('Tutorial: Pathfinding to Chest at (10,7)...', 200);
-            await moveStep('right', 200); // (11, 6) - Picks up jewel shards!
-            await moveStep('down', 200);  // (11, 7)
-            await moveStep('left', 200);  // (10, 7) - Opens Wooden Chest!
+            await moveStep('right', 320); // (11, 6) - Picks up jewel shards!
+            await moveStep('down', 320);  // (11, 7)
+            await moveStep('left', 320);  // (10, 7) - Opens Wooden Chest!
 
             if (this.props.boardManager) {
                 try {
@@ -29630,9 +30239,9 @@ class DungeonPage extends React.Component {
             await playTutorialNarrativeStep('Some items are laying on the ground, some are in chests');
 
             // 4. Move to Lockbox at (10, 8) - Attempt to open locked chest!
-            await moveStep('right', 200); // (11, 7)
-            await moveStep('down', 200);  // (11, 8)
-            await moveStep('left', 200);  // Bumps into locked Lockbox at (10, 8), blocked!
+            await moveStep('right', 320); // (11, 7)
+            await moveStep('down', 320);  // (11, 8)
+            await moveStep('left', 320);  // Bumps into locked Lockbox at (10, 8), blocked!
 
             // Step 4. Some chests are locked (user attempts to open the first locked chest)
             await pauseStep('🔒 Lockbox at (10,8) is LOCKED!', 400);
@@ -29640,21 +30249,21 @@ class DungeonPage extends React.Component {
 
             // 5. Navigate to (10, 5) to collect Lockbox Key & return to open Lockbox at (10, 8)
             await pauseStep('Tutorial: Pathfinding to (10,5) to collect Lockbox Key...', 200);
-            await moveStep('right', 200); // (12, 8)
-            await moveStep('up', 200);    // (12, 7)
-            await moveStep('up', 200);    // (12, 6)
-            await moveStep('up', 200);    // (12, 5)
-            await moveStep('left', 200);  // (11, 5)
-            await moveStep('left', 200);  // (10, 5) - Collects Lockbox Key!
+            await moveStep('right', 320); // (12, 8)
+            await moveStep('up', 320);    // (12, 7)
+            await moveStep('up', 320);    // (12, 6)
+            await moveStep('up', 320);    // (12, 5)
+            await moveStep('left', 320);  // (11, 5)
+            await moveStep('left', 320);  // (10, 5) - Collects Lockbox Key!
 
             await pauseStep('🔑 Lockbox Key Acquired! Returning to Lockbox...', 400);
-            await moveStep('right', 200); // (11, 5)
-            await moveStep('right', 200); // (12, 5)
-            await moveStep('down', 200);  // (12, 6)
-            await moveStep('down', 200);  // (12, 7)
-            await moveStep('down', 200);  // (12, 8)
-            await moveStep('left', 200);  // (11, 8)
-            await moveStep('left', 200);  // Bumps into Lockbox at (10, 8) - Unlocks & opens Lockbox!
+            await moveStep('right', 320); // (11, 5)
+            await moveStep('right', 320); // (12, 5)
+            await moveStep('down', 320);  // (12, 6)
+            await moveStep('down', 320);  // (12, 7)
+            await moveStep('down', 320);  // (12, 8)
+            await moveStep('left', 320);  // (11, 8)
+            await moveStep('left', 320);  // Bumps into Lockbox at (10, 8) - Unlocks & opens Lockbox!
 
             if (this.props.boardManager) {
                 try {
@@ -29669,11 +30278,12 @@ class DungeonPage extends React.Component {
 
             // 6. Pathfind over to connecting path at (14, 7) and transition to next board
             await pauseStep('Tutorial: Moving to Exit at (14,7)...', 200);
-            await moveStep('right', 200); // (12, 8)
-            await moveStep('right', 200); // (13, 8)
-            await moveStep('right', 200); // (14, 8)
-            await moveStep('up', 200);    // (14, 7) - Connecting path tile
-            await moveStep('right', 200); // Step right across board edge to transition to next board
+            await moveStep('right', 320); // (11, 8) or (12, 8)
+            await moveStep('right', 320); // (12, 8) or (13, 8)
+            await moveStep('right', 320); // (13, 8) or (14, 8)
+            await moveStep('right', 320); // (14, 8)
+            await moveStep('up', 320);    // (14, 7) - Connecting path tile
+            await moveStep('right', 320); // Step right across board edge to transition to next board
 
             if (this.props.boardManager) {
                 try {
@@ -29685,30 +30295,129 @@ class DungeonPage extends React.Component {
             await pauseStep('🗺️ Board Transition! Entering Middle Board...', 400);
             await playTutorialNarrativeStep('Moving through connecting paths transitions your crew to adjacent boards.');
 
-            // 7. Move from (0,7) to Wall Inscription at (3,8)
+            // 7. Move from (0,7) to Wall Inscription at (3,8) and bump South edge
             await pauseStep('Tutorial: Moving to Wall Inscription at (3,8)...', 200);
-            await moveStep('right', 200); // (1, 7)
-            await moveStep('right', 200); // (2, 7)
-            await moveStep('right', 200); // (3, 7)
-            await moveStep('down', 200);  // (3, 8) - Wall Inscription
+            await stepTo('right', 1, 7); // (1, 7) - Verify arrival at x=1, y=7
+            await stepTo('right', 2, 7); // (2, 7) - Verify arrival at x=2, y=7
+            await stepTo('right', 3, 7); // (3, 7) - Verify arrival at x=3, y=7
+            await stepTo('down', 3, 8);  // (3, 8) - Verify arrival at Wall Inscription tile x=3, y=8!
+
+            // Now that arrival at (3,8) is 100% verified, bump South edge wall inscription!
+            await bumpDirection('down', 350);
 
             // Inspect Wall Inscription at (3,8)
+            const sampleInscription = {
+                title: 'Ancient Wall Inscription',
+                text: 'Deep within the ancient labyrinth, secrets of arcane mastery and hidden treasure await those brave enough to explore.'
+            };
+            this.setState({
+                showModal: true,
+                modalType: 'Inscription',
+                currentInscriptionData: sampleInscription
+            });
             await pauseStep('📜 Inspecting Wall Inscription at (3,8)...', 400);
             await playTutorialNarrativeStep('Interact with wall inscriptions by double-moving into them, or clicking/tapping on them. Some inscriptions will depict game world lore, while others will pose riddles that can be answered for rewards.');
 
-            // 8. Move from (3,8) to (7,6) and try gate at (7,7)
+            // Linger on Inscription panel so user can view it, then close after delay
+            await pauseStep(null, 3200);
+            this.setState({ showModal: false, modalType: '', currentInscriptionData: null });
+
+            // 8. Move from (3,8) to (7,6) and bump locked Gate at (7,7)
             await pauseStep('Tutorial: Moving to Gate at (7,7)...', 200);
-            await moveStep('up', 200);    // (3, 7)
-            await moveStep('up', 200);    // (3, 6)
-            await moveStep('right', 200); // (4, 6)
-            await moveStep('right', 200); // (5, 6)
-            await moveStep('right', 200); // (6, 6)
-            await moveStep('right', 200); // (7, 6)
-            await moveStep('down', 200);  // Bumps into locked Gate at (7, 7)!
+            await stepTo('up', 3, 7);    // (3, 7)
+            await stepTo('up', 3, 6);    // (3, 6)
+            await stepTo('right', 4, 6); // (4, 6)
+            await stepTo('right', 5, 6); // (5, 6)
+            await stepTo('right', 6, 6); // (6, 6)
+            await stepTo('right', 7, 6); // (7, 6)
+            await bumpDirection('down', 320);  // Bumps into locked Gate at (7, 7)!
 
             await pauseStep('🔒 Gate at (7,7) is LOCKED!', 400);
             await playTutorialNarrativeStep('This gate is locked! Explore surrounding corridors for keys to open passage.');
 
+            // 9. Move to Merchant at (11,2) from (11,3) & Purchase Key
+            await pauseStep('Tutorial: Navigating to Merchant at (11,2)...', 200);
+            await stepTo('right', 8, 6); // (8, 6)
+            await stepTo('right', 9, 6); // (9, 6)
+            await stepTo('right', 10, 6); // (10, 6)
+            await stepTo('right', 11, 6); // (11, 6)
+            await stepTo('up', 11, 5);    // (11, 5)
+            await stepTo('up', 11, 4);    // (11, 4)
+            await stepTo('up', 11, 3);    // (11, 3)
+            await bumpDirection('up', 350);    // Interacts with Merchant at (11, 2) from (11, 3)!
+
+            const dummyMerchant = {
+                id: 'tutorial_merchant',
+                name: 'Dungeon Merchant',
+                building: 'merchant',
+                type: 'merchant',
+                stock: [{ id: 'key_minor', name: 'Minor Key', price: 0, icon: 'key_minor', description: 'Minor keys open locked dungeon doors' }]
+            };
+            this.setState({
+                showModal: true,
+                modalType: 'Merchant',
+                activeMerchantBuilding: dummyMerchant,
+                tutorialMerchantHighlight: true
+            });
+            await pauseStep('🏪 Merchant Modal Opened!', 400);
+            await playTutorialNarrativeStep('keys can be found in the dungeon or purchased from the merchant');
+
+            // Linger on open merchant interface with highlighted Minor Key so user sees it clearly
+            await pauseStep('🏪 Merchant interface open - Minor Key highlighted!', 3200);
+
+            // Auto-purchase key into inventory
+            if (this.props.inventoryManager) {
+                if (Array.isArray(this.props.inventoryManager.items)) {
+                    this.props.inventoryManager.items.push('key_minor');
+                }
+                if (Array.isArray(this.props.inventoryManager.inventory)) {
+                    this.props.inventoryManager.inventory.push({ id: 'key_minor', name: 'Minor Key', type: 'key' });
+                }
+            }
+            await pauseStep('🔑 Purchased Minor Key from Merchant!', 1000);
+
+            // Close Merchant interface after delay
+            this.setState({
+                showModal: false,
+                modalType: '',
+                activeMerchantBuilding: null,
+                tutorialMerchantHighlight: false
+            });
+
+            // 10. Return to Gate at (7,7) & Unlock Gate
+            await pauseStep('Tutorial: Returning to Gate at (7,7)...', 200);
+            await stepTo('down', 11, 4);  // (11, 4)
+            await stepTo('down', 11, 5);  // (11, 5)
+            await stepTo('down', 11, 6);  // (11, 6)
+            await stepTo('left', 10, 6);  // (10, 6)
+            await stepTo('left', 9, 6);   // (9, 6)
+            await stepTo('left', 8, 6);   // (8, 6)
+            await stepTo('left', 7, 6);   // (7, 6)
+            await bumpDirection('down', 320);  // Consumes Minor Key, unlocks Gate at (7,7)!
+
+            if (this.props.boardManager) {
+                try {
+                    this.props.boardManager.refreshTiles();
+                    this.setState({ tiles: this.props.boardManager.tiles });
+                } catch (e) { }
+            }
+            await pauseStep('🔓 Gate UNLOCKED!', 400);
+
+            // 11. Move through gate to Narrative Marker at (8,9)
+            await pauseStep('Tutorial: Moving to Narrative Marker at (8,9)...', 200);
+            await stepTo('down', 7, 7);  // Steps through open gate onto (7, 7)
+            await stepTo('down', 7, 8);  // (7, 8)
+            await stepTo('right', 8, 8); // (8, 8)
+            await stepTo('down', 8, 9);  // (8, 9) - Narrative marker / Brazier!
+
+            await playTutorialNarrativeStep('narrative markers will progress the linear story');
+
+            // Show Hikaron tutorial dialogue pane
+            this.setState({ showHikaronTutorialPane: true });
+            await pauseStep(null, 4500); // Linger on Hikaron "hello....."
+            this.setState({ showHikaronTutorialPane: false });
+
+            // 12. Completion & Exit
             await pauseStep('🎯 Tutorial Complete!', 1200);
 
             if (this.props.history) {
@@ -30521,11 +31230,13 @@ class DungeonPage extends React.Component {
         });
     }
 
-    triggerSelectedExpeditionSkill = () => {
+    triggerSelectedExpeditionSkill = (forcedSlotIdx) => {
         const selectedMember = this.state.selectedCrewMember;
-        const slotIdx = (selectedMember && typeof selectedMember.selectedExpeditionSkillSlot === 'number')
-            ? selectedMember.selectedExpeditionSkillSlot
-            : 0;
+        const slotIdx = (typeof forcedSlotIdx === 'number')
+            ? forcedSlotIdx
+            : ((selectedMember && typeof selectedMember.selectedExpeditionSkillSlot === 'number')
+                ? selectedMember.selectedExpeditionSkillSlot
+                : 0);
 
         if (this._skillFlashTimeout) clearTimeout(this._skillFlashTimeout);
         this.setState({
@@ -30537,6 +31248,204 @@ class DungeonPage extends React.Component {
         });
 
         const memberName = selectedMember ? (selectedMember.name || selectedMember.type || 'Crew member') : 'Crew member';
+        const memberClass = ((selectedMember && (selectedMember.type || selectedMember.image)) || '').toLowerCase();
+        const defaultExpSkills = {
+            sage: ['healing_ground', 'sing'],
+            ranger: ['sneak_attack', 'spike_trap'],
+            soldier: ['soldier_shield', 'breacher'],
+            summoner: ['wandering_eye'],
+            horologist: ['rewind_step', 'stopwatch'],
+            glitterburn: ['blinding_beacon', 'prismatic_flare']
+        };
+        const expSkills = (selectedMember && Array.isArray(selectedMember.expeditionSkills) && selectedMember.expeditionSkills.length > 0)
+            ? selectedMember.expeditionSkills
+            : (defaultExpSkills[memberClass] || []);
+        const skillKey = expSkills[slotIdx];
+
+        if (skillKey === 'breacher' || skillKey === 'gate_buster' || skillKey === 'gate_breaker') {
+            const bm = this.props.boardManager;
+            if (!bm) {
+                this.displayMessage("🔨 Breacher: Board manager not available.");
+                return;
+            }
+
+            let result = null;
+            if (typeof bm.breachAdjacentGate === 'function') {
+                result = bm.breachAdjacentGate();
+            }
+
+            // Fallback manual check if breachAdjacentGate didn't resolve a gate
+            if (!result || !result.success) {
+                const isMinorOrMajorGate = (tile) => {
+                    if (!tile) return null;
+                    const gt = bm.getGateTypeFromTile ? bm.getGateTypeFromTile(tile) : null;
+                    if (!gt) return null;
+                    if (gt === 'minor_gate' || gt === 'major_gate' || gt === 'dungeon_door' || gt === 'gryphon_gate' || gt === 'bat_gate') {
+                        return gt;
+                    }
+                    return null;
+                };
+
+                let targetTile = null;
+                let targetGateType = null;
+
+                if (bm.activeInteractionTile) {
+                    const gt = isMinorOrMajorGate(bm.activeInteractionTile);
+                    if (gt) {
+                        targetTile = bm.activeInteractionTile;
+                        targetGateType = gt;
+                    }
+                }
+
+                if (!targetTile && bm.playerTile && bm.playerTile.location) {
+                    const [curRow, curCol] = bm.playerTile.location;
+                    const offsets = [
+                        [0, -1], [0, 1], [-1, 0], [1, 0],
+                        [-1, -1], [-1, 1], [1, -1], [1, 1],
+                        [0, -2], [0, 2], [-2, 0], [2, 0],
+                        [-1, -2], [-1, 2], [1, -2], [1, 2],
+                        [-2, -1], [-2, 1], [2, -1], [2, 1],
+                        [-2, -2], [-2, 2], [2, -2], [2, 2]
+                    ];
+                    for (const [dr, dc] of offsets) {
+                        const checkCoords = [curRow + dr, curCol + dc];
+                        if (checkCoords[0] < 0 || checkCoords[1] < 0) continue;
+                        const tileIdx = bm.getIndexFromCoordinates ? bm.getIndexFromCoordinates(checkCoords) : null;
+                        if (tileIdx == null) continue;
+                        const cand = (bm.tiles && bm.tiles[tileIdx]) || (bm.currentBoard?.tiles && bm.currentBoard.tiles[tileIdx]);
+                        const gt = isMinorOrMajorGate(cand);
+                        if (cand && gt) {
+                            targetTile = cand;
+                            targetGateType = gt;
+                            break;
+                        }
+                    }
+                }
+
+                if (!targetTile && bm.pending && bm.pending.type) {
+                    const pt = bm.pending.type;
+                    if (pt === 'minor_gate' || pt === 'major_gate') {
+                        const cand = (bm.tiles || []).find(t => isMinorOrMajorGate(t));
+                        if (cand) {
+                            targetTile = cand;
+                            targetGateType = pt;
+                        }
+                    }
+                }
+
+                if (targetTile) {
+                    if (typeof bm.forceOpenGate === 'function') {
+                        bm.forceOpenGate(targetTile, targetGateType);
+                    } else {
+                        targetTile.contains = 'archway';
+                        targetTile.image = 'archway';
+                        bm.activeInteractionTile = targetTile;
+                        if (bm.tiles) bm.tiles[targetTile.id] = targetTile;
+                        if (typeof bm.refreshTiles === 'function') bm.refreshTiles();
+                        if (typeof bm.updateDungeon === 'function' && bm.dungeon) bm.updateDungeon(bm.dungeon);
+                    }
+                    result = { success: true, tile: targetTile, gateType: targetGateType };
+                }
+            }
+
+            if (result && result.success) {
+                const targetGateType = result.gateType;
+                const gateName = (targetGateType === 'major_gate' || targetGateType === 'gryphon_gate' || targetGateType === 'bat_gate')
+                    ? 'Major Gate'
+                    : (targetGateType === 'minor_gate' || targetGateType === 'dungeon_door')
+                        ? 'Minor Gate'
+                        : 'Gate';
+
+                if (bm.currentLevel) {
+                    bm.breacherUsedLevels = bm.breacherUsedLevels || new Set();
+                    bm.breacherUsedLevels.add(bm.currentLevel.id);
+                }
+
+                if (this.state.tiles) {
+                    this.setState({ tiles: bm.tiles ? [...bm.tiles] : [...this.state.tiles] });
+                }
+
+                this.displayMessage(`🔨 Breacher: Forced open the ${gateName}!`);
+                return;
+            }
+
+            this.displayMessage("🔨 Breacher: No Major or Minor Gate in range to force open! Move adjacent to a gate.");
+            return;
+        }
+
+        if (skillKey === 'rewind_step') {
+            const bm = this.props.boardManager;
+            if (this._rewindStepUsedForBoard === (bm?.playerTile?.boardIndex ?? -1)) {
+                this.displayMessage("⏳ Rewind Step can only be used once per board!");
+                return;
+            }
+            if (this._breadcrumbs && this._breadcrumbs.size > 1) {
+                const arr = Array.from(this._breadcrumbs.entries());
+                const targetEntry = arr[Math.max(0, arr.length - 4)];
+                if (targetEntry) {
+                    const [, data] = targetEntry;
+                    if (data && data.location) {
+                        this._rewindStepUsedForBoard = bm?.playerTile?.boardIndex ?? 0;
+                        this.updateFloatingPlayerPosition(data.location);
+                        if (bm && bm.playerTile) {
+                            bm.playerTile.location = data.location;
+                            bm.refreshTiles();
+                        }
+                        this.displayMessage("⏳ Rewind Step: Undid movement and rewound time!");
+                        return;
+                    }
+                }
+            }
+            this.displayMessage("⏳ Rewind Step: No previous steps to rewind!");
+            return;
+        }
+
+        if (skillKey === 'stopwatch') {
+            const meta = getMeta() || {};
+            const curResolve = typeof meta.resolve === 'number' ? meta.resolve : 100;
+            if (curResolve < 10) {
+                this.displayMessage("⏱️ Stopwatch requires 10 Resolve!");
+                return;
+            }
+            meta.resolve = Math.max(0, curResolve - 10);
+            storeMeta(meta);
+            this.setState({ stopwatchFrozenUntil: Date.now() + 8000 });
+            this.displayMessage("⏱️ Stopwatch activated! All monster patrols frozen for 8 seconds. (-10 Resolve)");
+            return;
+        }
+
+        if (skillKey === 'blinding_beacon') {
+            const meta = getMeta() || {};
+            const curResolve = typeof meta.resolve === 'number' ? meta.resolve : 100;
+            if (curResolve < 10) {
+                this.displayMessage("✨ Blinding Beacon requires 10 Resolve!");
+                return;
+            }
+            meta.resolve = Math.max(0, curResolve - 10);
+            storeMeta(meta);
+            this.setState({ stopwatchFrozenUntil: Date.now() + 12000 });
+            this.displayMessage("✨ Blinding Beacon activated! All monster patrols pacified for 12 seconds. (-10 Resolve)");
+            return;
+        }
+
+        if (skillKey === 'prismatic_flare') {
+            const bm = this.props.boardManager;
+            if (bm && Array.isArray(bm.tiles)) {
+                let trapsRevealed = 0;
+                bm.tiles.forEach(tile => {
+                    if (tile && tile.hasTrap && !tile.trapRevealed) {
+                        tile.trapRevealed = true;
+                        trapsRevealed++;
+                    }
+                });
+                if (typeof bm.refreshTiles === 'function') bm.refreshTiles();
+                this.displayMessage(`🌈 Prismatic Flare illuminated the board and revealed ${trapsRevealed} hidden trap(s)!`);
+            } else {
+                this.displayMessage("🌈 Prismatic Flare illuminated the area!");
+            }
+            return;
+        }
+
         this.displayMessage(`⚡ ${memberName} triggered Expedition Skill Slot ${slotIdx + 1}!`);
     }
 
@@ -30681,10 +31590,18 @@ class DungeonPage extends React.Component {
                             <div
                                 className="hud-timer-item"
                                 style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'help', pointerEvents: 'auto' }}
-                                title="Item & Loot Respawn Timer — Time remaining until gathered items, chests, and resources respawn"
+                                title="Item & Loot Respawn Timer — Time remaining until gathered items, chests, and resources respawn (20-minute cycle)"
                             >
                                 <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#ffd700', boxShadow: '0 0 6px rgba(255, 215, 0, 0.7)' }}></div>
                                 <div style={{ fontSize: 12, fontWeight: 600, color: '#f0ede5' }}>{this.state.itemTimeToRespawn || 'Active'}</div>
+                            </div>
+                            <div
+                                className="hud-timer-item"
+                                style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'help', pointerEvents: 'auto' }}
+                                title="Key Respawn Timer — Time remaining until key items respawn on the map (35-minute cycle)"
+                            >
+                                <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#38bdf8', boxShadow: '0 0 6px rgba(56, 189, 248, 0.7)' }}></div>
+                                <div style={{ fontSize: 12, fontWeight: 600, color: '#f0ede5' }}>{this.state.keyTimeToRespawn || 'Active'}</div>
                             </div>
                             <div
                                 className="hud-timer-item"
@@ -30777,6 +31694,7 @@ class DungeonPage extends React.Component {
 
     // Delegates camping start to CampManager
     setUpCamp = async (maybeDuration, useResolveFallback = false) => {
+        this.setState({ activePygmyCompanion: null });
         const res = await CampManager.setUpCamp(this, maybeDuration, useResolveFallback);
         if (this.props.boardManager && this.props.boardManager.playerTile && this.props.boardManager.playerTile.location) {
             this.updateFloatingPlayerPosition(this.props.boardManager.playerTile.location);
@@ -30799,10 +31717,97 @@ class DungeonPage extends React.Component {
         if (!text) return '';
         return text.charAt(0).toUpperCase() + text.slice(1);
     }
+    resetPursuitMonsterToOriginOnDefeat = () => {
+        try {
+            const pursuitInfo = this._activePursuitMonsterInfo || (this.state.monster && this.state.monster._pursuitOrigin);
+            if (!pursuitInfo) return;
+
+            const bm = this.props.boardManager || this.boardManager;
+            const pursuitTileId = pursuitInfo.pursuitTileId !== undefined ? pursuitInfo.pursuitTileId : this.state.monsterBattleTileId;
+            const originTileId = pursuitInfo.originTileId;
+
+            // 1. Remove the pursuing monster from the pursuit tile
+            if (bm && bm.tiles && pursuitTileId !== null && pursuitTileId !== undefined) {
+                const pTile = typeof pursuitTileId === 'number' ? bm.tiles[pursuitTileId] : (bm.tiles.find(t => t && (t.id === pursuitTileId || t.id === pursuitTileId.id)) || pursuitTileId);
+                if (pTile && typeof pTile === 'object') {
+                    if (pTile._underlyingContent) {
+                        pTile.contains = pTile._underlyingContent.contains;
+                        pTile.image = pTile._underlyingContent.image;
+                        pTile.icon = pTile._underlyingContent.icon;
+                        if (pTile._underlyingContent.type) pTile.type = pTile._underlyingContent.type;
+                        if (pTile._underlyingContent.subtype) pTile.subtype = pTile._underlyingContent.subtype;
+                        delete pTile._underlyingContent;
+                    } else {
+                        pTile.contains = null;
+                        pTile.image = null;
+                        if (pTile.icon) pTile.icon = null;
+                    }
+                    pTile.isPursuing = false;
+                    delete pTile.pursuitInterval;
+                    delete pTile.isAggro;
+                    delete pTile.aggro;
+                    if (bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[pTile.id]) {
+                        bm.currentBoard.tiles[pTile.id].contains = pTile.contains;
+                        bm.currentBoard.tiles[pTile.id].image = pTile.image;
+                    }
+                }
+            }
+
+            // 2. Restore original monster back at its origin tile with full health
+            if (bm && bm.tiles && originTileId !== null && originTileId !== undefined) {
+                const oTile = typeof originTileId === 'number' ? bm.tiles[originTileId] : (bm.tiles.find(t => t && (t.id === originTileId || t.id === originTileId.id)) || originTileId);
+                if (oTile && typeof oTile === 'object') {
+                    delete oTile._underlyingContent;
+                    let freshMonsterData = JSON.parse(JSON.stringify(pursuitInfo.originMonsterData || {}));
+                    if (typeof freshMonsterData === 'object' && freshMonsterData) {
+                        const maxHp = freshMonsterData.maxHp || freshMonsterData.starting_hp || freshMonsterData.hp || 100;
+                        freshMonsterData.hp = maxHp;
+                        freshMonsterData.starting_hp = maxHp;
+                        freshMonsterData.maxHp = maxHp;
+                        delete freshMonsterData.inDungeonDamaged;
+                        delete freshMonsterData._pursuitOrigin;
+                    }
+                    oTile.contains = freshMonsterData;
+                    oTile.image = pursuitInfo.originImage || (typeof freshMonsterData === 'object' ? (freshMonsterData.subtype || freshMonsterData.type) : freshMonsterData);
+                    oTile.isVoid = false;
+                    oTile.isPursuing = false;
+                    delete oTile.pursuitInterval;
+
+                    if (bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[oTile.id]) {
+                        bm.currentBoard.tiles[oTile.id].contains = freshMonsterData;
+                        bm.currentBoard.tiles[oTile.id].image = oTile.image;
+                    }
+                }
+            }
+            this._activePursuitMonsterInfo = null;
+            if (bm && typeof bm.refreshTiles === 'function') {
+                try { bm.refreshTiles(); } catch (e) {}
+            }
+        } catch (e) {
+            console.warn('resetPursuitMonsterToOriginOnDefeat failed:', e);
+        }
+    };
+
     battleOver = (result) => {
+        const isDebtCollector = this.state.monster && (this.state.monster.type === 'debt_collector' || this.state.monster.key === 'debt_collector');
         if (result === 'win') {
+            this._activePursuitMonsterInfo = null;
             // Suppress any lingering battle callbacks from overwriting HP/dead after win
             this._suppressFighterDeadHpUpdates = true;
+
+            if (isDebtCollector) {
+                try {
+                    const horologist = (this.props.crewManager?.crew || []).find(c => c && (c.crewClass === 'horologist' || c.type === 'horologist'));
+                    if (horologist && typeof this.props.crewManager.clearTimeDebt === 'function') {
+                        this.props.crewManager.clearTimeDebt(horologist);
+                    }
+                    if (this.props.boardManager && typeof this.props.boardManager.messaging === 'function') {
+                        this.props.boardManager.messaging('⏳ The Debt Collector has been vanquished! Time Debt fully cleared!');
+                    }
+                } catch (e) {
+                    console.warn('Debt Collector victory handling error:', e);
+                }
+            }
 
             // Progress bounty quests
             if (this.props.questManager) {
@@ -30855,6 +31860,15 @@ class DungeonPage extends React.Component {
             // Re-enable after a tick so any final in-flight combat callbacks have cleared
             setTimeout(() => { this._suppressFighterDeadHpUpdates = false; }, 0);
         } else if (result === 'loss') {
+            this.resetPursuitMonsterToOriginOnDefeat();
+            if (isDebtCollector && this.props.crewManager && typeof this.props.crewManager.resetAllPreparations === 'function') {
+                this.props.crewManager.resetAllPreparations();
+                try {
+                    if (this.props.boardManager && typeof this.props.boardManager.messaging === 'function') {
+                        this.props.boardManager.messaging('⌛ The Debt Collector claims its due: all active crew preparations reset to 0%!');
+                    }
+                } catch (e) { }
+            }
             this.setState({
                 inMonsterBattle: false,
                 keysLocked: false
@@ -30863,12 +31877,21 @@ class DungeonPage extends React.Component {
             });
             return;
         } else if (result === 'respawn') {
+            this.resetPursuitMonsterToOriginOnDefeat();
+            if (isDebtCollector && this.props.crewManager && typeof this.props.crewManager.resetAllPreparations === 'function') {
+                this.props.crewManager.resetAllPreparations();
+                try {
+                    if (this.props.boardManager && typeof this.props.boardManager.messaging === 'function') {
+                        this.props.boardManager.messaging('⌛ The Debt Collector claims its due: all active crew preparations reset to 0%!');
+                    }
+                } catch (e) { }
+            }
             // Try to respawn the player at spawn point (guard against missing boardManager)
-            const meta2 = getMeta();
+            const meta2 = getMeta() || {};
 
             // Adjust resolve on defeat: -5 resolve
             const currentResolve = typeof meta2.resolve === 'number' ? meta2.resolve : 100;
-            const penalty = applyResolvePenalty(5);
+            const penalty = typeof applyResolvePenalty === 'function' ? applyResolvePenalty(5) : 5;
             meta2.resolve = Math.max(0, currentResolve - penalty);
             if (meta2 && Array.isArray(meta2.crew)) {
                 meta2.crew.forEach(c => {
@@ -31076,7 +32099,7 @@ class DungeonPage extends React.Component {
             inMonsterBattle: false,
             isPvPMode: false,
             opponentCrew: null,
-            showUserLevelUpModal: getPendingUserPerkLevels() > 0
+            showUserLevelUpModal: (this.state?.isTutorialMode || this._isTutorialSession) ? false : (getPendingUserPerkLevels() > 0)
         }, () => {
             this.checkPocketDimensionVictory();
             try {
@@ -32410,7 +33433,9 @@ class DungeonPage extends React.Component {
     triggerVendorEncounter = (vendorType, tile) => {
         const normalized = String(vendorType || '').toLowerCase();
         let modalType = 'Merchant';
-        if (normalized === 'alchemist') {
+        if (normalized === 'war_camp' || normalized === 'war camp') {
+            modalType = 'War Camp';
+        } else if (normalized === 'alchemist') {
             modalType = 'Alchemist';
             try {
                 const meta = getMeta() || {};
@@ -32704,6 +33729,56 @@ class DungeonPage extends React.Component {
         if (this.state && this.state.illuminatedTileId !== null) {
             this.setState({ illuminatedTileId: null });
         }
+    };
+
+    getVendorInfo = (tileObj) => {
+        const bm = this.props.boardManager;
+        if (bm && typeof bm.getVendorInfo === 'function') {
+            return bm.getVendorInfo(tileObj);
+        }
+        if (!tileObj) return { isVendor: false, vendorType: null };
+
+        const cObj = (typeof tileObj.contains === 'object' && tileObj.contains !== null) ? tileObj.contains : {};
+        const cType = String(cObj.type || tileObj.contains || '').toLowerCase();
+        const cSub = String(cObj.subtype || cObj.building || cObj.name || cObj.key || tileObj.building || tileObj.image || '').toLowerCase();
+        const vGroup = String(cObj.vendorGroupId || tileObj.vendorGroupId || '').toLowerCase();
+        const vCell = cObj.vendorCell || tileObj.vendorCell;
+
+        const vAnchorId = (typeof cObj.vendorAnchorId === 'number')
+            ? cObj.vendorAnchorId
+            : (typeof tileObj.vendorAnchorId === 'number' ? tileObj.vendorAnchorId : null);
+
+        let anchorSub = '';
+        let anchorGroup = '';
+        const boardTiles = bm?.currentBoard?.tiles || bm?.tiles;
+        if (vAnchorId !== null && boardTiles && boardTiles[vAnchorId]) {
+            const aTile = boardTiles[vAnchorId];
+            const aObj = (typeof aTile.contains === 'object' && aTile.contains !== null) ? aTile.contains : {};
+            anchorSub = String(aObj.subtype || aObj.building || aObj.name || aObj.key || aTile.building || aTile.image || '').toLowerCase();
+            anchorGroup = String(aObj.vendorGroupId || aTile.vendorGroupId || '').toLowerCase();
+        }
+
+        const combinedStr = `${cType} ${cSub} ${vGroup} ${anchorSub} ${anchorGroup}`;
+
+        const vendorKeys = ['war_camp', 'war camp', 'alchemist', 'fungal_nursery', 'dream_den', 'dream den', 'merchant', 'vendor'];
+        const isVendor = vendorKeys.some(k => combinedStr.includes(k)) || !!vCell || vAnchorId !== null || !!vGroup;
+
+        if (!isVendor) {
+            return { isVendor: false, vendorType: null };
+        }
+
+        let vendorType = 'merchant';
+        if (combinedStr.includes('war_camp') || combinedStr.includes('war camp')) {
+            vendorType = 'war_camp';
+        } else if (combinedStr.includes('alchemist')) {
+            vendorType = 'alchemist';
+        } else if (combinedStr.includes('fungal_nursery')) {
+            vendorType = 'fungal_nursery';
+        } else if (combinedStr.includes('dream_den') || combinedStr.includes('dream den')) {
+            vendorType = 'dream_den';
+        }
+
+        return { isVendor: true, vendorType };
     };
 
     getIsLocusHelper = (t) => {
@@ -38601,7 +39676,7 @@ class DungeonPage extends React.Component {
                     const globalSkillsByClass = {
                         ranger: [{ key: 'keen_eye', name: 'Keen Eye', desc: 'L1: Reveals nearby traps. L2: +3 DEX to trap saves.' }, { key: 'hunters_quarry', name: "Hunter's Quarry", desc: '+10% food drop on monster defeat' }, { key: 'trapper', name: 'Trapper', desc: '25% chance to negate any trap entirely.' }, { key: 'trailblaze', name: 'Trailblaze', desc: 'Visual breadcrumb to last camp spot' }, { key: 'scrounging_rat', name: 'Scrounging Rat', desc: 'Forage for food in camp: 15-30 food (3h) / 30-50 food (2h) / 50-80 food (1h).' }, { key: 'fastidious_crow', name: 'Fastidious Crow', desc: 'Scout a 10x10 board area for 24h. Process: 20m. Cooldown: 6h / 3h. Reward: 5-20g / 25-80g + 30% shard chance.' }],
                         sage: [{ key: 'herbalism', name: 'Herbalism', desc: 'Camp costs 1 less food per member' }, { key: 'mend', name: 'Mend', desc: 'Out-of-combat potions restore +15% HP' }, { key: 'ritual_efficiency', name: 'Ritual Efficiency', desc: 'Ritual prep time -25%' }, { key: 'revive', name: 'Revive', desc: 'Once per run: fallen member revived at 25% HP' }, { key: 'awake_refreshed', name: 'Awake Refreshed', desc: 'Recuperates an additional +10/+20/+40 Resolve after camping.' }],
-                        soldier: [{ key: 'fortify', name: 'Fortify', desc: 'Resolve does not decay while camping' }, { key: 'breacher', name: 'Breacher', desc: 'Force open a Minor Key gate once per level' }, { key: 'rally', name: 'Rally', desc: '+5 bonus Resolve on combat victory' }, { key: 'iron_will', name: 'Iron Will', desc: 'Party Resolve never drops below 20 from deaths' }, { key: 'awake_refreshed', name: 'Awake Refreshed', desc: 'Recuperates an additional +10/+20/+40 Resolve after camping.' }, { key: 'strong_resolve', name: 'Strong Resolve', desc: 'Reduces Resolve penalties by 40%/75%/90%.' }],
+                        soldier: [{ key: 'fortify', name: 'Fortify', desc: 'Resolve does not decay while camping' }, { key: 'breacher', name: 'Breacher', desc: 'Force open any Major or Minor Gate' }, { key: 'rally', name: 'Rally', desc: '+5 bonus Resolve on combat victory' }, { key: 'iron_will', name: 'Iron Will', desc: 'Party Resolve never drops below 20 from deaths' }, { key: 'awake_refreshed', name: 'Awake Refreshed', desc: 'Recuperates an additional +10/+20/+40 Resolve after camping.' }, { key: 'strong_resolve', name: 'Strong Resolve', desc: 'Reduces Resolve penalties by 40%/75%/90%.' }],
                         wizard: [{ key: 'arcane_sense', name: 'Arcane Sense', desc: 'Identifies chest tier before opening' }, { key: 'ley_tap', name: 'Ley Tap', desc: 'Draw energy at Magic Nexus — recover 15% endurance' }, { key: 'dimensional_pocket', name: 'Dimensional Pocket', desc: '+2 shared inventory slots' }, { key: 'scry', name: 'Scry', desc: 'Reveals all chests and monsters for 30s once per run' }],
                         barbarian: [{ key: 'iron_gut', name: 'Iron Gut', desc: 'Barbarian does not count toward camping food cost' }, { key: 'savage_haul', name: 'Savage Haul', desc: 'Grants +2/+4/+6 Strength and +10/+20/+30 Max HP' }, { key: 'bloodhound', name: 'Bloodhound', desc: 'Reveals all monsters on miniboard entry' }, { key: 'endure', name: 'Endure', desc: 'Zero-food camp: no Resolve penalty, crew heals to 50%. Auto-triggers on camp; 20% chance during 10m exhaustion window.' }],
                         monk: [{ key: 'swift_step', name: 'Swift Step', desc: 'Movement animation 30% faster' }, { key: 'focused_rest', name: 'Focused Rest', desc: 'Camping duration -30% (same healing)' }, { key: 'silent_awareness', name: 'Silent Awareness', desc: 'Cuts ambush chance in obscured spaces by 50% when Monk is selected' }, { key: 'pressure_points', name: 'Pressure Points', desc: '15% vendor discount once per vendor' }, { key: 'astral_map', name: 'Astral Map', desc: 'Full fog reveal for 60s once per run' }],
@@ -38733,7 +39808,7 @@ class DungeonPage extends React.Component {
                         </div>
                     );
                 })()}
-                <CModal className={this.state.modalType === 'PrepComplete' ? 'prep-complete-modal' : this.state.modalType === 'RitualComplete' ? 'ritual-complete-modal' : this.state.modalType === 'Magic' ? 'ritual-encounter-modal' : this.state.modalType === 'FoodComplete' ? 'food-complete-modal' : this.state.modalType === 'Merchant' ? 'merchant-modal' : this.state.modalType === 'Alchemist' ? 'alchemist-modal' : this.state.modalType === 'Dream Den' ? 'dream-den-modal' : this.state.modalType === 'SharpenBladesDetails' ? 'sharpen-blades-details-modal' : ''} alignment="center" visible={this.state.showModal} onClose={() => this.onUpdateModalClosed()}>
+                <CModal className={this.state.modalType === 'PrepComplete' ? 'prep-complete-modal' : this.state.modalType === 'RitualComplete' ? 'ritual-complete-modal' : this.state.modalType === 'Magic' ? 'ritual-encounter-modal' : this.state.modalType === 'FoodComplete' ? 'food-complete-modal' : this.state.modalType === 'Merchant' ? 'merchant-modal' : this.state.modalType === 'Alchemist' ? 'alchemist-modal' : this.state.modalType === 'Dream Den' ? 'dream-den-modal' : this.state.modalType === 'War Camp' ? 'war-camp-modal' : this.state.modalType === 'SharpenBladesDetails' ? 'sharpen-blades-details-modal' : ''} alignment="center" visible={this.state.showModal} onClose={() => this.onUpdateModalClosed()}>
                     {this.state.modalType === 'Merchant' && (
                         <div className="merchant-modal-bg" style={{
                             position: 'absolute',
@@ -38770,7 +39845,7 @@ class DungeonPage extends React.Component {
                             pointerEvents: 'none'
                         }} />
                     )}
-                    {(this.state.modalType === 'Merchant' || this.state.modalType === 'Alchemist' || this.state.modalType === 'Dream Den') && (
+                    {(this.state.modalType === 'Merchant' || this.state.modalType === 'Alchemist' || this.state.modalType === 'Dream Den' || this.state.modalType === 'War Camp') && (
                         <CModalHeader closeButton={false} style={{ position: 'relative', zIndex: 2 }}>
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', position: 'relative', zIndex: 2 }}>
                                 <CModalTitle>{this.state.modalType}</CModalTitle>
@@ -38822,6 +39897,8 @@ class DungeonPage extends React.Component {
                             this.onUpdateModalClosed();
                             this.enterSuperboardPocketDimension(type);
                         }}
+                        onSpawnPygmy={() => this.handleSpawnPygmyCompanion()}
+                        tutorialMerchantHighlight={this.state.tutorialMerchantHighlight}
                     />
                 </CModal>
                 {/* Inscription popup */}
@@ -41098,6 +42175,7 @@ class DungeonPage extends React.Component {
                                     handleHover={this.handleOverlayHover}
                                     type={'overlay-tile'}
                                     passThrough={!this.state.minimapPlaceMapMarkerStarted}
+                                    aggroOn={!!this.state.aggroOn}
                                     handleClick={(e) => this.handleOverlayClick}
                                     // For overlay tiles we want the background color to reflect overlay state (e.g. edge indicator)
                                     backgroundColor={(tile.color && tile.color !== 'null' && tile.color !== 'black' && !String(tile.color).includes('ff0000')) ? tile.color : (this.state.overlayHoveredTileId === i && this.state.minimapPlaceMapMarkerStarted ? 'rgba(100, 100, 38, 0.272)' : 'transparent')}
@@ -41448,6 +42526,7 @@ class DungeonPage extends React.Component {
                                         partialObscured={!!tile.partialObscured}
                                         trapRevealed={!!tile.trapRevealed}
                                         trapVisionEnabled={!!this.state.trapVisionEnabled}
+                                        aggroOn={!!this.state.aggroOn}
                                         hasTrap={!!tile.hasTrap}
                                         insidePerfectSquareDomain={!!tile.insidePerfectSquareDomain}
                                         illuminated={
@@ -41911,17 +42990,61 @@ class DungeonPage extends React.Component {
                                             {ind.text || '+3'}
                                         </div>
                                     ))}
-                                    {/* Weapon swing arc — cosmetic melee attack cone */}
+                                    {/* Weapon swing arc / Monk linear punch attack animation */}
                                     {this.state.swingArc && (() => {
-                                        const { facing, weaponIcon } = this.state.swingArc;
+                                        const { facing, weaponIcon, isMonk } = this.state.swingArc;
                                         const rotMap = { right: 0, down: 90, left: 180, up: 270 };
                                         const baseRot = rotMap[facing] ?? 0;
                                         const ts = this.state.tileSize || 48;
-                                        // Scale cone proportional to avatar's rendered size, not raw tileSize
                                         const avatarPx = this.state.inSuperboard ? ts * 0.65 : ts;
                                         const conePx = avatarPx * 2.6;
                                         const iconPx = avatarPx * 0.85;
                                         const glowRadius = Math.round(avatarPx * 0.08);
+                                        const iconSrc = this.resolveWeaponIconSrc(weaponIcon);
+                                        if (!iconSrc) return null;
+
+                                        if (isMonk) {
+                                            return (
+                                                <div
+                                                    key={this.state.swingArc.id}
+                                                    className="monk-punch-straight"
+                                                    style={{
+                                                        position: 'absolute',
+                                                        top: '50%',
+                                                        left: '50%',
+                                                        width: `${avatarPx}px`,
+                                                        height: `${avatarPx}px`,
+                                                        pointerEvents: 'none',
+                                                        zIndex: 30,
+                                                        '--base-rot': `${baseRot}deg`,
+                                                    }}
+                                                >
+                                                    <img
+                                                        src={iconSrc}
+                                                        alt="punch"
+                                                        className="monk-punch-icon"
+                                                        style={{
+                                                            position: 'absolute',
+                                                            width: `${iconPx}px`,
+                                                            height: `${iconPx}px`,
+                                                            top: '50%',
+                                                            left: '50%',
+                                                            pointerEvents: 'none',
+                                                            filter: `drop-shadow(0 0 ${glowRadius}px rgba(251,191,36,0.95)) drop-shadow(0 0 4px rgba(245,158,11,0.8))`,
+                                                        }}
+                                                        onError={(e) => {
+                                                            const fb = (images.monk_punch && images.monk_punch.default) || images.monk_punch || (images.fist_punch && images.fist_punch.default) || images.fist_punch;
+                                                            if (fb && e.target.src !== fb) {
+                                                                e.target.src = fb;
+                                                            } else {
+                                                                e.target.style.display = 'none';
+                                                            }
+                                                        }}
+                                                    />
+                                                </div>
+                                            );
+                                        }
+
                                         return (
                                             <div
                                                 key={this.state.swingArc.id}
@@ -41937,38 +43060,70 @@ class DungeonPage extends React.Component {
                                                     '--base-rot': `${baseRot}deg`,
                                                 }}
                                             >
-                                                {(() => {
-                                                    const iconSrc = this.resolveWeaponIconSrc(weaponIcon);
-                                                    if (!iconSrc) return null;
-                                                    return (
-                                                        <img
-                                                            src={iconSrc}
-                                                            alt="weapon"
-                                                            className="weapon-swing-icon"
-                                                            style={{
-                                                                position: 'absolute',
-                                                                width: `${iconPx}px`,
-                                                                height: `${iconPx}px`,
-                                                                top: '50%',
-                                                                left: '84%',
-                                                                transform: 'translate(-50%, -50%)',
-                                                                pointerEvents: 'none',
-                                                                filter: `drop-shadow(0 0 ${glowRadius}px rgba(251,191,36,0.95)) drop-shadow(0 0 4px rgba(245,158,11,0.8))`,
-                                                            }}
-                                                            onError={(e) => {
-                                                                const fb = (images.sword_upright && images.sword_upright.default) || images.sword_upright || (images.sword && images.sword.default) || images.sword;
-                                                                if (fb && e.target.src !== fb) {
-                                                                    e.target.src = fb;
-                                                                } else {
-                                                                    e.target.style.display = 'none';
-                                                                }
-                                                            }}
-                                                        />
-                                                    );
-                                                })()}
+                                                <img
+                                                    src={iconSrc}
+                                                    alt="weapon"
+                                                    className="weapon-swing-icon"
+                                                    style={{
+                                                        position: 'absolute',
+                                                        width: `${iconPx}px`,
+                                                        height: `${iconPx}px`,
+                                                        top: '50%',
+                                                        left: '84%',
+                                                        transform: 'translate(-50%, -50%)',
+                                                        pointerEvents: 'none',
+                                                        filter: `drop-shadow(0 0 ${glowRadius}px rgba(251,191,36,0.95)) drop-shadow(0 0 4px rgba(245,158,11,0.8))`,
+                                                    }}
+                                                    onError={(e) => {
+                                                        const fb = (images.sword_upright && images.sword_upright.default) || images.sword_upright || (images.sword && images.sword.default) || images.sword;
+                                                        if (fb && e.target.src !== fb) {
+                                                            e.target.src = fb;
+                                                        } else {
+                                                            e.target.style.display = 'none';
+                                                        }
+                                                    }}
+                                                />
                                             </div>
                                         );
                                     })()}
+                                </div>
+                            );
+                        })()}
+
+                        {/* ── Pygmy Companion Floating Sprite Overlay ── */}
+                        {this.state.activePygmyCompanion && this.state.activePygmyCompanion.boardIndex === (this.props.boardManager?.boardIndex || 0) && (() => {
+                            const pygmyLoc = this.state.activePygmyCompanion.location;
+                            const floatStyle = this.getFloatingPlayerStyle(pygmyLoc);
+                            if (!floatStyle) return null;
+                            const ts = this.state.inSuperboard ? (this.state.tileSize * 0.65) : this.state.tileSize;
+                            const pygmyImg = (images.pygmy && images.pygmy.default) || images.pygmy || (images.woodland_individual && images.woodland_individual.default) || images.woodland_individual || (images.pygmies && images.pygmies.default) || images.pygmies;
+                            return (
+                                <div
+                                    key="pygmy_companion_float"
+                                    className="floating-pygmy-companion"
+                                    style={{
+                                        position: 'absolute',
+                                        left: floatStyle.left,
+                                        top: floatStyle.top,
+                                        width: `${ts}px`,
+                                        height: `${ts}px`,
+                                        pointerEvents: 'none',
+                                        transform: floatStyle.transform,
+                                        zIndex: 24,
+                                        transition: 'left 0.22s cubic-bezier(0.22, 0.61, 0.36, 1), top 0.22s cubic-bezier(0.22, 0.61, 0.36, 1)',
+                                        filter: 'drop-shadow(0 0 6px rgba(168, 85, 247, 0.75)) drop-shadow(0 0 10px rgba(147, 51, 234, 0.5))'
+                                    }}
+                                >
+                                    <div
+                                        style={{
+                                            width: '100%',
+                                            height: '100%',
+                                            backgroundImage: `url(${pygmyImg})`,
+                                            backgroundSize: 'contain',
+                                            backgroundRepeat: 'no-repeat',
+                                            backgroundPosition: 'center',
+                                        }}
+                                    />
                                 </div>
                             );
                         })()}
@@ -45157,7 +46312,7 @@ class DungeonPage extends React.Component {
                     />
                 )}
 
-                {this.state.showUserLevelUpModal && (
+                {this.state.showUserLevelUpModal && !this.state.isTutorialMode && !this._isTutorialSession && (
                     <UserLevelUpScreen
                         onComplete={() => {
                             const remaining = getPendingUserPerkLevels();

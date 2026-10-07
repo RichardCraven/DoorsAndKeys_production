@@ -143,6 +143,78 @@ describe('BoardManager key normalization and pickup', () => {
     expect(bm.messaging).toHaveBeenCalledWith(expect.stringContaining('Breacher already used on Level 1'));
   });
 
+  test('Breacher skill allows forcing open a major key gate when no key is in inventory', () => {
+    const bm = new BoardManager();
+    bm.getCurrentInventory = jest.fn().mockReturnValue([]);
+    bm.getCrew = jest.fn().mockReturnValue([
+      { id: 1, type: 'soldier', expeditionSkills: ['soldier_shield', 'breacher'] }
+    ]);
+    bm.messaging = jest.fn();
+    bm.refreshTiles = jest.fn();
+    bm.updateDungeon = jest.fn();
+
+    const majorGateTile = { id: 5, contains: { type: 'gate', subtype: 'major_gate' }, image: 'major_gate' };
+    bm.tiles = { 5: majorGateTile };
+
+    bm.currentLevel = { id: 2 };
+    bm.currentBoard = { id: 1 };
+    bm.currentOrientation = 'F';
+    bm.dungeon = {
+      levels: [{
+        id: 2,
+        front: {
+          miniboards: [{
+            id: 1,
+            tiles: { 5: majorGateTile }
+          }]
+        }
+      }]
+    };
+
+    expect(bm.canBreachGate(majorGateTile, 'major_gate')).toBe(true);
+    expect(bm.isLockedGateTile(majorGateTile)).toBe(false);
+
+    bm.handleGate(majorGateTile, 'major_gate');
+    expect(majorGateTile.contains).toBe('archway');
+    expect(bm.messaging).toHaveBeenCalledWith(expect.stringContaining('Breacher: Forced open the major key gate'));
+  });
+
+  test('breachAdjacentGate forces open an adjacent major or minor gate', () => {
+    const bm = new BoardManager();
+    bm.getCurrentInventory = jest.fn().mockReturnValue([]);
+    bm.getCrew = jest.fn().mockReturnValue([
+      { id: 1, type: 'soldier', expeditionSkills: ['soldier_shield', 'breacher'] }
+    ]);
+    bm.messaging = jest.fn();
+    bm.refreshTiles = jest.fn();
+    bm.updateDungeon = jest.fn();
+
+    // 15x15 board: player at [7, 7] (index 112)
+    // Major gate at [7, 8] (index 113) - adjacent to player
+    const majorGateTile = { id: 113, contains: 'major_gate', image: 'major_gate' };
+    bm.tiles = { 113: majorGateTile };
+    bm.playerTile = { location: [7, 7] };
+    bm.currentLevel = { id: 3 };
+    bm.currentBoard = { id: 1 };
+    bm.currentOrientation = 'F';
+    bm.dungeon = {
+      levels: [{
+        id: 3,
+        front: {
+          miniboards: [{
+            id: 1,
+            tiles: { 113: majorGateTile }
+          }]
+        }
+      }]
+    };
+
+    const res = bm.breachAdjacentGate();
+    expect(res.success).toBe(true);
+    expect(majorGateTile.contains).toBe('archway');
+    expect(majorGateTile.image).toBe('archway');
+  });
+
   test('Closed gates block Fog of War vision past themselves even when player holds key', () => {
     const bm = new BoardManager();
     // 15x15 board

@@ -20,6 +20,7 @@ export const CRITICAL_DAMAGE_MULTIPLIER = 3; // damage multiplier on a critical 
 // Respawn intervals in minutes
 export const MONSTER_RESPAWN_MINUTES = 10;
 export const ITEM_RESPAWN_MINUTES = 20;
+export const KEY_RESPAWN_MINUTES = ITEM_RESPAWN_MINUTES * 1.75;
 
 export const DURATION_ROUNDS = {
     'instant': 0,

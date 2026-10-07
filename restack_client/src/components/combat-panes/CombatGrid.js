@@ -13,6 +13,8 @@ import Overlay from '../Overlay';
 import { runesData } from '../../utils/rune-data';
 import WalkerAnimatedUnit from '../WalkerAnimatedUnit';
 import SobekAnimatedUnit from '../SobekAnimatedUnit';
+import { combatClock } from '../../utils/combat-clock';
+import { useCombatClockPlayback } from '../../utils/use-combat-clock-playback';
 
 
 const TILE_SIZE = 100;
@@ -28,13 +30,13 @@ function FamiliarSummonRuneAnimation({ animKey, tgtPx, runeKey = 'archaic' }) {
     const [phase, setPhase] = React.useState(1);
 
     React.useEffect(() => {
-        const t1 = setTimeout(() => setPhase(2), 400);  // Step 2: replace base icon with 5 assembled shards
-        const t2 = setTimeout(() => setPhase(3), 520);  // Step 3: shards move outward to disassembled state
-        const t3 = setTimeout(() => setPhase(4), 1150); // Step 4: shards fade out
+        const t1 = combatClock.setTimeout(() => setPhase(2), 400);  // Step 2: replace base icon with 5 assembled shards
+        const t2 = combatClock.setTimeout(() => setPhase(3), 520);  // Step 3: shards move outward to disassembled state
+        const t3 = combatClock.setTimeout(() => setPhase(4), 1150); // Step 4: shards fade out
         return () => {
-            clearTimeout(t1);
-            clearTimeout(t2);
-            clearTimeout(t3);
+            combatClock.clearTimeout(t1);
+            combatClock.clearTimeout(t2);
+            combatClock.clearTimeout(t3);
         };
     }, []);
 
@@ -665,6 +667,48 @@ const isPCUnitType = (key) => {
     return ['soldier', 'ranger', 'wizard', 'monk', 'barbarian', 'sage', 'engineer', 'summoner', 'avatar', 'cultist', 'basilisk_cultist', 'crew'].some(t => k.includes(t));
 };
 
+const isDamageIndicator = (ind) => {
+    if (!ind) return false;
+    if (ind.isMiss) return false;
+    if (ind.type === 'heal' || ind.type === 'buff' || ind.type === 'status' || ind.type === 'robbed') return false;
+    const strVal = String(ind.value !== undefined ? ind.value : '').trim();
+    if (strVal.includes('MISS') || strVal.includes('DODGE') || strVal.includes('PARRY') || strVal.includes('IMMUNE') || strVal.includes('BLOCKED')) return false;
+    if (strVal.startsWith('+')) return false;
+    if (strVal.includes('Stamina')) return false;
+    if (ind.type === 'damage') return true;
+    if (strVal.startsWith('-')) return true;
+    if (ind.isCrit) return true;
+    const num = parseFloat(strVal);
+    if (!isNaN(num) && num > 0) return true;
+    return false;
+};
+
+const getRecoilDirection = (entity, indicators = [], combatManager = null) => {
+    if (!entity) return 'left';
+    const hitInd = Array.isArray(indicators) ? indicators.find(ind => ind && ind.sourceDirection) : null;
+    const srcDir = (hitInd && hitInd.sourceDirection) || (entity.wounded && entity.wounded.sourceDirection);
+    if (srcDir) {
+        switch (srcDir) {
+            case 'left': return 'right';
+            case 'right': return 'left';
+            case 'up':
+            case 'top': return 'down';
+            case 'down':
+            case 'bottom': return 'up';
+            default: break;
+        }
+    }
+
+    const facing = entity.facing || combatManager?.getCombatant?.(entity.id)?.facing;
+    if (facing === 'left') return 'right';
+    if (facing === 'right') return 'left';
+    if (facing === 'up') return 'down';
+    if (facing === 'down') return 'up';
+
+    const isPlayer = !entity.isMonster && !entity.isMinion && !entity.isOpponent;
+    return isPlayer ? 'left' : 'right';
+};
+
 const computeHitVars = (combatant, getHitAnimation, isMobileLandscape) => {
     // CombatGrid portraits fill their container via width:100%/height:100%,
     // so --portrait-base-scale should always be 1 (container is already 200px for large monsters).
@@ -776,8 +820,8 @@ const getCombatantPortrait = (unit, greetingInProcess, activeAnimations, showDea
         if (unit.dead) {
             const deathList = Array.isArray(sp.death) ? sp.death : (Array.isArray(sp.deathStages) ? sp.deathStages : null);
             if (deathList && deathList.length > 0) {
-                const deathStart = unit.deathTimestamp || unit.deathStartTime || (unit._deathStartTime = unit._deathStartTime || Date.now());
-                const elapsed = Date.now() - deathStart;
+                const deathStart = unit.deathTimestamp || unit.deathStartTime || (unit._deathStartTime = unit._deathStartTime || combatClock.now());
+                const elapsed = combatClock.now() - deathStart;
                 const frameDuration = 320;
                 const frameIdx = Math.min(deathList.length - 1, Math.floor(elapsed / frameDuration));
                 return resolvePortrait(deathList[frameIdx]);
@@ -827,12 +871,6 @@ const getCombatantPortrait = (unit, greetingInProcess, activeAnimations, showDea
     if (!targetKey) targetKey = 'soldier';
 
     const finalUrl = resolvePortrait(targetKey);
-    const isOpponentUnit = (unit) => {
-        if (!unit) return false;
-        if (unit.isOpponent === true) return true;
-        if (typeof unit.id === 'string' && (unit.id.includes('opponent') || unit.id.includes('pvp_') || unit.id.includes('pvp'))) return true;
-        return false;
-    };
 
     if (!finalUrl && process.env.NODE_ENV !== 'production') {
         console.warn(`[PvP Diagnostic] Unit "${unit.name || unit.id}" has no valid portrait URL (targetKey="${targetKey}")`, unit);
@@ -886,11 +924,38 @@ export default function CombatGrid(props) {
 
     const isOpponentUnit = (unit) => {
         if (!unit) return false;
-        if (isPvP) return true;
+        if (crewIds.has(unit.id)) return false;
         if (unit.isOpponent === true) return true;
-        if (typeof unit.id === 'string' && (unit.id.includes('opponent') || unit.id.includes('pvp_') || unit.id.includes('pvp'))) return true;
+        if (unit.isOpponent === false) return false;
+
+        const summonerId = unit.summonedBy || unit.casterId;
+        if (summonerId) {
+            if (crewIds.has(summonerId)) return false;
+            const summoner = battleData[summonerId] ||
+                combatManager?.combatants?.[summonerId] ||
+                (typeof combatManager?.getCombatant === 'function' ? combatManager.getCombatant(summonerId) : null) ||
+                (props.crew && props.crew.find(c => c && c.id === summonerId));
+            if (summoner) {
+                if (summoner.isOpponent === true) return true;
+                if (summoner.isOpponent === false) return false;
+                if (crewIds.has(summoner.id)) return false;
+                if (typeof summoner.id === 'string' && (summoner.id.includes('opponent') || summoner.id.startsWith('pvp_'))) return true;
+                if (Array.isArray(props.opponentCrew) && props.opponentCrew.some(o => o && o.id === summoner.id)) return true;
+                if (Array.isArray(combatManager?.data?.opponentCrew) && combatManager.data.opponentCrew.some(o => o && o.id === summoner.id)) return true;
+                if (summoner.isMonster === false) return false;
+            }
+        }
+
         if (Array.isArray(props.opponentCrew) && props.opponentCrew.some(o => o && o.id === unit.id)) return true;
         if (Array.isArray(combatManager?.data?.opponentCrew) && combatManager.data.opponentCrew.some(o => o && o.id === unit.id)) return true;
+        if (typeof unit.id === 'string' && (unit.id.includes('opponent') || unit.id.startsWith('pvp_'))) return true;
+
+        if (unit.isMonster === false) return false;
+
+        if (isPvP) {
+            return true;
+        }
+
         return false;
     };
 
@@ -926,6 +991,10 @@ export default function CombatGrid(props) {
 
     const getLiveCombatant = (id) => (combatManager && typeof combatManager.getCombatant === 'function') ? combatManager.getCombatant(id) : null;
 
+    // ── Combat clock playback (sandbox slow-mo / pause; no-op in real time) ───
+    const clockPlaybackRootRef = React.useRef(null);
+    useCombatClockPlayback(clockPlaybackRootRef);
+
     // ── Mounted check Ref ─────────────────────────────────────────────────────
     const isMountedRef = React.useRef(true);
     React.useEffect(() => {
@@ -957,7 +1026,7 @@ export default function CombatGrid(props) {
         const hasActiveEffects = Object.values(battleData).some(unit => {
             if (!unit || unit.dead) return false;
             const effs = getActiveEffects(unit, combatManager);
-            return effs.some(eff => eff.endTimeMs && eff.endTimeMs > Date.now());
+            return effs.some(eff => eff.endTimeMs && eff.endTimeMs > combatClock.now());
         });
 
         if (hasActiveEffects) {
@@ -974,7 +1043,7 @@ export default function CombatGrid(props) {
             // Cancel and clear all active death timeouts and animation frames immediately
             if (deathTimeoutsRef.current) {
                 Object.values(deathTimeoutsRef.current).forEach(item => {
-                    if (item.timeout) clearTimeout(item.timeout);
+                    if (item.timeout) combatClock.clearTimeout(item.timeout);
                     if (item.animId) cancelAnimationFrame(item.animId);
                 });
                 deathTimeoutsRef.current = {};
@@ -1027,10 +1096,10 @@ export default function CombatGrid(props) {
                 animId = requestAnimationFrame(animate);
 
                 if (deathTimeoutsRef.current[id]) {
-                    if (deathTimeoutsRef.current[id].timeout) clearTimeout(deathTimeoutsRef.current[id].timeout);
+                    if (deathTimeoutsRef.current[id].timeout) combatClock.clearTimeout(deathTimeoutsRef.current[id].timeout);
                     if (deathTimeoutsRef.current[id].animId) cancelAnimationFrame(deathTimeoutsRef.current[id].animId);
                 }
-                const t = setTimeout(() => {
+                const t = combatClock.setTimeout(() => {
                     if (isMountedRef.current) {
                         setFullyDead(prev => { if (!prev[id]) return { ...prev, [id]: true }; return prev; });
                         setShowDeathAnimation(prev => ({ ...prev, [id]: false }));
@@ -1046,7 +1115,7 @@ export default function CombatGrid(props) {
             } else if (!isUnitDead && !deadUnitIdsRef.current.has(unit.id) && (showDeathAnimation[unit.id] || fullyDead[unit.id])) {
                 if (deathTimeoutsRef.current[unit.id]) {
                     const item = deathTimeoutsRef.current[unit.id];
-                    if (item.timeout) clearTimeout(item.timeout);
+                    if (item.timeout) combatClock.clearTimeout(item.timeout);
                     if (item.animId) cancelAnimationFrame(item.animId);
                     delete deathTimeoutsRef.current[unit.id];
                 }
@@ -1069,48 +1138,101 @@ export default function CombatGrid(props) {
         return () => {
             if (timeouts) {
                 Object.values(timeouts).forEach(item => {
-                    if (item.timeout) clearTimeout(item.timeout);
+                    if (item.timeout) combatClock.clearTimeout(item.timeout);
                     if (item.animId) cancelAnimationFrame(item.animId);
                 });
             }
         };
     }, []);
 
-    // ── Damage indicator system ───────────────────────────────────────────────
+    // ── Damage indicator & damaged animation system ─────────────────────────────
     const [visibleDamageIndicators, setVisibleDamageIndicators] = React.useState({});
     const [indicatorQueues, setIndicatorQueues] = React.useState({});
     const indicatorTimeouts = React.useRef({});
     const STAGGER_DELAY = 150;
     const processedIndicatorsRef = React.useRef(new Set());
+    const [damagedUnits, setDamagedUnits] = React.useState({});
+    const prevHpRef = React.useRef({});
+    const damageAnimTimeouts = React.useRef({});
 
     React.useEffect(() => {
+        const newDamaged = {};
+
         Object.values(battleData).forEach(entity => {
-            if (!entity || !Array.isArray(entity.damageIndicators)) return;
+            if (!entity) return;
             const id = entity.id;
-            setIndicatorQueues(prev => {
-                const prevQueue = prev[id] || [];
-                const newIndicators = entity.damageIndicators
+
+            let hasNewDamage = false;
+            let newIndicators = [];
+
+            if (Array.isArray(entity.damageIndicators)) {
+                newIndicators = entity.damageIndicators
                     .map((e, index) => {
                         if (!e) return null;
                         const stableId = e.id || `${id}_indicator_${index}`;
                         return { ...e, id: stableId };
                     })
                     .filter(e => e && !processedIndicatorsRef.current.has(e.id))
-                    .map(e => e.timestamp ? e : { ...e, timestamp: Date.now() });
-                if (newIndicators.length === 0) return prev;
+                    .map(e => e.timestamp ? e : { ...e, timestamp: combatClock.now() });
 
-                newIndicators.forEach(e => processedIndicatorsRef.current.add(e.id));
+                if (newIndicators.length > 0) {
+                    newIndicators.forEach(e => processedIndicatorsRef.current.add(e.id));
+                    setIndicatorQueues(prev => {
+                        const prevQueue = prev[id] || [];
+                        return { ...prev, [id]: [...prevQueue, ...newIndicators] };
+                    });
+                    if (newIndicators.some(isDamageIndicator)) {
+                        hasNewDamage = true;
+                    }
+                }
+            }
 
-                return { ...prev, [id]: [...prevQueue, ...newIndicators] };
-            });
+            const prevHp = prevHpRef.current[id];
+            if (typeof prevHp === 'number' && typeof entity.hp === 'number' && entity.hp < prevHp) {
+                hasNewDamage = true;
+            }
+            prevHpRef.current[id] = entity.hp;
+
+            if (entity.wounded) {
+                hasNewDamage = true;
+            }
+
+            const isUnitDead = !!(entity.dead || (typeof entity.hp === 'number' && entity.hp <= 0 && !entity.isVCT && !entity.isTrialIcon) || deadUnitIdsRef.current.has(id));
+            if (hasNewDamage && !isUnitDead) {
+                const recoilDirection = getRecoilDirection(entity, newIndicators, combatManager);
+                newDamaged[id] = {
+                    key: combatClock.now() + Math.random(),
+                    direction: recoilDirection
+                };
+            }
         });
+
+        if (Object.keys(newDamaged).length > 0) {
+            setDamagedUnits(prev => ({ ...prev, ...newDamaged }));
+            Object.keys(newDamaged).forEach(id => {
+                if (damageAnimTimeouts.current[id]) {
+                    combatClock.clearTimeout(damageAnimTimeouts.current[id]);
+                }
+                damageAnimTimeouts.current[id] = combatClock.setTimeout(() => {
+                    setDamagedUnits(prev => {
+                        if (!prev[id]) return prev;
+                        const copy = { ...prev };
+                        delete copy[id];
+                        return copy;
+                    });
+                    delete damageAnimTimeouts.current[id];
+                }, 300);
+            });
+        }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [battleData]);
 
     React.useEffect(() => {
         return () => {
             // eslint-disable-next-line react-hooks/exhaustive-deps
-            Object.values(indicatorTimeouts.current).forEach(clearTimeout);
+            Object.values(indicatorTimeouts.current).forEach(combatClock.clearTimeout);
+            // eslint-disable-next-line react-hooks/exhaustive-deps
+            Object.values(damageAnimTimeouts.current).forEach(combatClock.clearTimeout);
         };
     }, []);
 
@@ -1124,7 +1246,7 @@ export default function CombatGrid(props) {
                 if (!indicatorQueues[id] || indicatorQueues[id].length === 0) return;
                 const visibleArr = visibleDamageIndicators[id] || [];
                 const lastTimestamp = visibleArr.length > 0 ? Math.max(...visibleArr.map(e => e.timestamp)) : 0;
-                const timeDiff = Date.now() - lastTimestamp;
+                const timeDiff = combatClock.now() - lastTimestamp;
 
                 if (visibleArr.length === 0 || timeDiff >= STAGGER_DELAY) {
                     const [next, ...rest] = indicatorQueues[id];
@@ -1153,7 +1275,7 @@ export default function CombatGrid(props) {
                     });
                     setIndicatorQueues(prev => ({ ...prev, [id]: rest }));
                     if (!indicatorTimeouts.current[next.id]) {
-                        indicatorTimeouts.current[next.id] = setTimeout(() => {
+                        indicatorTimeouts.current[next.id] = combatClock.setTimeout(() => {
                             setVisibleDamageIndicators(current => {
                                 const arr = (current[id] || []).filter(e => e.id !== next.id);
                                 return { ...current, [id]: arr };
@@ -1174,14 +1296,14 @@ export default function CombatGrid(props) {
             });
 
             if (nextCheckDelay !== null) {
-                activeTimeout = setTimeout(processQueues, nextCheckDelay);
+                activeTimeout = combatClock.setTimeout(processQueues, nextCheckDelay);
             }
         };
 
         processQueues();
 
         return () => {
-            if (activeTimeout) clearTimeout(activeTimeout);
+            if (activeTimeout) combatClock.clearTimeout(activeTimeout);
         };
     }, [indicatorQueues, visibleDamageIndicators, battleData]);
 
@@ -1217,9 +1339,9 @@ export default function CombatGrid(props) {
                 prevConsumableFlashRef.current[fighter.id] = flashTs;
                 setConsumableFlashes(prev => ({ ...prev, [fighter.id]: details.consumableFlash.iconKey }));
                 if (consumableTimeoutsRef.current[fighter.id]) {
-                    clearTimeout(consumableTimeoutsRef.current[fighter.id]);
+                    combatClock.clearTimeout(consumableTimeoutsRef.current[fighter.id]);
                 }
-                consumableTimeoutsRef.current[fighter.id] = setTimeout(() => {
+                consumableTimeoutsRef.current[fighter.id] = combatClock.setTimeout(() => {
                     setConsumableFlashes(prev => ({ ...prev, [fighter.id]: null }));
                     delete consumableTimeoutsRef.current[fighter.id];
                 }, 1500);
@@ -1249,7 +1371,7 @@ export default function CombatGrid(props) {
                     // When paused, freeze the sweep at the moment combat was paused
                     const now = (combatManager?.combatPaused && combatManager?.pauseStartTimestamp)
                         ? combatManager.pauseStartTimestamp
-                        : Date.now();
+                        : combatClock.now();
                     const timeLeftMs = eff.endTimeMs - now;
                     preciseRoundsLeft = Math.max(0, (timeLeftMs / eff.totalDurationMs) * total);
                 } else {
@@ -1422,11 +1544,13 @@ export default function CombatGrid(props) {
             (typeof liveFighter?.hp === 'number' && liveFighter?.hp <= 0) ||
             deadUnitIdsRef.current.has(fighter.id)
         );
+        const isDamagedFighter = !isFighterDead && damagedUnits[fighter.id];
         if (showSummaryPanel && (isFighterDead || showDeathAnimation[fighter.id] || fullyDead[fighter.id])) {
             return null;
         }
-        const facingClass = details?.facing === 'left' ? 'reversed' : '';
-        const verticalFacingClass = details?.facing === 'up' ? 'facing-up' : (details?.facing === 'down' ? 'facing-down' : '');
+        const currentFtrFacing = details?.facing || liveFighter?.facing || fighter?.facing;
+        const facingClass = currentFtrFacing === 'left' ? 'reversed' : '';
+        const verticalFacingClass = currentFtrFacing === 'up' ? 'facing-up' : (currentFtrFacing === 'down' ? 'facing-down' : '');
         const isTelep = isTeleporting(fighter.id);
         const coords = battleData[fighter.id]?.coordinates;
         if (!coords) return null;
@@ -1484,7 +1608,7 @@ export default function CombatGrid(props) {
             details?.rocked ? 'rocked' : '',
             details?.wounded ? 'hit' : '',
             details?.wounded ? (getHitAnimation ? getHitAnimation(details) : '') : '',
-            details?.wounded ? 'hit-flash' : '',
+            (details?.wounded || isDamagedFighter) ? 'hit-flash' : '',
             details?.facing === 'right' ? 'reversed' : '',
             (details?.stunned && !isAsleepFighter) ? 'stunned' : '',
             isDisintegrating ? 'disintegrate-shaking' : '',
@@ -1494,6 +1618,7 @@ export default function CombatGrid(props) {
         const portraitClasses = [
             'portrait', 'fighter-portrait',
             isUltimateCasting ? 'ultimate-casting' : '',
+            isDamagedFighter ? 'hit-flash' : '',
             isTelep ? 'teleporting' : '',
             selectedFighter?.id === fighter.id && !fighter.dead ? 'selected' : '',
             details?.dead ? 'dead fighterDeadAnimation' : '',
@@ -1665,6 +1790,27 @@ export default function CombatGrid(props) {
                         transition: 'opacity 0.25s ease-in-out'
                     }}
                 >
+                    {/* PvP soft blue/green glow for player units (positioned behind portrait) */}
+                    {isPvP && !details?.dead && (
+                        <div
+                            className="pvp-player-glow"
+                            data-testid="pvp-player-glow"
+                            style={{
+                                position: 'absolute',
+                                top: '-10px',
+                                left: '-10px',
+                                width: '120px',
+                                height: '120px',
+                                borderRadius: '50%',
+                                background: 'radial-gradient(circle, rgba(33, 230, 193, 0.82) 0%, rgba(0, 191, 255, 0.28) 45%, transparent 68%)',
+                                boxShadow: '0 0 10px 1px rgba(33, 230, 193, 0.18), 0 0 18px 2px rgba(0, 191, 255, 0.04)',
+                                filter: 'blur(3px)',
+                                zIndex: 0,
+                                pointerEvents: 'none',
+                                animation: 'pvpGlowPulse 2.5s ease-in-out infinite alternate'
+                            }}
+                        />
+                    )}
                     {isUltimateCasting && (
                         <div
                             className="ultimate-portrait-aura"
@@ -1685,7 +1831,18 @@ export default function CombatGrid(props) {
                         />
                     )}
                     <div
-                        className={portraitClasses}
+                        key={isDamagedFighter ? isDamagedFighter.key : 'rest'}
+                        className={`unit-damaged-recoil-wrapper${isDamagedFighter ? ` damaged-jerk-${isDamagedFighter.direction}` : ''}`}
+                        style={{
+                            position: 'relative',
+                            width: '100%',
+                            height: '100%',
+                            overflow: 'visible',
+                            pointerEvents: 'auto'
+                        }}
+                    >
+                        <div
+                            className={portraitClasses}
                         style={{
                             backgroundImage: ((fighter.type === 'walker' || fighter.portrait === 'walker' || fighter.portrait === 'walker_glowing_square' || fighter.name === 'Walker' || fighter.type === 'turret' || fighter.portrait === 'turret') || fighter.type === 'sobek' || fighter.key === 'sobek') ? 'none' : `url("${resolvePortrait(
                                 (fighter.type === 'archaic_familiar' && activeAnimations.some(a => a.sourceUnitId === fighter.id))
@@ -1758,34 +1915,13 @@ export default function CombatGrid(props) {
                             }
                         }}
                     >
-                        {/* PvP soft blue/green glow for player units */}
-                        {isPvP && !details?.dead && (
-                            <div
-                                className="pvp-player-glow"
-                                data-testid="pvp-player-glow"
-                                style={{
-                                    position: 'absolute',
-                                    top: '-10px',
-                                    left: '-10px',
-                                    width: '120px',
-                                    height: '120px',
-                                    borderRadius: '50%',
-                                    background: 'radial-gradient(circle, rgba(33, 230, 193, 0.75) 0%, rgba(0, 191, 255, 0.45) 50%, transparent 75%)',
-                                    boxShadow: '0 0 25px 8px rgba(33, 230, 193, 0.6), 0 0 45px 16px rgba(0, 191, 255, 0.35)',
-                                    filter: 'blur(4px)',
-                                    zIndex: 0,
-                                    pointerEvents: 'none',
-                                    animation: 'pvpGlowPulse 2.5s ease-in-out infinite alternate'
-                                }}
-                            />
-                        )}
                         {(() => {
                             const isWalkerAttacking = !!(
                                 fighter.attacking || 
                                 details?.attacking || 
                                 liveFighter?.attacking || 
-                                (fighter.isCleaving && Date.now() - fighter.isCleaving < 1000) ||
-                                (liveFighter?.isCleaving && Date.now() - liveFighter.isCleaving < 1000) ||
+                                (fighter.isCleaving && combatClock.now() - fighter.isCleaving < 1000) ||
+                                (liveFighter?.isCleaving && combatClock.now() - liveFighter.isCleaving < 1000) ||
                                 (liveFighter?.activeAbility && (liveFighter.activeAbility.id === 'walker_cleave' || liveFighter.activeAbility === 'walker_cleave'))
                             );
                             return (fighter.type === 'walker' || fighter.portrait === 'walker' || fighter.portrait === 'walker_glowing_square' || fighter.name === 'Walker' || fighter.type === 'turret' || fighter.portrait === 'turret') && (
@@ -1932,7 +2068,7 @@ export default function CombatGrid(props) {
                             animation: 'scaleUp 0.2s ease-out'
                         }} />
                     )}
-                    {details?.wounded && <div className="hit-flash-overlay" />}
+                    {(details?.wounded || isDamagedFighter) && <div className="hit-flash-overlay" style={{ zIndex: 320 }} />}
                     {/* Ensnare Visual Overlay – green vine corners matching Sandbox */}
                     {details?.ensnared && !details?.dead && (
                         details.ensnaredSourceAbility === 'bind' ? (
@@ -2145,6 +2281,7 @@ export default function CombatGrid(props) {
                             pointerEvents: 'none'
                         }} />
                     )}
+                    </div>
                     {!details?.dead && fighter.type !== 'darkness_sphere' && (
                         <div className="indicators-wrapper" style={{
                             zIndex: 310,
@@ -2308,6 +2445,8 @@ export default function CombatGrid(props) {
                 <div className={`portrait-overlay${details?.drained ? ' drained' : ''}${details?.frozen ? ' frozen' : ''}`} style={{ overflow: 'visible', zIndex: 2, position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', borderRadius: 0 }}>
                     {renderDamageIndicators(fighter.id)}
                 </div>
+                {renderHorologistMarkers(getLiveCombatant(fighter.id))}
+                {renderGlitterburnMarkers(getLiveCombatant(fighter.id))}
                 {/* Target indicator */}
                 {(() => {
                     const liveFighter = getLiveCombatant(fighter.id);
@@ -2434,6 +2573,7 @@ export default function CombatGrid(props) {
         const isMonster = unit.isMonster;
         const isMinion = unit.isMinion;
         const isDead = !!(unit.dead || (typeof unit.hp === 'number' && unit.hp <= 0 && !unit.isVCT && !unit.isTrialIcon) || deadUnitIdsRef.current.has(unit.id));
+        const isDamagedMonster = !isDead && damagedUnits[unit.id];
         if (showSummaryPanel && (isDead || showDeathAnimation[unit.id] || fullyDead[unit.id])) {
             return null;
         }
@@ -2506,10 +2646,10 @@ export default function CombatGrid(props) {
         const isFamiliar = unit.isFamiliar || unit.type === 'archaic_familiar' || (unit.type && String(unit.type).includes('familiar')) || (unit.key && String(unit.key).includes('familiar'));
         if (isMinion && !isDead && !isFamiliar) {
             if (!minionSpawnTimesRef.current[unit.id]) {
-                minionSpawnTimesRef.current[unit.id] = Date.now();
+                minionSpawnTimesRef.current[unit.id] = combatClock.now();
             }
         }
-        const isSpawningMinion = isMinion && !isDead && !isFamiliar && (Date.now() - (minionSpawnTimesRef.current[unit.id] || Date.now()) < 2000);
+        const isSpawningMinion = isMinion && !isDead && !isFamiliar && (combatClock.now() - (minionSpawnTimesRef.current[unit.id] || combatClock.now()) < 2000);
 
         const isPCUnit = isOpponent || unit.isOpponent || (!unit.isMonster && !unit.isMinion) || isPCUnitType(unit.type || unit.portrait || unit.image);
         const currentFacing = unit.facing || (isOpponent || (unit.coordinates && unit.coordinates.x >= 4) ? 'left' : (isPCUnit ? 'right' : 'left'));
@@ -2527,7 +2667,7 @@ export default function CombatGrid(props) {
             unit.rocked ? 'rocked' : '',
             unit.wounded ? 'hit' : '',
             unit.wounded ? hitAnim : '',
-            unit.wounded ? 'hit-flash' : '',
+            (unit.wounded || isDamagedMonster) ? 'hit-flash' : '',
             needFlip ? 'reversed' : '',
             (unit.stunned && !isAsleepMonster) ? 'stunned' : '',
             isDisintegrating ? 'disintegrate-shaking' : '',
@@ -2537,6 +2677,7 @@ export default function CombatGrid(props) {
         const portraitClasses = [
             'portrait',
             isOpponent ? 'fighter-portrait opponent-portrait' : (isMinion ? 'minion-portrait' : 'monster-portrait'),
+            isDamagedMonster ? 'hit-flash' : '',
             (!isOpponent && isHuge) ? 'huge-portrait' : ((!isOpponent && isLarge) ? 'large-portrait' : ''),
             (!isOpponent && showEnlarged) ? 'enlarged' : '',
             unit.active ? 'active' : '',
@@ -2628,12 +2769,12 @@ export default function CombatGrid(props) {
                             height: `${height + 20}px`,
                             borderRadius: '50%',
                             background: isOpponent
-                                ? 'radial-gradient(circle, rgba(255, 45, 85, 0.8) 0%, rgba(220, 20, 60, 0.5) 50%, transparent 75%)'
-                                : 'radial-gradient(circle, rgba(33, 230, 193, 0.75) 0%, rgba(0, 191, 255, 0.45) 50%, transparent 75%)',
+                                ? 'radial-gradient(circle, rgba(255, 45, 85, 0.85) 0%, rgba(220, 20, 60, 0.28) 45%, transparent 68%)'
+                                : 'radial-gradient(circle, rgba(33, 230, 193, 0.82) 0%, rgba(0, 191, 255, 0.28) 45%, transparent 68%)',
                             boxShadow: isOpponent
-                                ? '0 0 25px 8px rgba(255, 45, 85, 0.65), 0 0 45px 16px rgba(220, 20, 60, 0.4)'
-                                : '0 0 25px 8px rgba(33, 230, 193, 0.6), 0 0 45px 16px rgba(0, 191, 255, 0.35)',
-                            filter: 'blur(4px)',
+                                ? '0 0 10px 1px rgba(255, 45, 85, 0.2), 0 0 18px 2px rgba(220, 20, 60, 0.04)'
+                                : '0 0 10px 1px rgba(33, 230, 193, 0.18), 0 0 18px 2px rgba(0, 191, 255, 0.04)',
+                            filter: 'blur(3px)',
                             zIndex: 0,
                             pointerEvents: 'none',
                             animation: 'pvpGlowPulse 2.5s ease-in-out infinite alternate'
@@ -2669,7 +2810,18 @@ export default function CombatGrid(props) {
                         transition: typeof unit.opacityTransition === 'string' ? unit.opacityTransition : 'opacity 0.25s ease-in-out'
                     }}
                 >
-                    {(() => {
+                    <div
+                        key={isDamagedMonster ? isDamagedMonster.key : 'rest'}
+                        className={`unit-damaged-recoil-wrapper${isDamagedMonster ? ` damaged-jerk-${isDamagedMonster.direction}` : ''}`}
+                        style={{
+                            position: 'relative',
+                            width: '100%',
+                            height: '100%',
+                            overflow: 'visible',
+                            pointerEvents: (unit.opacity === 0) ? 'none' : 'auto'
+                        }}
+                    >
+                        {(() => {
                         const isWalkerUnit = unit.type === 'walker' || unit.key === 'walker' || unit.portrait === 'walker' || unit.portrait === 'walker_glowing_square' || (unit.name && String(unit.name).toLowerCase() === 'walker');
                         const isSobekUnit = unit.type === 'sobek' || unit.key === 'sobek' || (unit.name && String(unit.name).toLowerCase() === 'sobek');
                         return (
@@ -2730,8 +2882,8 @@ export default function CombatGrid(props) {
                                     const isWalkerAttacking = !!(
                                         unit.attacking || 
                                         liveMonster?.attacking || 
-                                        (unit.isCleaving && Date.now() - unit.isCleaving < 1000) ||
-                                        (liveMonster?.isCleaving && Date.now() - liveMonster.isCleaving < 1000) ||
+                                        (unit.isCleaving && combatClock.now() - unit.isCleaving < 1000) ||
+                                        (liveMonster?.isCleaving && combatClock.now() - liveMonster.isCleaving < 1000) ||
                                         (liveMonster?.activeAbility && (liveMonster.activeAbility.id === 'walker_cleave' || liveMonster.activeAbility === 'walker_cleave'))
                                     );
                                     return isWalkerUnit && <WalkerAnimatedUnit isMoving={true} isAttacking={isWalkerAttacking} />;
@@ -2775,7 +2927,7 @@ export default function CombatGrid(props) {
                                 }}
                             />
                         )}
-                        {unit.wounded && <div className="hit-flash-overlay" />}
+                        {(unit.wounded || isDamagedMonster) && <div className="hit-flash-overlay" style={{ zIndex: 320 }} />}
                         {unit.type === 'darkness_sphere' && (
                             <div
                                 style={{
@@ -2970,6 +3122,7 @@ export default function CombatGrid(props) {
                     </div>
                     )
                     })()}
+                    </div>
                     {liveMonster?.marked && !isDead && (
                         <div style={{
                             position: 'absolute',
@@ -3113,6 +3266,8 @@ export default function CombatGrid(props) {
                     <div className={`portrait-overlay ${liveMonster.frozen ? 'frozen' : ''}`} style={{ zIndex: 2, position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', borderRadius: 0, overflow: 'visible' }}>
                         {renderDamageIndicators(unit.id)}
                     </div>
+                    {renderHorologistMarkers(liveMonster)}
+                    {renderGlitterburnMarkers(liveMonster)}
                     {/* Target indicator */}
                     {(() => {
                         const target = unit.targetId ? combatManager?.getCombatant?.(unit.targetId) : null;
@@ -3327,10 +3482,166 @@ export default function CombatGrid(props) {
         );
     };
 
+    // Horologist per-unit markers: anchor ring (crystal once crystallized) + echo dials.
+    // Function declaration (hoisted) so the fighter/monster renderers above can call it.
+    function renderHorologistMarkers(live) {
+        if (!live || live.dead) return null;
+        const anchor = live.timeAnchor;
+        const echoes = Array.isArray(live.incomingEchoes) ? live.incomingEchoes : [];
+        if (!anchor && echoes.length === 0) return null;
+        return (
+            <>
+                {anchor && (
+                    <div
+                        className={`horologist-anchor-ring${anchor.crystallized ? ' crystallized' : ''}`}
+                        title={anchor.crystallized ? 'Crystallized anchor: Recall will Shatter' : `Anchored: crystallizes in ${anchor.roundsUntilCrystal} round(s)`}
+                    >
+                        <span className="horologist-anchor-hand" />
+                        {!anchor.crystallized && <span className="horologist-anchor-count">{anchor.roundsUntilCrystal}</span>}
+                    </div>
+                )}
+                {echoes.length > 0 && (
+                    <div className="horologist-echo-dials">
+                        {echoes.map(e => (
+                            <div key={e.id} className={`horologist-echo-dial${e.roundsLeft <= 1 ? ' imminent' : ''}`} title={`Future Echo lands in ${e.roundsLeft} round(s)`}>
+                                <span className="horologist-echo-sweep" style={{ animationDuration: `${Math.max(0.6, e.roundsLeft * 0.8)}s` }} />
+                                <span className="horologist-echo-num">{e.roundsLeft}</span>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </>
+        );
+    }
+
+    // Glitterburn per-unit markers: Dazzled sparkle crown and Decoy holographic aura
+    function renderGlitterburnMarkers(live) {
+        if (!live || live.dead) return null;
+        return (
+            <>
+                {live.dazzled > 0 && (
+                    <div className="glitterburn-dazzled-marker" title={`Dazzled (${live.dazzled}) — Accuracy reduced by ${live.dazzled * 15}%`}>
+                        <span className="sparkle s1">✨</span>
+                        <span className="sparkle s2">✨</span>
+                    </div>
+                )}
+                {live.isDecoy && (
+                    <div className="glitterburn-decoy-aura" />
+                )}
+            </>
+        );
+    }
+
     // ── Sandbox-style CSS animation overlay ───────────────────────────────────
     const renderAnimation = (anim) => {
         if (!anim) return null;
         const key = anim.id;
+
+        // ── Horologist ────────────────────────────────────────────────────
+        if ((anim.type === 'future_echo_cast' || anim.type === 'horologist_anchor' || anim.type === 'horologist_recall') && anim.srcPx && anim.tgtPx) {
+            const dx = anim.tgtPx.x - anim.srcPx.x;
+            const dy = anim.tgtPx.y - anim.srcPx.y;
+            const length = Math.sqrt(dx * dx + dy * dy);
+            const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+            return (
+                <React.Fragment key={key}>
+                    <div className={`horologist-thread ${anim.type}`} style={{ left: `${anim.srcPx.x}px`, top: `${anim.srcPx.y}px`, width: `${length}px`, transform: `rotate(${angle}deg)` }} />
+                    <div className={`horologist-clockface ${anim.type}${anim.isUltimate ? ' ultimate' : ''}`} style={{ left: `${anim.tgtPx.x}px`, top: `${anim.tgtPx.y}px` }}>
+                        <span className="hand hour" />
+                        <span className="hand minute" />
+                    </div>
+                </React.Fragment>
+            );
+        }
+        if ((anim.type === 'future_echo_strike' || anim.type === 'horologist_shatter') && anim.tgtPx) {
+            return (
+                <div key={key} className={`horologist-impact ${anim.type}`} style={{ left: `${anim.tgtPx.x}px`, top: `${anim.tgtPx.y}px` }}>
+                    {anim.type === 'horologist_shatter' && [0, 1, 2, 3, 4, 5].map(i => (
+                        <span key={i} className="shard" style={{ '--shard-angle': `${i * 60}deg` }} />
+                    ))}
+                </div>
+            );
+        }
+        if (anim.type === 'hour_of_reckoning' && anim.srcPx) {
+            return (
+                <React.Fragment key={key}>
+                    <div className="horologist-reckoning-veil" />
+                    <div className="horologist-clockface hour_of_reckoning" style={{ left: `${anim.srcPx.x}px`, top: `${anim.srcPx.y}px` }}>
+                        <span className="hand hour" />
+                        <span className="hand minute" />
+                    </div>
+                </React.Fragment>
+            );
+        }
+
+        // ── Glitterburn ────────────────────────────────────────────────────
+        if (anim.type === 'pyro_spark' && anim.srcPx && anim.tgtPx) {
+            const dx = anim.tgtPx.x - anim.srcPx.x;
+            const dy = anim.tgtPx.y - anim.srcPx.y;
+            const length = Math.sqrt(dx * dx + dy * dy);
+            const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+            return (
+                <React.Fragment key={key}>
+                    <div className="glitterburn-spark-beam" style={{ left: `${anim.srcPx.x}px`, top: `${anim.srcPx.y}px`, width: `${length}px`, transform: `rotate(${angle}deg)` }} />
+                    <div className="glitterburn-spark-burst" style={{ left: `${anim.tgtPx.x}px`, top: `${anim.tgtPx.y}px` }} />
+                </React.Fragment>
+            );
+        }
+        if (anim.type === 'glitter_burst' && anim.srcPx && anim.tgtPx) {
+            const dx = anim.tgtPx.x - anim.srcPx.x;
+            const dy = anim.tgtPx.y - anim.srcPx.y;
+            const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+            return (
+                <div key={key} className="glitterburn-fan-burst" style={{ left: `${anim.srcPx.x}px`, top: `${anim.srcPx.y}px`, transform: `rotate(${angle}deg)` }}>
+                    <div className="glitter-fan-particles" />
+                </div>
+            );
+        }
+        if (anim.type === 'prism_snare_place' && anim.tgtPx) {
+            return (
+                <div key={key} className="glitterburn-snare-deploy" style={{ left: `${anim.tgtPx.x}px`, top: `${anim.tgtPx.y}px` }}>
+                    <span className="snare-ring" />
+                    <span className="snare-crystal" />
+                </div>
+            );
+        }
+        if (anim.type === 'prism_snare_snap' && anim.tgtPx) {
+            return (
+                <div key={key} className="glitterburn-snare-snap" style={{ left: `${anim.tgtPx.x}px`, top: `${anim.tgtPx.y}px` }}>
+                    <span className="cage-beam b1" />
+                    <span className="cage-beam b2" />
+                    <span className="cage-beam b3" />
+                </div>
+            );
+        }
+        if (anim.type === 'starlight_decoy_summon' && anim.tgtPx) {
+            return (
+                <div key={key} className="glitterburn-decoy-summon" style={{ left: `${anim.tgtPx.x}px`, top: `${anim.tgtPx.y}px` }}>
+                    <span className="decoy-aura" />
+                </div>
+            );
+        }
+        if (anim.type === 'glitter_pop' && anim.tgtPx) {
+            return (
+                <div key={key} className="glitterburn-glitter-pop" style={{ left: `${anim.tgtPx.x}px`, top: `${anim.tgtPx.y}px` }} />
+            );
+        }
+        if (anim.type === 'supernova_core_pulse' && anim.tgtPx) {
+            return (
+                <div key={key} className="glitterburn-supernova-pulse" style={{ left: `${anim.tgtPx.x}px`, top: `${anim.tgtPx.y}px` }}>
+                    <span className="supernova-vortex-ring" />
+                    <span className="supernova-core-star" />
+                </div>
+            );
+        }
+        if (anim.type === 'supernova_core_detonate' && anim.tgtPx) {
+            return (
+                <React.Fragment key={key}>
+                    <div className="glitterburn-supernova-flash" />
+                    <div className="glitterburn-supernova-shockwave" style={{ left: `${anim.tgtPx.x}px`, top: `${anim.tgtPx.y}px` }} />
+                </React.Fragment>
+            );
+        }
 
         if (anim.type === 'eldritch_wind_overlay') {
             return (
@@ -7717,8 +8028,99 @@ export default function CombatGrid(props) {
 
     // ── Main render ───────────────────────────────────────────────────────────
     const activePaused = isPaused || (combatManager && combatManager.combatPaused);
+    const renderDestinationTrajectoriesAndReticles = () => {
+        return (
+            <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 250, overflow: 'visible' }}>
+                {activeCrew.map(fighter => {
+                    const details = getFighterDetails(fighter) || fighter;
+                    const liveFighter = getLiveCombatant(fighter.id) || details || fighter;
+                    const bData = (battleData && battleData[fighter.id]) || null;
+                    if (!liveFighter || liveFighter.dead) return null;
+                    const dest = liveFighter.manualDestination || bData?.manualDestination || details?.manualDestination;
+                    if (!dest || typeof dest.x !== 'number' || typeof dest.y !== 'number') return null;
+                    const src = liveFighter.coordinates || bData?.coordinates || details?.coordinates;
+                    if (!src) return null;
+
+                    const destX = tilePos(dest.x);
+                    const destY = tilePos(dest.y);
+                    const srcX = tilePos(src.x) + TILE_SIZE / 2;
+                    const srcY = tilePos(src.y) + TILE_SIZE / 2;
+                    const tgtX = destX + TILE_SIZE / 2;
+                    const tgtY = destY + TILE_SIZE / 2;
+
+                    const gridDist = Math.max(Math.abs(dest.x - src.x), Math.abs(dest.y - src.y));
+                    const isFar = gridDist > 1;
+
+                    const midX = (srcX + tgtX) / 2;
+                    const midY = (srcY + tgtY) / 2 - Math.min(60, gridDist * 15);
+
+                    const isSelected = selectedFighter?.id === fighter.id || combatManager?.selectedFighter?.id === fighter.id;
+                    const strokeColor = isSelected ? '#f9b115' : 'rgba(192, 132, 252, 0.85)';
+                    const shadowColor = isSelected ? 'rgba(249, 177, 21, 0.7)' : 'rgba(192, 132, 252, 0.6)';
+
+                    return (
+                        <React.Fragment key={`dest_path_${fighter.id}`}>
+                            {/* Tile Perimeter Highlight */}
+                            <div
+                                style={{
+                                    position: 'absolute',
+                                    left: `${destX}px`,
+                                    top: `${destY}px`,
+                                    width: `${TILE_SIZE}px`,
+                                    height: `${TILE_SIZE}px`,
+                                    boxSizing: 'border-box',
+                                    border: `3px solid ${strokeColor}`,
+                                    borderRadius: '10px',
+                                    boxShadow: `0 0 15px ${shadowColor}, inset 0 0 10px ${shadowColor}`,
+                                    animation: 'destinationPulse 1.2s ease-in-out infinite alternate',
+                                    pointerEvents: 'none',
+                                    zIndex: 255
+                                }}
+                            />
+                            {/* Arced Dashed Trajectory Line (Rendered if destination > 1 tile away) */}
+                            {isFar && (
+                                <svg
+                                    style={{
+                                        position: 'absolute',
+                                        top: 0,
+                                        left: 0,
+                                        width: '100%',
+                                        height: '100%',
+                                        pointerEvents: 'none',
+                                        overflow: 'visible',
+                                        zIndex: 254
+                                    }}
+                                >
+                                    <path
+                                        d={`M ${srcX} ${srcY} Q ${midX} ${midY} ${tgtX} ${tgtY}`}
+                                        fill="none"
+                                        stroke={strokeColor}
+                                        strokeWidth="3.5"
+                                        strokeDasharray="8 6"
+                                        strokeLinecap="round"
+                                        style={{
+                                            filter: `drop-shadow(0 0 6px ${shadowColor})`
+                                        }}
+                                    />
+                                    {/* Destination Endpoint Arrow/Dot */}
+                                    <circle
+                                        cx={tgtX}
+                                        cy={tgtY}
+                                        r="6"
+                                        fill={strokeColor}
+                                        style={{ filter: `drop-shadow(0 0 8px ${strokeColor})` }}
+                                    />
+                                </svg>
+                            )}
+                        </React.Fragment>
+                    );
+                })}
+            </div>
+        );
+    };
+
     return (
-        <div className={`combat-units-layer ${activePaused ? 'combat-paused' : ''}`} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', overflow: 'visible' }}>
+        <div ref={clockPlaybackRootRef} className={`combat-units-layer ${activePaused ? 'combat-paused' : ''}`} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', overflow: 'visible' }}>
             <svg style={{ position: 'absolute', width: 0, height: 0 }}>
                 <defs>
                     {Object.entries(meltScales).map(([unitId, scale]) => (
@@ -7729,6 +8131,7 @@ export default function CombatGrid(props) {
                     ))}
                 </defs>
             </svg>
+            {renderDestinationTrajectoriesAndReticles()}
             {/* Fighters */}
             {activeCrew.map(renderFighter)}
             {renderRiftPortal()}
@@ -8077,6 +8480,56 @@ export default function CombatGrid(props) {
                                     backgroundPosition: 'center',
                                     filter: 'drop-shadow(0 0 6px rgba(255, 100, 50, 0.8))',
                                 }} />
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+            {/* --- Glitterburn Prism Snare Traps --- */}
+            {combatManager && Array.isArray(combatManager.glitterTraps) && (
+                <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 16 }}>
+                    {combatManager.glitterTraps.map((trap) => {
+                        const top = tilePos(trap.y);
+                        const left = tilePos(trap.x);
+                        return (
+                            <div
+                                key={`snare-${trap.id}`}
+                                className="glitter-snare-tile-hazard"
+                                style={{
+                                    position: 'absolute',
+                                    left: `${left}px`,
+                                    top: `${top}px`,
+                                    width: `${TILE_SIZE}px`,
+                                    height: `${TILE_SIZE}px`,
+                                }}
+                            >
+                                <span className="hazard-crystal" />
+                                <span className="hazard-pulse" />
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+            {/* --- Glitterburn Supernova Cores --- */}
+            {combatManager && Array.isArray(combatManager.supernovaCores) && (
+                <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 17 }}>
+                    {combatManager.supernovaCores.map((core) => {
+                        const top = tilePos(core.y);
+                        const left = tilePos(core.x);
+                        return (
+                            <div
+                                key={`supernova-${core.id}`}
+                                className="glitter-supernova-tile-hazard"
+                                style={{
+                                    position: 'absolute',
+                                    left: `${left}px`,
+                                    top: `${top}px`,
+                                    width: `${TILE_SIZE}px`,
+                                    height: `${TILE_SIZE}px`,
+                                }}
+                            >
+                                <span className="supernova-swirl" />
+                                <span className="supernova-countdown">{core.roundsLeft}</span>
                             </div>
                         );
                     })}

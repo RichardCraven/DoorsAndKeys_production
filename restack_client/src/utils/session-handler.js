@@ -116,7 +116,7 @@ function sanitizeMeta(metadata){
     const safe = {};
     // Copy only small, commonly useful properties. Avoid large nested objects
     // like full dungeon boards, tile arrays, or other heavy structures.
-    const whitelistedKeys = ['skipIntro','dungeonId','boardIndex','tileIndex','crew','alternateCrew','lockedRoster','rosterLocked','dungeonEntered','inventory','preferences','lastVisited','userNotes','visitedBoards','location','spawnPoint','selectedDungeon','deathTracker','deathEnemyIndex','respawnDate','itemRespawnDate','simulatorDefaults','combatSpeed','soulShards','echoCards','activeEchoCards','scroungeActive','scoutActive','suffix','region','fastMove','dungeonEntryTimestamp','mailbox','dungeonHistory','welcomeMailSent','leftExpanded','rightExpanded','hasEnteredFirstDungeon','hasSeenSidePanelsDelay','food','resolve','lastFoodExpiryCheck','pocketResources','pocketPlayerBuildings','infirmaryDischarged'];
+    const whitelistedKeys = ['skipIntro','dungeonId','selectedDungeonTemplateId','selectedDungeonTemplateName','boardIndex','tileIndex','crew','alternateCrew','lockedRoster','rosterLocked','dungeonEntered','inventory','preferences','lastVisited','userNotes','visitedBoards','location','spawnPoint','selectedDungeon','deathTracker','deathEnemyIndex','respawnDate','itemRespawnDate','keyRespawnDate','simulatorDefaults','combatSpeed','soulShards','echoCards','activeEchoCards','scroungeActive','scoutActive','suffix','region','fastMove','dungeonEntryTimestamp','mailbox','dungeonHistory','welcomeMailSent','leftExpanded','rightExpanded','hasEnteredFirstDungeon','hasSeenSidePanelsDelay','food','resolve','lastFoodExpiryCheck','pocketResources','pocketPlayerBuildings','infirmaryDischarged'];
     for (const k of whitelistedKeys) {
         if (k in metadata) safe[k] = metadata[k];
     }
@@ -132,17 +132,21 @@ function sanitizeMeta(metadata){
             portrait: c && c.portrait,
             type: c && c.type,
             globalSkills: c && c.globalSkills,
+            skills: c && c.skills,
+            passives: c && c.passives,
+            perks: c && c.perks,
+            levelHistory: c && c.levelHistory,
             stats: c && c.stats,
             trainingProgress: c && c.trainingProgress,
             lastTrained: c && c.lastTrained,
             trainingActive: c && c.trainingActive,
             specialActions: c && c.specialActions,
-            passives: c && c.passives,
             pendingLevelUpPicks: c && c.pendingLevelUpPicks,
             knownRituals: c && c.knownRituals,
             knownTattoos: c && c.knownTattoos,
             tattoos: c && c.tattoos,
-            knownRecipes: c && c.knownRecipes
+            knownRecipes: c && c.knownRecipes,
+            inventory: c && c.inventory
         }));
     }
     // If inventory present, keep only counts/names

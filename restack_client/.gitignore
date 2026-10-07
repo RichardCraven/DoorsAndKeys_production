@@ -25,6 +25,7 @@ yarn-error.log*
 
 # Python & scratch files
 scratch/
+reference_images/
 venv/
 .venv/
 __pycache__/

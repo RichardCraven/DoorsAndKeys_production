@@ -2,6 +2,7 @@
 import * as images from '../utils/images'
 import { SPELLS, RITUALS, GLYPHS, GLYPH_SPELL_SLOT_COST, computeGlyphPrepTime, BATTLE_TACTICS, INNER_DISCIPLINES, SCRY_OPTIONS } from './spells-table'
 import { getMeta, storeMeta } from './session-handler'
+import { dischargeFromInfirmary } from './infirmary-manager'
 
 // eslint-disable-next-line no-extend-native
 Date.prototype.addHours = function (h) {
@@ -50,8 +51,50 @@ export const CLASS_BASE_LORE_TEMPLATES = {
     barbarian: {
         baseName: 'Ulaf',
         template: "Ulaf is the son of the chieftan of the Rootsnarl Clan. He is on a journey to prove his mettle and one day take his father's place"
+    },
+    hollow: {
+        baseName: 'Valok',
+        template: 'Valok is a wanderer caught between the living realm and the eternal dark, resurrected by the dungeon itself to walk its haunted corridors.'
+    },
+    glitterburn: {
+        baseName: 'Glitterburn',
+        template: 'A volatile pyromancer born under cosmic starlight, fusing chaotic magic with blinding ember sparks and dazzling illusions.'
+    },
+    horologist: {
+        baseName: 'Seren',
+        template: 'Seren was an apprentice of the Guild of Escapements until she stole the Master Mainspring. Every second she spends is borrowed, and something is coming to collect.'
     }
 };
+
+// ── Ledger of Hours (Horologist time debt) ─────────────────────────────────
+const HOUR_MS = 60 * 60 * 1000;
+
+// Debt cap scales with level: 4h + 1h per level.
+export function getTimeDebtCap(level) {
+    const lvl = (typeof level === 'number' && level > 0) ? level : 1;
+    return (4 + lvl) * HOUR_MS;
+}
+
+// Debt is stored as a snapshot { timeDebt, timeDebtUpdatedAt } and repaid lazily
+// in real time, so no background timer is needed. `rate` lets callers apply
+// faster repayment (e.g. 2x while camping).
+export function getEffectiveTimeDebt(stats, now = Date.now(), rate = 1) {
+    if (!stats || typeof stats.timeDebt !== 'number' || stats.timeDebt <= 0) return 0;
+    const updatedAt = typeof stats.timeDebtUpdatedAt === 'number' ? stats.timeDebtUpdatedAt : now;
+    const elapsed = Math.max(0, now - updatedAt);
+    return Math.max(0, stats.timeDebt - elapsed * rate);
+}
+
+// 0: none, 1: cooldowns +1 in combat, 2: + faster resolve decay, 3: + Debt Collector hunts the party.
+export function computeTemporalStrainTier(debtMs, level) {
+    const cap = getTimeDebtCap(level);
+    if (!debtMs || debtMs <= 0) return 0;
+    const ratio = debtMs / cap;
+    if (ratio > 0.75) return 3;
+    if (ratio > 0.50) return 2;
+    if (ratio >= 0.25) return 1;
+    return 0;
+}
 
 export const BASE_AND_ALT_CREW_NAMES = [
     'Theodora (Ascetic)',
@@ -72,7 +115,11 @@ export const BASE_AND_ALT_CREW_NAMES = [
     'Astra',
     'Ulaf',
     'Mei',
-    'Yu'
+    'Yu',
+    'Valok',
+    'Mira',
+    'Seren',
+    'Odran'
 ];
 
 export function escapeRegExp(string) {
@@ -158,7 +205,9 @@ export function CrewManager() {
         'ranger',
         'sage',
         'soldier',
-        'glitterburn'
+        'glitterburn',
+        'hollow',
+        'horologist'
     ]
     this.crew = [];
 
@@ -234,7 +283,10 @@ export function CrewManager() {
             const defaultExpeditionSkills = {
                 sage: ['healing_ground', 'sing'],
                 ranger: ['sneak_attack', 'spike_trap'],
-                soldier: ['soldier_shield', 'breacher']
+                soldier: ['soldier_shield', 'breacher'],
+                horologist: ['rewind_step', 'stopwatch'],
+                summoner: ['wandering_eye'],
+                glitterburn: ['blinding_beacon', 'prismatic_flare']
             };
             const mClass = (member.type || member.image || '').toLowerCase();
             if (!Array.isArray(member.expeditionSkills) || member.expeditionSkills.length === 0) {
@@ -275,6 +327,10 @@ export function CrewManager() {
                 }
                 // compute derived/substats from base stats
                 try { this.computeDerivedStats(member); } catch (e) { console.warn('computeDerivedStats failed', e, member); }
+                // Ensure initial levelHistory snapshot is preserved
+                if (!Array.isArray(member.levelHistory) || member.levelHistory.length === 0) {
+                    try { this.recordLevelSnapshot(member, member.level || 1); } catch (e) { }
+                }
                 this.crew.push(member)
             } else {
                 console.warn('initializeCrew: REJECTED member — image:', member.image, 'type:', member.type, 'name:', member.name, 'full object:', JSON.stringify(member).slice(0, 300));
@@ -293,7 +349,10 @@ export function CrewManager() {
             engineer: ['dex', 'int'],
             summoner: ['int'],
             ranger: ['dex', 'str'],
-            sage: ['fort']
+            sage: ['fort'],
+            hollow: ['dex', 'int'],
+            glitterburn: ['int', 'dex'],
+            horologist: ['int', 'dex']
         },
         defense: {
             monk: ['dex'],
@@ -303,7 +362,10 @@ export function CrewManager() {
             engineer: ['dex', 'fort'],
             summoner: ['int', 'fort'],
             ranger: ['str', 'fort'],
-            sage: ['str', 'fort']
+            sage: ['str', 'fort'],
+            hollow: ['dex', 'fort'],
+            glitterburn: ['dex', 'int'],
+            horologist: ['dex', 'int']
         },
         hp: { all: ['fort'] },
         energy: { all: ['fort'] },
@@ -522,6 +584,16 @@ export function CrewManager() {
                 if (typeof crewMember.stats.baseDex === 'number') crewMember.stats.baseDex += 1;
                 gains.dex = 1;
                 break;
+            case 'horologist':
+                crewMember.stats.dex = (crewMember.stats.dex || 0) + 1;
+                if (typeof crewMember.stats.baseDex === 'number') crewMember.stats.baseDex += 1;
+                gains.dex = 1;
+                break;
+            case 'glitterburn':
+                crewMember.stats.int = (crewMember.stats.int || 0) + 1;
+                if (typeof crewMember.stats.baseInt === 'number') crewMember.stats.baseInt += 1;
+                gains.int = 1;
+                break;
             case 'sage':
                 crewMember.stats.int = (crewMember.stats.int || 0) + 1;
                 if (typeof crewMember.stats.baseInt === 'number') crewMember.stats.baseInt += 1;
@@ -549,6 +621,12 @@ export function CrewManager() {
                 gains.fort = 1;
                 break;
         }
+        // Ensure levelHistory has a snapshot of the unit prior to this level-up being applied
+        const curLvl = (typeof crewMember.level === 'number' && crewMember.level > 0) ? crewMember.level : 1;
+        if (!Array.isArray(crewMember.levelHistory) || !crewMember.levelHistory.some(h => h && h.level === curLvl)) {
+            try { this.recordLevelSnapshot(crewMember, curLvl); } catch (e) { }
+        }
+
         crewMember.level = (typeof crewMember.level === 'number' ? crewMember.level : 0) + 1;
         // mark and record recent gains for UI consumption
         crewMember.justLeveled = true;
@@ -576,6 +654,7 @@ export function CrewManager() {
         }
 
         try { this.computeDerivedStats(crewMember); } catch (e) { console.warn('levelUp: computeDerivedStats failed', e, crewMember); }
+        try { this.recordLevelSnapshot(crewMember, crewMember.level); } catch (e) { }
         return gains;
     }
 
@@ -604,6 +683,129 @@ export function CrewManager() {
             console.warn('clearAllLevelFlags failed', err);
         }
     }
+
+    /**
+     * Record a snapshot of a crew member's state at a given level.
+     * Stored in crewMember.levelHistory as an array of level snapshots.
+     */
+    this.recordLevelSnapshot = (crewMember, level) => {
+        if (!crewMember) return null;
+        const lvl = typeof level === 'number' ? level : (crewMember.level || 1);
+        if (!Array.isArray(crewMember.levelHistory)) {
+            crewMember.levelHistory = [];
+        }
+        const snapshot = {
+            level: lvl,
+            stats: JSON.parse(JSON.stringify(crewMember.stats || {})),
+            skills: Array.isArray(crewMember.skills) ? [...crewMember.skills] : [],
+            passives: Array.isArray(crewMember.passives) ? [...crewMember.passives] : [],
+            perks: Array.isArray(crewMember.perks) ? [...crewMember.perks] : [],
+            knownRituals: Array.isArray(crewMember.knownRituals) ? [...crewMember.knownRituals] : [],
+            knownTattoos: Array.isArray(crewMember.knownTattoos) ? [...crewMember.knownTattoos] : [],
+            tattoos: Array.isArray(crewMember.tattoos) ? JSON.parse(JSON.stringify(crewMember.tattoos)) : [],
+            expeditionSkills: Array.isArray(crewMember.expeditionSkills) ? [...crewMember.expeditionSkills] : [],
+            timestamp: Date.now()
+        };
+        const existingIndex = crewMember.levelHistory.findIndex(h => h && h.level === lvl);
+        if (existingIndex >= 0) {
+            crewMember.levelHistory[existingIndex] = snapshot;
+        } else {
+            crewMember.levelHistory.push(snapshot);
+            crewMember.levelHistory.sort((a, b) => a.level - b.level);
+        }
+        return snapshot;
+    };
+
+    /**
+     * Set a crew member back to 1/2 their current level (rounded down, minimum 1).
+     * Restores stats and perks from their levelHistory entry, loses all items, and restores hp.
+     */
+    this.rollbackCrewMemberToHalfLevel = (crewMember) => {
+        if (!crewMember) return;
+        const curLvl = (typeof crewMember.level === 'number' && crewMember.level > 0) ? crewMember.level : 1;
+        const targetLevel = Math.max(1, Math.floor(curLvl / 2));
+
+        let snapshot = null;
+        if (Array.isArray(crewMember.levelHistory)) {
+            snapshot = crewMember.levelHistory.find(h => h && h.level === targetLevel);
+            if (!snapshot) {
+                // Fallback: highest entry <= targetLevel
+                const candidates = crewMember.levelHistory.filter(h => h && h.level <= targetLevel).sort((a, b) => b.level - a.level);
+                if (candidates.length > 0) snapshot = candidates[0];
+            }
+        }
+
+        // Fallback to base template in adventurers if no snapshot found
+        if (!snapshot && Array.isArray(this.adventurers)) {
+            const template = this.adventurers.find(a => (a.id && a.id === crewMember.id) || a.type === crewMember.type || a.image === crewMember.image);
+            if (template) {
+                snapshot = {
+                    level: 1,
+                    stats: JSON.parse(JSON.stringify(template.stats || {})),
+                    skills: Array.isArray(template.skills) ? [...template.skills] : [],
+                    passives: Array.isArray(template.passives) ? [...template.passives] : [],
+                    perks: Array.isArray(template.perks) ? [...template.perks] : [],
+                    knownRituals: Array.isArray(template.knownRituals) ? [...template.knownRituals] : [],
+                    knownTattoos: Array.isArray(template.knownTattoos) ? [...template.knownTattoos] : [],
+                    tattoos: Array.isArray(template.tattoos) ? JSON.parse(JSON.stringify(template.tattoos)) : [],
+                    expeditionSkills: Array.isArray(template.expeditionSkills) ? [...template.expeditionSkills] : []
+                };
+            }
+        }
+
+        crewMember.level = targetLevel;
+        if (snapshot && snapshot.stats) {
+            crewMember.stats = JSON.parse(JSON.stringify(snapshot.stats));
+        }
+        crewMember.stats = crewMember.stats || {};
+        crewMember.stats.experience = (typeof EXP_TABLE[targetLevel - 1] === 'number') ? EXP_TABLE[targetLevel - 1] : 0;
+
+        if (snapshot) {
+            crewMember.skills = Array.isArray(snapshot.skills) ? [...snapshot.skills] : (crewMember.skills || []);
+            crewMember.passives = Array.isArray(snapshot.passives) ? [...snapshot.passives] : (crewMember.passives || []);
+            crewMember.perks = Array.isArray(snapshot.perks) ? [...snapshot.perks] : [];
+            if (snapshot.knownRituals) crewMember.knownRituals = [...snapshot.knownRituals];
+            if (snapshot.knownTattoos) crewMember.knownTattoos = [...snapshot.knownTattoos];
+            if (snapshot.tattoos) crewMember.tattoos = JSON.parse(JSON.stringify(snapshot.tattoos));
+            if (snapshot.expeditionSkills) crewMember.expeditionSkills = [...snapshot.expeditionSkills];
+        }
+
+        // All items are lost
+        crewMember.inventory = [];
+
+        // Reset health & status
+        crewMember.dead = false;
+        crewMember.hp = crewMember.stats.maxHp || crewMember.stats.baseHp || 10;
+        delete crewMember.deathTrackers;
+
+        crewMember.justLeveled = false;
+        crewMember._recentLevelGains = [];
+        crewMember.pendingLevelUpPicks = [];
+
+        try { this.computeDerivedStats(crewMember); } catch (e) { }
+
+        // Prune future history above targetLevel
+        if (Array.isArray(crewMember.levelHistory)) {
+            crewMember.levelHistory = crewMember.levelHistory.filter(h => h && h.level <= targetLevel);
+        }
+
+        // Sync with template in this.adventurers
+        if (Array.isArray(this.adventurers)) {
+            const adv = this.adventurers.find(a => (a.id && a.id === crewMember.id) || (a.type && a.type === crewMember.type));
+            if (adv && adv !== crewMember) {
+                adv.level = crewMember.level;
+                adv.stats = JSON.parse(JSON.stringify(crewMember.stats));
+                adv.skills = [...crewMember.skills];
+                adv.passives = [...crewMember.passives];
+                adv.perks = [...(crewMember.perks || [])];
+                adv.inventory = [];
+                adv.hp = crewMember.hp;
+                adv.dead = false;
+                adv.levelHistory = Array.isArray(crewMember.levelHistory) ? JSON.parse(JSON.stringify(crewMember.levelHistory)) : [];
+                try { this.computeDerivedStats(adv); } catch (e) { }
+            }
+        }
+    };
 
     /**
      * applyLevelUpChoices — called by LevelUpScreen when player confirms picks.
@@ -653,6 +855,22 @@ export function CrewManager() {
             }
             try { this.computeDerivedStats(crewMember); } catch (e) {
                 console.warn('applyLevelUpChoices: computeDerivedStats failed', e);
+            }
+            // Update levelHistory snapshot to capture chosen stat bonuses and perks
+            try { this.recordLevelSnapshot(crewMember, crewMember.level); } catch (e) { }
+
+            // Sync to matching adventurer in this.adventurers
+            if (Array.isArray(this.adventurers)) {
+                const adv = this.adventurers.find(a => (a.id && a.id === crewMember.id) || (a.type && a.type === crewMember.type));
+                if (adv && adv !== crewMember) {
+                    adv.level = crewMember.level;
+                    adv.stats = JSON.parse(JSON.stringify(crewMember.stats));
+                    adv.skills = [...crewMember.skills];
+                    adv.passives = [...crewMember.passives];
+                    adv.perks = [...(crewMember.perks || [])];
+                    adv.levelHistory = Array.isArray(crewMember.levelHistory) ? JSON.parse(JSON.stringify(crewMember.levelHistory)) : [];
+                    try { this.computeDerivedStats(adv); } catch (e) { }
+                }
             }
         } catch (err) {
             console.warn('applyLevelUpChoices failed', err);
@@ -920,10 +1138,165 @@ export function CrewManager() {
                 });
             }
                 break;
+            case 'borrow_time':
+                // actionSubtype: { targetMember, actionIndex }
+                this.borrowTime(member, actionSubtype && actionSubtype.targetMember, actionSubtype && actionSubtype.actionIndex);
+                break;
+            case 'craft_phosphor_lure': {
+                const prepTime = 30 * 60 * 1000; // 30 minutes
+                endDate = new Date(Date.now() + prepTime);
+                member.specialActions.push({
+                    type: 'phosphor_lure',
+                    name: 'Phosphor Lure',
+                    iconUrl: images['prism_snare'] || images['prism_snare_glitterburn'] || '',
+                    available: false,
+                    startDate,
+                    endDate,
+                    notified: false,
+                });
+                break;
+            }
+            case 'brew_flashbang': {
+                const prepTime = 60 * 60 * 1000; // 1 hour
+                endDate = new Date(Date.now() + prepTime);
+                member.specialActions.push({
+                    type: 'flashbang_powder',
+                    name: 'Flashbang Powder',
+                    iconUrl: images['glitter_burst'] || images['glitter_burst_glitterburn'] || '',
+                    available: false,
+                    startDate,
+                    endDate,
+                    notified: false,
+                });
+                break;
+            }
+            case 'assemble_mirror_decoy': {
+                const prepTime = 120 * 60 * 1000; // 2 hours
+                endDate = new Date(Date.now() + prepTime);
+                member.specialActions.push({
+                    type: 'mirror_decoy',
+                    name: 'Mirror Decoy',
+                    iconUrl: images['starlight_decoy'] || images['starlight_decoy_glitterburn'] || '',
+                    available: false,
+                    startDate,
+                    endDate,
+                    notified: false,
+                });
+                break;
+            }
             default:
                 break;
         }
     }
+
+    // ── Ledger of Hours ──────────────────────────────────────────────────────
+    this.getTimeDebt = (member, now = Date.now()) => getEffectiveTimeDebt(member && member.stats, now);
+
+    this.getTemporalStrainTier = (member, now = Date.now()) =>
+        computeTemporalStrainTier(this.getTimeDebt(member, now), member && member.level);
+
+    // Fold real-time repayment into the stored snapshot.
+    this._settleTimeDebt = (member, now = Date.now()) => {
+        if (!member || !member.stats) return 0;
+        const debt = getEffectiveTimeDebt(member.stats, now);
+        member.stats.timeDebt = debt;
+        member.stats.timeDebtUpdatedAt = now;
+        return debt;
+    };
+
+    // Borrow time so that targetMember.specialActions[actionIndex] completes now.
+    // The remaining time is added to the Horologist's debt. Returns a result
+    // object so the UI can explain refusals.
+    this.borrowTime = (horologist, targetMember, actionIndex, now = Date.now()) => {
+        const type = String((horologist && (horologist.type || horologist.image)) || '').toLowerCase();
+        if (!type.startsWith('horologist')) return { ok: false, reason: 'not_horologist' };
+        if (!targetMember || !Array.isArray(targetMember.specialActions)) return { ok: false, reason: 'no_target' };
+        const action = targetMember.specialActions[actionIndex];
+        if (!action) return { ok: false, reason: 'no_action' };
+        const remaining = new Date(action.endDate).getTime() - now;
+        if (!(remaining > 0) || action.available) return { ok: false, reason: 'already_complete' };
+
+        const debt = this._settleTimeDebt(horologist, now);
+        const cap = getTimeDebtCap(horologist.level);
+        if (debt + remaining > cap) {
+            return { ok: false, reason: 'over_cap', debt, cap, remaining };
+        }
+
+        horologist.stats.timeDebt = debt + remaining;
+        horologist.stats.timeDebtUpdatedAt = now;
+        action.endDate = new Date(now);
+        action.available = true;
+        action.borrowedBy = horologist.id;
+        return {
+            ok: true,
+            borrowedMs: remaining,
+            debt: horologist.stats.timeDebt,
+            cap,
+            strainTier: computeTemporalStrainTier(horologist.stats.timeDebt, horologist.level)
+        };
+    };
+
+    // Borrow time to instantly heal an infirmary patient
+    this.borrowTimeInfirmary = (horologist, patientId, now = Date.now()) => {
+        const type = String((horologist && (horologist.type || horologist.image)) || '').toLowerCase();
+        if (!type.startsWith('horologist')) return { ok: false, reason: 'not_horologist' };
+
+        const meta = getMeta();
+        if (!meta || !meta.infirmary || !Array.isArray(meta.infirmary.patients)) return { ok: false, reason: 'no_patient' };
+        const patient = meta.infirmary.patients.find(p => p.id === patientId);
+        if (!patient) return { ok: false, reason: 'no_patient' };
+
+        const maxHp = patient.stats?.hp || patient.starting_hp || 100;
+        const missingHp = Math.max(0, maxHp - patient.hp);
+        if (missingHp <= 0) return { ok: false, reason: 'already_complete' };
+
+        const healingRate = meta.infirmary.sageCommitted ? 2 : 1;
+        const remainingHours = missingHp / healingRate;
+        const remainingMs = Math.round(remainingHours * 60 * 60 * 1000);
+
+        const debt = this._settleTimeDebt(horologist, now);
+        const cap = getTimeDebtCap(horologist.level);
+        if (debt + remainingMs > cap) {
+            return { ok: false, reason: 'over_cap', debt, cap, remainingMs };
+        }
+
+        horologist.stats.timeDebt = debt + remainingMs;
+        horologist.stats.timeDebtUpdatedAt = now;
+        patient.hp = maxHp;
+        patient.dead = false;
+
+        dischargeFromInfirmary(patientId);
+
+        return {
+            ok: true,
+            borrowedMs: remainingMs,
+            debt: horologist.stats.timeDebt,
+            cap,
+            strainTier: computeTemporalStrainTier(horologist.stats.timeDebt, horologist.level)
+        };
+    };
+
+    // Called when the party defeats the Debt Collector.
+    this.clearTimeDebt = (horologist, now = Date.now()) => {
+        if (!horologist || !horologist.stats) return;
+        horologist.stats.timeDebt = 0;
+        horologist.stats.timeDebtUpdatedAt = now;
+    };
+
+    // Called when the party loses to the Debt Collector: every in-progress
+    // crew preparation resets to 0% (its full duration starts again).
+    this.resetAllPreparations = (now = Date.now()) => {
+        (this.crew || []).forEach(m => {
+            (m.specialActions || []).forEach(a => {
+                if (a.available) return;
+                const start = new Date(a.startDate).getTime();
+                const end = new Date(a.endDate).getTime();
+                const duration = (end > start) ? end - start : 0;
+                a.startDate = new Date(now);
+                a.endDate = new Date(now + duration);
+            });
+        });
+    };
 
     this.adventurers = [
         // All fighter objects now use the new, less redundant structure
@@ -1107,6 +1480,7 @@ export function CrewManager() {
                 'summon_imp',
                 'summoner_duplicate'
             ],
+            expeditionSkills: ['wandering_eye'],
             passives: ['magic_affinity'],
             weaknesses: ['crushing', 'blood_magic'],
             description: 'A conduit for unstable arcana who overwhelms enemies with elemental pressure by opening rifts and summoning minions.',
@@ -1120,8 +1494,6 @@ export function CrewManager() {
             class: 'spellcaster',
             name: 'Glitterburn',
             id: 9903,
-            disabled: true,
-            locked: true,
             level: 1,
             stats: { str: 4, int: 8, dex: 6, fort: 5, baseHp: 24, experience: 0 },
             portrait: images['glitterburn_portrait'] || images['glitterburn'],
@@ -1130,13 +1502,68 @@ export function CrewManager() {
                 { id: 'astra', name: 'Astra', defaultName: 'Astra', portrait: images['glitterburn_alt_portrait'] || images['glitterburn_alt'], image: 'glitterburn_alt' }
             ],
             inventory: [],
-            skills: ['glitter_burst', 'pyro_spark', 'blinding_flash'],
-            passives: ['sparkling_aura'],
+            skills: ['pyro_spark', 'glitter_burst', 'prism_snare', 'starlight_decoy', 'supernova_core'],
+            expeditionSkills: ['blinding_beacon', 'prismatic_flare'],
+            passives: ['sparkling_aura', 'pyrotechnic_chain'],
             weaknesses: ['crushing', 'ice'],
-            description: 'A volatile pyromancer born under cosmic starlight, fusing chaotic magic with blinding ember sparks.',
+            description: 'A volatile pyromancer born under cosmic starlight, fusing chaotic magic with blinding ember sparks and dazzling illusions.',
             specialActions: [],
             actionsTrayExpanded: false,
             actionMenuTypeExpanded: false
         },
-    ]
+        {
+            image: 'hollow',
+            type: 'hollow',
+            class: 'spellcaster',
+            name: 'Valok',
+            id: 9904,
+            level: 1,
+            stats: { str: 3, int: 7, dex: 7, fort: 4, baseHp: 22, experience: 0 },
+            portrait: images['hollow_portrait'],
+            portraitOptions: [
+                { id: 'valok', name: 'Valok', defaultName: 'Valok', portrait: images['hollow_portrait'], image: 'hollow' },
+                { id: 'mira', name: 'Mira', defaultName: 'Mira', portrait: images['hollow_alt_portrait'], image: 'hollow_alt' }
+            ],
+            inventory: [],
+            skills: ['void_touch', 'death_grasp'],
+            passives: ['undying_presence', 'dungeon_sense'],
+            weaknesses: ['fire', 'electricity', 'crushing'],
+            description: 'A wanderer caught between the living realm and the eternal dark, resurrected by the dungeon itself to walk its haunted corridors.',
+            specialActions: [],
+            actionsTrayExpanded: false,
+            actionMenuTypeExpanded: false
+        },
+        {
+            image: 'horologist',
+            type: 'horologist',
+            class: 'spellcaster',
+            name: 'Seren',
+            id: 9905,
+            level: 1,
+            stats: { str: 3, int: 7, dex: 7, fort: 4, baseHp: 20, experience: 0, timeDebt: 0 },
+            portrait: images['horologist_portrait'],
+            portraitOptions: [
+                { id: 'seren', name: 'Seren', defaultName: 'Seren', portrait: images['horologist_portrait'], image: 'horologist' },
+                { id: 'odran', name: 'Odran', defaultName: 'Odran', portrait: images['horologist_alt_portrait'], image: 'horologist_alt' }
+            ],
+            inventory: [],
+            skills: ['set_anchor', 'recall', 'future_echo'],
+            expeditionSkills: ['rewind_step', 'stopwatch'],
+            passives: ['clockwork_heart', 'ledger_of_hours'],
+            weaknesses: ['psionic', 'crushing', 'electricity'],
+            description: 'Seren was an apprentice of the Guild of Escapements until she stole the Master Mainspring. Every second she spends is borrowed, and something is coming to collect.',
+            specialActions: [],
+            actionsTrayExpanded: false,
+            actionMenuTypeExpanded: false
+        },
+    ];
+
+    // Ensure all base adventurer templates have an initial level 1 snapshot
+    try {
+        this.adventurers.forEach(adv => {
+            if (adv && (!Array.isArray(adv.levelHistory) || adv.levelHistory.length === 0)) {
+                this.recordLevelSnapshot(adv, adv.level || 1);
+            }
+        });
+    } catch (e) { }
 }

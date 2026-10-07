@@ -157,7 +157,79 @@ class MonsterBattle extends React.Component {
     }
     // lifecycle methods implemented further below
 
-    // All keydown logic removed; now handled in CombatSimulator
+    handleKeyDown = (event) => {
+        if (event.defaultPrevented) return;
+        const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
+        if (activeTag === 'input' || activeTag === 'textarea') return;
+        const key = event.key;
+        const dirMap = {
+            ArrowUp: 'up',
+            ArrowDown: 'down',
+            ArrowLeft: 'left',
+            ArrowRight: 'right',
+            Numpad8: 'up',
+            Numpad2: 'down',
+            Numpad4: 'left',
+            Numpad6: 'right',
+            Numpad7: 'up-left',
+            Numpad9: 'up-right',
+            Numpad1: 'down-left',
+            Numpad3: 'down-right'
+        };
+        if (dirMap[key]) {
+            event.preventDefault();
+            this.moveFighterOneSpace(dirMap[key]);
+        }
+    };
+
+    moveFighterOneSpace = (direction) => {
+        const cm = this.props.combatManager;
+        if (!cm) return;
+
+        let fighter = this.state.selectedFighter;
+        const liveCrew = (this.props.crew || []).map(c => this.state.battleData[c.id] || c).filter(c => c && !c.dead && (typeof c.hp !== 'number' || c.hp > 0));
+
+        if (!fighter || !this.state.battleData[fighter.id] || this.state.battleData[fighter.id].dead) {
+            fighter = liveCrew[0] || null;
+            if (fighter) {
+                this.setState({ selectedFighter: fighter });
+            }
+        }
+
+        if (!fighter) return;
+
+        if (typeof cm.setSelectedFighter === 'function') {
+            cm.setSelectedFighter(fighter);
+        } else {
+            cm.selectedFighter = fighter;
+        }
+
+        if (typeof cm.moveFighterOneSpace === 'function') {
+            cm.moveFighterOneSpace(direction);
+        }
+
+        const updatedFighter = (typeof cm.getCombatant === 'function' ? cm.getCombatant(fighter.id) : null) || cm.combatants?.[fighter.id] || this.state.battleData[fighter.id];
+        if (updatedFighter && updatedFighter.manualDestination) {
+            const dest = updatedFighter.manualDestination;
+            const isEnemy = Object.values(this.state.battleData).some(u =>
+                u && !u.dead && (u.isMonster || u.isMinion) && !u.isVCT &&
+                ((Array.isArray(u.occupiedCoords) && u.occupiedCoords.some(c => c.x === dest.x && c.y === dest.y)) ||
+                 (u.coordinates && u.coordinates.x === dest.x && u.coordinates.y === dest.y))
+            );
+
+            this.setState({
+                dragFlashTile: { ...dest, color: isEnemy ? 'red' : 'yellow' },
+                committedArc: {
+                    fighterId: fighter.id,
+                    dst: { x: dest.x, y: dest.y },
+                    isEnemy
+                }
+            });
+            this._setTimeout(() => {
+                this.setState({ dragFlashTile: null });
+            }, 650);
+        }
+    };
 
     enableManualModeForSelectedFighter = () => {
         // Implement logic to enable manual control for the selected fighter
@@ -424,6 +496,7 @@ class MonsterBattle extends React.Component {
         // mark mounted so async callbacks can safely call setState
         this._isMounted = true;
         window.addEventListener('resize', this._handleResize);
+        window.addEventListener('keydown', this.handleKeyDown);
         try {
             socketHandler.on('pvp:action_broadcast', this.handlePvPActionBroadcast);
         } catch (e) { }
@@ -787,6 +860,7 @@ class MonsterBattle extends React.Component {
         try { this._isMounted = false; } catch (e) { }
         try { socketHandler.off('pvp:action_broadcast', this.handlePvPActionBroadcast); } catch (e) { }
         window.removeEventListener('resize', this._handleResize);
+        window.removeEventListener('keydown', this.handleKeyDown);
         if (this._rafId) {
             cancelAnimationFrame(this._rafId);
         }
@@ -4583,11 +4657,24 @@ class MonsterBattle extends React.Component {
                         {this.state.combatTiles.map((t, i) => {
                             const isSelectedFighter = this.state.selectedFighter?.id && Object.values(this.state.battleData).some(e => e.id === this.state.selectedFighter.id && !e.dead && e.coordinates && e.coordinates.x === t.x && e.coordinates.y === t.y);
                             const isSelectedMonster = this.state.selectedMonster?.id && Object.values(this.state.battleData).some(e => e.id === this.state.selectedMonster.id && !e.dead && e.coordinates && e.coordinates.x === t.x && e.coordinates.y === t.y);
-                            // Manual drag highlight
+                            // Manual drag & destination highlight
                             const isDragTarget = this.state.dragTargetTile && this.state.dragTargetTile.x === t.x && this.state.dragTargetTile.y === t.y;
+                            const dragEnemy    = isDragTarget && this.state.dragTargetIsEnemy;
+                            const activeManualDest = (this.state.selectedFighter && (this.state.battleData[this.state.selectedFighter.id]?.manualDestination || this.state.selectedFighter.manualDestination))
+                                || (this.state.committedArc && this.state.committedArc.dst)
+                                || null;
+                            const isManualDestTile = !!(activeManualDest && activeManualDest.x === t.x && activeManualDest.y === t.y);
+                            const manualDestEnemy = isManualDestTile && (
+                                this.state.committedArc?.isEnemy ||
+                                Object.values(this.state.battleData).some(u => u && !u.dead && (u.isMonster || u.isMinion) && !u.isVCT &&
+                                    ((Array.isArray(u.occupiedCoords) && u.occupiedCoords.some(c => c.x === t.x && c.y === t.y)) ||
+                                     (u.coordinates && u.coordinates.x === t.x && u.coordinates.y === t.y))
+                                )
+                            );
+                            const isTileHighlighted = isDragTarget || isManualDestTile;
+                            const isTargetEnemy = dragEnemy || manualDestEnemy;
                             const isDragFlash  = this.state.dragFlashTile  && this.state.dragFlashTile.x  === t.x && this.state.dragFlashTile.y  === t.y;
                             const isGroupFlash = (this.state.groupFlashTiles || []).some(ft => ft.x === t.x && ft.y === t.y);
-                            const dragEnemy    = isDragTarget && this.state.dragTargetIsEnemy;
                             let tileClassName = 'combat-tile';
                             if (isDragFlash) {
                                 tileClassName += this.state.dragFlashTile.color === 'red'
@@ -4613,8 +4700,8 @@ class MonsterBattle extends React.Component {
                                     style={{
                                         width: currentTileSize + 'px',
                                         height: currentTileSize + 'px',
-                                        border: isDragTarget
-                                            ? (dragEnemy ? '2px solid rgba(231, 76, 60, 0.9)' : '2px solid rgba(255, 183, 3, 0.8)')
+                                        border: isTileHighlighted
+                                            ? (isTargetEnemy ? '2px solid rgba(231, 76, 60, 0.9)' : '2px solid rgba(255, 183, 3, 0.8)')
                                             : isAcidBombTarget
                                                 ? '1px solid rgba(122, 255, 54, 0.4)'
                                                 : isSelectedFighter
@@ -4622,8 +4709,8 @@ class MonsterBattle extends React.Component {
                                                 : isSelectedMonster
                                                     ? '1px dashed rgba(255, 84, 0, 0.25)'
                                                     : '1px solid rgba(255, 255, 255, 0.04)',
-                                        background: isDragTarget
-                                            ? (dragEnemy ? 'rgba(231, 76, 60, 0.35)' : 'rgba(255, 183, 3, 0.4)')
+                                        background: isTileHighlighted
+                                            ? (isTargetEnemy ? 'rgba(231, 76, 60, 0.35)' : 'rgba(255, 183, 3, 0.4)')
                                             : this.state.draggedOverCombatTileId === i
                                                 ? '#cccca4c1'
                                                 : isSelectedFighter

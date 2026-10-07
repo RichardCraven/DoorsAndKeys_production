@@ -1482,6 +1482,7 @@ function Tile(props) {
 
     const mmRef = props.monsterManager || defaultMonsterManager;
     const isAggroMonster = isMonsterOrPygmyTile && !!(
+        props.aggroOn ||
         (containsObj && (containsObj.aggro === true || containsObj.isAggro === true)) ||
         (currentContains && typeof currentContains === 'object' && (currentContains.aggro === true || currentContains.isAggro === true)) ||
         props.aggro === true ||
@@ -3559,7 +3560,7 @@ function Tile(props) {
                     right: 0,
                     bottom: 0,
                     backgroundColor: isRevealedBySpiritSight ? 'rgba(0, 0, 0, 0.65)' : 'rgba(0, 0, 0, 0.5)',
-                    zIndex: 25,
+                    zIndex: 45,
                     pointerEvents: 'none',
                     opacity: color === 'black' ? 0 : 1,
                     transition: 'opacity 0.08s ease-in-out'

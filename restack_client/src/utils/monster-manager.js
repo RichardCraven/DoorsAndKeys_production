@@ -966,6 +966,35 @@ export function MonsterManager() {
             ],
             aggro: true
         },
+        debt_collector: {
+            type: 'debt_collector',
+            tier: 3,
+            subtype: 'eldritch',
+            key: 'debt_collector',
+            image_names: ['qlippoth'],
+            monster_names: ['Chrono-Reaper', 'Hourglass Specter', 'The Time Collector'],
+            lordName: 'The Debt Collector',
+            stats: {
+                hp: 350,
+                atk: 14,
+                def: 12,
+                speed: 12,
+                willpower: 8,
+                str: 6,
+                int: 10,
+                dex: 8,
+                fort: 8
+            },
+            level: 15,
+            portrait: images['qlippoth'],
+            greetings: ['Time is up.', 'The Ledger demands payment...'],
+            deathCries: ['Your debt... is cleared...'],
+            skills: ['despair', 'induce_fear', 'displacement_ray', 'silence', 'hour_of_reckoning'],
+            weaknesses: ['arcane', 'holy'],
+            minions: [],
+            drops: [],
+            aggro: true
+        },
         // ── Level 19 ─────────────────────────────────────────────────────
         eidolon: {
             type: 'eidolon',
@@ -1039,6 +1068,39 @@ export function MonsterManager() {
             drops: [
                 { item: TIER2_POTION, percentChance: 35 },
                 { itemPool: TIER3_MAGICAL, percentChance: 45 },
+            ],
+            aggro: true
+        },
+        vallgorguina_djinn: {
+            type: 'vallgorguina_djinn',
+            tier: 3,
+            subtype: 'eldritch',
+            key: 'vallgorguina_djinn',
+            image_names: ['vallgorguina_djinn'],
+            monster_names: ["Xavier's Shadow", 'The Abductor', 'Subterranean Djinn', 'Cave Stalker'],
+            lordName: 'The Vallgorguina Entity',
+            stats: {
+                hp: 360,
+                atk: 14,
+                def: 10,
+                speed: 11,
+                willpower: 9,
+                str: 7,
+                int: 11,
+                dex: 8,
+                fort: 7
+            },
+            level: 15,
+            portrait: images['vallgorguina_djinn'],
+            greetings: ['34 hours vanish in the dark...', 'Your sample has been collected.'],
+            deathCries: ['*shatters back into memory shadows*'],
+            skills: ['obsidian_slash', 'missing_time', 'biological_sample', 'temporal_duplicate', 'induce_fear'],
+            weaknesses: ['holy', 'arcane'],
+            minions: ['qlippoth', 'shade'],
+            drops: [
+                { item: TIER2_POTION, percentChance: 50 },
+                { itemPool: TIER3_MAGICAL, percentChance: 40 },
+                { itemPool: TIER3_ITEM, percentChance: 25 },
             ],
             aggro: true
         },

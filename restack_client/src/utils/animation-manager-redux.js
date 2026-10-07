@@ -33,6 +33,7 @@ import {
   food,
   soul_tap_summoner
 } from './images';
+import { combatClock } from './combat-clock';
 
 export class AnimationManagerRedux {
   constructor() {
@@ -81,11 +82,11 @@ export class AnimationManagerRedux {
    */
   _delay(fn, ms) {
     const delayId = ++this._delayIdCounter;
-    const handle = setTimeout(() => {
+    const handle = combatClock.setTimeout(() => {
       this._pendingDelays.delete(delayId);
       fn();
     }, ms);
-    this._pendingDelays.set(delayId, { handle, fn, remaining: ms, startedAt: Date.now() });
+    this._pendingDelays.set(delayId, { handle, fn, remaining: ms, startedAt: combatClock.now() });
     return delayId;
   }
 
@@ -93,10 +94,10 @@ export class AnimationManagerRedux {
   pause() {
     if (this.isPaused) return;
     this.isPaused = true;
-    this._pausedAt = Date.now();
+    this._pausedAt = combatClock.now();
     this._pendingDelays.forEach((entry, delayId) => {
-      clearTimeout(entry.handle);
-      const elapsed = Date.now() - entry.startedAt;
+      combatClock.clearTimeout(entry.handle);
+      const elapsed = combatClock.now() - entry.startedAt;
       entry.remaining = Math.max(0, entry.remaining - elapsed);
     });
   }
@@ -108,19 +109,19 @@ export class AnimationManagerRedux {
     this._pausedAt = null;
     this._pendingDelays.forEach((entry, delayId) => {
       const { fn, remaining } = entry;
-      const handle = setTimeout(() => {
+      const handle = combatClock.setTimeout(() => {
         this._pendingDelays.delete(delayId);
         fn();
       }, remaining);
       entry.handle = handle;
-      entry.startedAt = Date.now();
+      entry.startedAt = combatClock.now();
       entry.remaining = remaining;
     });
   }
 
   /** Emit an animation event and auto-remove it after duration */
   _emit(anim) {
-    const id = `anim_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+    const id = `anim_${combatClock.now()}_${Math.random().toString(36).substr(2, 5)}`;
     const entry = { id, sourceUnitId: this._currentSourceUnitId, abilityName: this._currentAbilityName, ...anim };
     this.activeAnimations = [...this.activeAnimations, entry];
     if (this.onAnimationEvent) this.onAnimationEvent([...this.activeAnimations]);
@@ -162,6 +163,53 @@ export class AnimationManagerRedux {
     const spherePx = sphereCoords ? this._px(sphereCoords) : null;
 
     switch (name) {
+      // ── Horologist ──────────────────────────────────────────────────────
+      case 'future_echo_cast':
+      case 'horologist_anchor':
+      case 'horologist_recall': {
+        const srcPx = this._px(sourceCoords);
+        const tgtPx = this._getImpactTargetPx(targetCoords);
+        this._emit({ type: name, srcPx, tgtPx, isUltimate, duration: name === 'horologist_recall' ? 1100 : 900 });
+        break;
+      }
+      case 'future_echo_strike':
+      case 'horologist_shatter': {
+        const tgtPx = this._getImpactTargetPx(targetCoords);
+        this._emit({ type: name, tgtPx, duration: 900 });
+        break;
+      }
+      case 'hour_of_reckoning': {
+        const srcPx = this._px(sourceCoords);
+        this._emit({ type: 'hour_of_reckoning', srcPx, tgtPx: srcPx, duration: 1800 });
+        break;
+      }
+      // ── Glitterburn ──────────────────────────────────────────────────────
+      case 'pyro_spark':
+      case 'glitter_burst':
+      case 'prism_snare_place': {
+        const srcPx = this._px(sourceCoords);
+        const tgtPx = this._getImpactTargetPx(targetCoords);
+        this._emit({ type: name, srcPx, tgtPx, isUltimate, duration: name === 'glitter_burst' ? 1000 : 800 });
+        break;
+      }
+      case 'prism_snare_snap':
+      case 'glitter_pop':
+      case 'starlight_decoy_summon': {
+        const tgtPx = this._getImpactTargetPx(targetCoords);
+        this._emit({ type: name, tgtPx, duration: 800 });
+        break;
+      }
+      case 'supernova_core_pulse': {
+        const srcPx = this._px(sourceCoords);
+        const tgtPx = this._getImpactTargetPx(targetCoords);
+        this._emit({ type: 'supernova_core_pulse', srcPx, tgtPx, isUltimate, duration: 1200 });
+        break;
+      }
+      case 'supernova_core_detonate': {
+        const tgtPx = this._getImpactTargetPx(targetCoords);
+        this._emit({ type: 'supernova_core_detonate', tgtPx, duration: 1600 });
+        break;
+      }
       case 'betrayal_success':
         this._betrayalSuccess(targetCoords, sourceUnitId);
         break;
