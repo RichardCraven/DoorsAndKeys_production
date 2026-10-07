@@ -964,7 +964,7 @@ class CrewManagerPage extends React.Component {
                                 'barbarian_slash', 'sword_swing', 'axe_throw', 'summon_skeleton', 
                                 'claw_strike', 'claws', 'rake', 'gore_horns', 'snake_strike', 
                                 'grasp', 'void_lance', 'crush', 'tackle', 'major_magic_missile', 'greater_magic_missile',
-                                'vampiric_bite', 'induce_madness', 'lightning', 'bite'
+                                'vampiric_bite', 'induce_madness', 'lightning', 'bite', 'void_touch'
                             ];
                             const basics = member.skills.filter(s => BASIC_ATTACK_KEYS.includes(s));
                             let specials = member.skills.filter(s => !BASIC_ATTACK_KEYS.includes(s));
@@ -982,6 +982,9 @@ class CrewManagerPage extends React.Component {
                             } else if (member.type === 'monk') {
                                 if (!basics.includes('monk_punch')) basics.push('monk_punch');
                                 if (!specials.includes('monk_twin_finger_authority')) specials.push('monk_twin_finger_authority');
+                            } else if (member.type === 'hollow' || member.image === 'hollow') {
+                                if (!basics.includes('void_touch')) basics.push('void_touch');
+                                if (!specials.includes('death_grasp')) specials.push('death_grasp');
                             }
                             member.skills = [...basics, ...specials];
                         } else {
@@ -1007,6 +1010,11 @@ class CrewManagerPage extends React.Component {
                                 if (!member.specials.includes('monk_twin_finger_authority')) member.specials.push('monk_twin_finger_authority');
                                 member.attacks = member.attacks || [];
                                 if (!member.attacks.includes('monk_punch')) member.attacks.push('monk_punch');
+                            } else if (member.type === 'hollow' || member.image === 'hollow') {
+                                member.attacks = member.attacks || [];
+                                if (!member.attacks.includes('void_touch')) member.attacks.push('void_touch');
+                                member.specials = member.specials || [];
+                                if (!member.specials.includes('death_grasp')) member.specials.push('death_grasp');
                             }
                         }
                     }
@@ -1124,7 +1132,7 @@ class CrewManagerPage extends React.Component {
                             'barbarian_slash', 'sword_swing', 'axe_throw', 'summon_skeleton', 
                             'claw_strike', 'claws', 'rake', 'gore_horns', 'snake_strike', 
                             'grasp', 'void_lance', 'crush', 'tackle', 'major_magic_missile', 'greater_magic_missile',
-                            'vampiric_bite', 'induce_madness', 'lightning', 'bite'
+                            'vampiric_bite', 'induce_madness', 'lightning', 'bite', 'void_touch'
                         ];
                         const basics = pvpMember.skills.filter(s => BASIC_ATTACK_KEYS.includes(s));
                         let specials = pvpMember.skills.filter(s => !BASIC_ATTACK_KEYS.includes(s));
@@ -1142,6 +1150,9 @@ class CrewManagerPage extends React.Component {
                         } else if (pvpMember.type === 'monk') {
                             if (!basics.includes('monk_punch')) basics.push('monk_punch');
                             if (!specials.includes('monk_twin_finger_authority')) specials.push('monk_twin_finger_authority');
+                        } else if (pvpMember.type === 'hollow' || pvpMember.image === 'hollow') {
+                            if (!basics.includes('void_touch')) basics.push('void_touch');
+                            if (!specials.includes('death_grasp')) specials.push('death_grasp');
                         }
                         pvpMember.skills = [...basics, ...specials];
                     }

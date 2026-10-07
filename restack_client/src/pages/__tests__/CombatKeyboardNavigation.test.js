@@ -168,7 +168,7 @@ describe('Combat Arrow Key Navigation & Target Pathfinding', () => {
         // Single player unit must spawn at { x: 0, y: 2 }
         expect(singleCm.combatants.p1.coordinates).toEqual({ x: 0, y: 2 });
 
-        // When multiple live units are present, standard top-down assignment applies
+        // When multiple live units are present, center-out assignment applies (rows 2, 3, 1, 4, 0, 5)
         const multiCm = new CombatManagerRedux();
         multiCm.initializeCombat({
             crew: [
@@ -177,8 +177,8 @@ describe('Combat Arrow Key Navigation & Target Pathfinding', () => {
             ],
             monster: { id: 'm1', name: 'Goblin', stats: { hp: 50 } }
         });
-        expect(multiCm.combatants.p1.coordinates).toEqual({ x: 0, y: 0 });
-        expect(multiCm.combatants.p2.coordinates).toEqual({ x: 0, y: 1 });
+        expect(multiCm.combatants.p1.coordinates).toEqual({ x: 0, y: 2 });
+        expect(multiCm.combatants.p2.coordinates).toEqual({ x: 0, y: 3 });
     });
 
     test('Rule 11: Single opponent unit in PvP spawns in center-back position (row 2)', () => {

@@ -73,7 +73,7 @@ export function createFighter(fighter, callbacks, FIGHT_INTERVAL) {
         'barbarian_slash', 'sword_swing', 'axe_throw', 'summon_skeleton', 
         'claw_strike', 'claws', 'rake', 'gore_horns', 'snake_strike', 
         'grasp', 'void_lance', 'crush', 'tackle', 'major_magic_missile', 'greater_magic_missile', 
-        'vampiric_bite', 'induce_madness', 'lightning', 'bite', 'gore'
+        'vampiric_bite', 'induce_madness', 'lightning', 'bite', 'gore', 'void_touch'
     ];
 
     if (Array.isArray(fighter.attacks) && fighter.attacks.length > 0) {
