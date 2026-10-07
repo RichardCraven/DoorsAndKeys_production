@@ -12,6 +12,7 @@ import { computeTemporalStrainTier, getEffectiveTimeDebt } from './crew-manager'
 import { combatClock } from './combat-clock';
 import { combatRng } from './combat-rng';
 const MAX_LANES = 6;
+const CENTER_OUT_LANES = [2, 3, 1, 4, 0, 5];
 
 
 const clone = (val) => {
@@ -432,186 +433,189 @@ export function CombatManagerRedux() {
     };
 
     this.minionsPopulated = false;
+    this.populateSingleMinion = (e) => {
+        if (!e) return null;
+        e.isMinion = true;
+        e.isMonster = true;
+
+        const monsterY = this.monsterY;
+        const isHuge = this.isHuge;
+        const isLarge = this.isLarge;
+        const callbacks = this._combatCallbacks;
+        const LARGE_COMBAT_KEYS = ['dragon', 'beholder', 'ogre', 'sphinx', 'manticore', 'wyvern', 'wyvern_alt', 'mummy', 'djinn', 'vampire', 'goblin_warchief', 'summoned_djinn', 'summoned_mummy', 'summoned_ogre', 'summoned_vampire', 'summoned_goblin_warchief'];
+
+        const occupiedLanes = [monsterY];
+        if (isHuge) {
+            occupiedLanes.push(monsterY - 1);
+            occupiedLanes.push(monsterY - 2);
+        } else if (isLarge) {
+            occupiedLanes.push(monsterY - 1);
+        }
+        const bossMinY = Math.min(...occupiedLanes);
+        const bossMaxY = Math.max(...occupiedLanes);
+        const aboveLanes = [];
+        const belowLanes = [];
+        for (let y = 0; y < MAX_LANES; y++) {
+            if (!occupiedLanes.includes(y)) {
+                if (y < bossMinY) {
+                    aboveLanes.push(y);
+                } else if (y > bossMaxY) {
+                    belowLanes.push(y);
+                }
+            }
+        }
+        aboveLanes.sort((a, b) => b - a);
+        belowLanes.sort((a, b) => a - b);
+
+        const availableLanes = [];
+        let aboveIdx = 0;
+        let belowIdx = 0;
+        while (aboveIdx < aboveLanes.length || belowIdx < belowLanes.length) {
+            if (belowIdx < belowLanes.length) {
+                availableLanes.push(belowLanes[belowIdx++]);
+            }
+            if (aboveIdx < aboveLanes.length) {
+                availableLanes.push(aboveLanes[aboveIdx++]);
+            }
+        }
+
+        const getCurrentlyOccupiedCoords = () => {
+            const occupied = [];
+            Object.values(this.combatants).forEach(c => {
+                if (!c || c.dead) return;
+                if (Array.isArray(c.occupiedCoords)) {
+                    c.occupiedCoords.forEach(coord => {
+                        if (!occupied.some(o => o.x === coord.x && o.y === coord.y)) {
+                            occupied.push({ x: coord.x, y: coord.y });
+                        }
+                    });
+                } else if (c.coordinates) {
+                    if (!occupied.some(o => o.x === c.coordinates.x && o.y === c.coordinates.y)) {
+                        occupied.push({ x: c.coordinates.x, y: c.coordinates.y });
+                    }
+                }
+            });
+            return occupied;
+        };
+
+        const getOccupiedCoordsForPos = (x, y, isHuge, isLarge) => {
+            const coords = [{ x, y }];
+            if (isHuge) {
+                const hOffset = (x >= 4) ? -1 : 1;
+                const extra = [
+                    { x: x, y: y - 1 },
+                    { x: x, y: y - 2 },
+                    { x: x + hOffset, y: y },
+                    { x: x + hOffset, y: y - 1 },
+                    { x: x + hOffset, y: y - 2 },
+                    { x: x + 2 * hOffset, y: y },
+                    { x: x + 2 * hOffset, y: y - 1 },
+                    { x: x + 2 * hOffset, y: y - 2 }
+                ];
+                extra.forEach(c => {
+                    if (!coords.some(existing => existing.x === c.x && existing.y === c.y)) {
+                        coords.push(c);
+                    }
+                });
+            } else if (isLarge) {
+                const hOffset = (x >= 4) ? -1 : 1;
+                const extra = [
+                    { x: x, y: y - 1 },
+                    { x: x + hOffset, y: y },
+                    { x: x + hOffset, y: y - 1 }
+                ];
+                extra.forEach(c => {
+                    if (!coords.some(existing => existing.x === c.x && existing.y === c.y)) {
+                        coords.push(c);
+                    }
+                });
+            }
+            return coords;
+        };
+
+        const isMinionHuge = !e.isShrineGuardian && (
+            (typeof e.huge === 'boolean' && e.huge === true)
+            || (e.type === 'dragon')
+            || (e.tier === 4)
+            || (typeof e.size === 'number' && e.size === 3)
+            || (typeof e.scale === 'number' && e.scale === 3)
+        );
+        const isMinionLarge = !e.isShrineGuardian && (
+            !isMinionHuge && (
+                (typeof e.large === 'boolean' && e.large === true)
+                || (typeof e.isLarge === 'boolean' && e.isLarge === true)
+                || (e.type && LARGE_COMBAT_KEYS.includes(e.type))
+                || (e.key && LARGE_COMBAT_KEYS.includes(e.key))
+                || (typeof e.size === 'number' && e.size >= 2)
+                || (typeof e.scale === 'number' && e.scale >= 2)
+                || (e.tier === 3)
+            )
+        );
+
+        const currentlyOccupied = getCurrentlyOccupiedCoords();
+        let assignedCoord = null;
+
+        const maxColOffset = (e.type === 'beholder_minion' || e.key === 'beholder_minion') ? 2 : 5;
+        for (let colOffset = 0; colOffset < maxColOffset; colOffset++) {
+            const targetX = MAX_DEPTH - colOffset;
+            for (let laneIdx = 0; laneIdx < availableLanes.length; laneIdx++) {
+                const targetY = availableLanes[laneIdx];
+                const minionOccupied = getOccupiedCoordsForPos(targetX, targetY, isMinionHuge, isMinionLarge);
+                const allInBounds = minionOccupied.every(c => c.x >= 0 && c.x <= MAX_DEPTH && c.y >= 0 && c.y < MAX_LANES);
+                if (!allInBounds) continue;
+                const overlaps = minionOccupied.some(c => currentlyOccupied.some(o => o.x === c.x && o.y === c.y));
+                if (!overlaps) {
+                    assignedCoord = { x: targetX, y: targetY };
+                    break;
+                }
+            }
+            if (assignedCoord) break;
+        }
+
+        if (!assignedCoord) {
+            for (let colOffset = 0; colOffset < 5; colOffset++) {
+                const targetX = MAX_DEPTH - colOffset;
+                for (const y of CENTER_OUT_LANES) {
+                    const minionOccupied = getOccupiedCoordsForPos(targetX, y, isMinionHuge, isMinionLarge);
+                    const allInBounds = minionOccupied.every(c => c.x >= 0 && c.x <= MAX_DEPTH && c.y >= 0 && c.y < MAX_LANES);
+                    if (!allInBounds) continue;
+                    const overlaps = minionOccupied.some(c => currentlyOccupied.some(o => o.x === c.x && o.y === c.y));
+                    if (!overlaps) {
+                        assignedCoord = { x: targetX, y: y };
+                        break;
+                    }
+                }
+                if (assignedCoord) break;
+            }
+        }
+
+        e.coordinates = assignedCoord;
+
+        const minion = createFighter(e, callbacks, this.FIGHT_INTERVAL);
+        minion.isMinion = true;
+        minion.isMonster = true;
+        minion.isShrineGuardian = e.isShrineGuardian;
+        minion.tier = e.tier || 1;
+        minion.maxEndurance = e.stats.vitality || Math.round(20 + (e.stats.def || 5) * 2);
+        minion.endurance = minion.maxEndurance;
+        minion.enduranceFrozenRounds = 0;
+        minion.cooldowns = {};
+        minion.movesTakenThisRound = 0;
+        minion.actionsTakenThisRound = 0;
+
+        this.combatants[minion.id] = minion;
+        this._initializeInitialCooldowns(minion);
+        this._setCombatantOccupiedCoords(minion, this.combatants);
+        this._makeHpEffectsAware(minion);
+        return minion;
+    };
+
     this.populateMinions = () => {
         if (this.minionsPopulated) return;
         this.minionsPopulated = true;
         if (this.data && this.data.minions) {
-            const monsterY = this.monsterY;
-            const isHuge = this.isHuge;
-            const isLarge = this.isLarge;
-            const callbacks = this._combatCallbacks;
-            const LARGE_COMBAT_KEYS = ['dragon', 'beholder', 'ogre', 'sphinx', 'manticore', 'wyvern', 'wyvern_alt', 'mummy', 'djinn', 'vampire', 'goblin_warchief', 'summoned_djinn', 'summoned_mummy', 'summoned_ogre', 'summoned_vampire', 'summoned_goblin_warchief'];
-
-            const occupiedLanes = [monsterY];
-            if (isHuge) {
-                occupiedLanes.push(monsterY - 1);
-                occupiedLanes.push(monsterY - 2);
-            } else if (isLarge) {
-                occupiedLanes.push(monsterY - 1);
-            }
-            const bossMinY = Math.min(...occupiedLanes);
-            const bossMaxY = Math.max(...occupiedLanes);
-            const aboveLanes = [];
-            const belowLanes = [];
-            for (let y = 0; y < MAX_LANES; y++) {
-                if (!occupiedLanes.includes(y)) {
-                    if (y < bossMinY) {
-                        aboveLanes.push(y);
-                    } else if (y > bossMaxY) {
-                        belowLanes.push(y);
-                    }
-                }
-            }
-            aboveLanes.sort((a, b) => b - a);
-            belowLanes.sort((a, b) => a - b);
-
-            const availableLanes = [];
-            let aboveIdx = 0;
-            let belowIdx = 0;
-            while (aboveIdx < aboveLanes.length || belowIdx < belowLanes.length) {
-                if (belowIdx < belowLanes.length) {
-                    availableLanes.push(belowLanes[belowIdx++]);
-                }
-                if (aboveIdx < aboveLanes.length) {
-                    availableLanes.push(aboveLanes[aboveIdx++]);
-                }
-            }
-
-            const getCurrentlyOccupiedCoords = () => {
-                const occupied = [];
-                Object.values(this.combatants).forEach(c => {
-                    if (!c || c.dead) return;
-                    if (Array.isArray(c.occupiedCoords)) {
-                        c.occupiedCoords.forEach(coord => {
-                            if (!occupied.some(o => o.x === coord.x && o.y === coord.y)) {
-                                occupied.push({ x: coord.x, y: coord.y });
-                            }
-                        });
-                    } else if (c.coordinates) {
-                        if (!occupied.some(o => o.x === c.coordinates.x && o.y === c.coordinates.y)) {
-                            occupied.push({ x: c.coordinates.x, y: c.coordinates.y });
-                        }
-                    }
-                });
-                return occupied;
-            };
-
-            const getOccupiedCoordsForPos = (x, y, isHuge, isLarge) => {
-                const coords = [{ x, y }];
-                if (isHuge) {
-                    const hOffset = (x >= 4) ? -1 : 1;
-                    const extra = [
-                        { x: x, y: y - 1 },
-                        { x: x, y: y - 2 },
-                        { x: x + hOffset, y: y },
-                        { x: x + hOffset, y: y - 1 },
-                        { x: x + hOffset, y: y - 2 },
-                        { x: x + 2 * hOffset, y: y },
-                        { x: x + 2 * hOffset, y: y - 1 },
-                        { x: x + 2 * hOffset, y: y - 2 }
-                    ];
-                    extra.forEach(c => {
-                        if (!coords.some(existing => existing.x === c.x && existing.y === c.y)) {
-                            coords.push(c);
-                        }
-                    });
-                } else if (isLarge) {
-                    const hOffset = (x >= 4) ? -1 : 1;
-                    const extra = [
-                        { x: x, y: y - 1 },
-                        { x: x + hOffset, y: y },
-                        { x: x + hOffset, y: y - 1 }
-                    ];
-                    extra.forEach(c => {
-                        if (!coords.some(existing => existing.x === c.x && existing.y === c.y)) {
-                            coords.push(c);
-                        }
-                    });
-                }
-                return coords;
-            };
-
-            this.data.minions.forEach((e, i) => {
-                e.isMinion = true;
-                e.isMonster = true;
-
-                const isMinionHuge = !e.isShrineGuardian && (
-                    (typeof e.huge === 'boolean' && e.huge === true)
-                    || (e.type === 'dragon')
-                    || (e.tier === 4)
-                    || (typeof e.size === 'number' && e.size === 3)
-                    || (typeof e.scale === 'number' && e.scale === 3)
-                );
-                const isMinionLarge = !e.isShrineGuardian && (
-                    !isMinionHuge && (
-                        (typeof e.large === 'boolean' && e.large === true)
-                        || (typeof e.isLarge === 'boolean' && e.isLarge === true)
-                        || (e.type && LARGE_COMBAT_KEYS.includes(e.type))
-                        || (e.key && LARGE_COMBAT_KEYS.includes(e.key))
-                        || (typeof e.size === 'number' && e.size >= 2)
-                        || (typeof e.scale === 'number' && e.scale >= 2)
-                        || (e.tier === 3)
-                    )
-                );
-
-                const currentlyOccupied = getCurrentlyOccupiedCoords();
-                let assignedCoord = null;
-
-                const maxColOffset = (e.type === 'beholder_minion' || e.key === 'beholder_minion') ? 2 : 5;
-                for (let colOffset = 0; colOffset < maxColOffset; colOffset++) {
-                    const targetX = MAX_DEPTH - colOffset;
-                    for (let laneIdx = 0; laneIdx < availableLanes.length; laneIdx++) {
-                        const targetY = availableLanes[laneIdx];
-                        
-                        const minionOccupied = getOccupiedCoordsForPos(targetX, targetY, isMinionHuge, isMinionLarge);
-                        
-                        const allInBounds = minionOccupied.every(c => c.x >= 0 && c.x <= MAX_DEPTH && c.y >= 0 && c.y < MAX_LANES);
-                        if (!allInBounds) continue;
-                        
-                        const overlaps = minionOccupied.some(c => currentlyOccupied.some(o => o.x === c.x && o.y === c.y));
-                        if (!overlaps) {
-                            assignedCoord = { x: targetX, y: targetY };
-                            break;
-                        }
-                    }
-                    if (assignedCoord) break;
-                }
-
-                if (!assignedCoord) {
-                    for (let colOffset = 0; colOffset < 5; colOffset++) {
-                        const targetX = MAX_DEPTH - colOffset;
-                        for (let y = 0; y < MAX_LANES; y++) {
-                            const minionOccupied = getOccupiedCoordsForPos(targetX, y, isMinionHuge, isMinionLarge);
-                            const allInBounds = minionOccupied.every(c => c.x >= 0 && c.x <= MAX_DEPTH && c.y >= 0 && c.y < MAX_LANES);
-                            if (!allInBounds) continue;
-                            const overlaps = minionOccupied.some(c => currentlyOccupied.some(o => o.x === c.x && o.y === c.y));
-                            if (!overlaps) {
-                                assignedCoord = { x: targetX, y: y };
-                                break;
-                            }
-                        }
-                        if (assignedCoord) break;
-                    }
-                }
-
-                e.coordinates = assignedCoord;
-
-                const minion = createFighter(e, callbacks, this.FIGHT_INTERVAL);
-                minion.isMinion = true;
-                minion.isMonster = true;
-                minion.isShrineGuardian = e.isShrineGuardian;
-                minion.tier = e.tier || 1;
-                minion.maxEndurance = e.stats.vitality || Math.round(20 + (e.stats.def || 5) * 2);
-                minion.endurance = minion.maxEndurance;
-                minion.enduranceFrozenRounds = 0;
-                minion.cooldowns = {};
-                minion.movesTakenThisRound = 0;
-                minion.actionsTakenThisRound = 0;
-
-                this.combatants[minion.id] = minion;
-                this._initializeInitialCooldowns(minion);
-                this._setCombatantOccupiedCoords(minion, this.combatants);
-                this._makeHpEffectsAware(minion);
+            this.data.minions.forEach(e => {
+                this.populateSingleMinion(e);
             });
         }
     };
@@ -663,9 +667,31 @@ export function CombatManagerRedux() {
             await delay(800);
 
             // --- Stage 3: Minions Appear ---
-            this.populateMinions();
-            if (typeof this.updateData === 'function') {
-                this.updateData(clone(this.combatants));
+            if (this.data && this.data.minions && this.data.minions.length > 0 && !this.minionsPopulated) {
+                this.minionsPopulated = true;
+                for (let i = 0; i < this.data.minions.length; i++) {
+                    const minion = this.populateSingleMinion(this.data.minions[i]);
+                    if (minion) {
+                        minion.fadingIn = true;
+                        combatClock.setTimeout(() => {
+                            minion.fadingIn = false;
+                            if (typeof this.updateData === 'function') {
+                                this.updateData(clone(this.combatants));
+                            }
+                        }, 500);
+                    }
+                    if (typeof this.updateData === 'function') {
+                        this.updateData(clone(this.combatants));
+                    }
+                    if (i < this.data.minions.length - 1) {
+                        await delay(220);
+                    }
+                }
+            } else {
+                this.populateMinions();
+                if (typeof this.updateData === 'function') {
+                    this.updateData(clone(this.combatants));
+                }
             }
             await delay(800);
 
@@ -850,9 +876,6 @@ export function CombatManagerRedux() {
         this._combatCallbacks = callbacks;
 
         const colors = ['#7b5e8c', '#506e86', '#5f7055', '#b88d4c'];
-        const activeCrew = (this.data?.crew || []).filter(e => e && !e.dead && (typeof e.hp !== 'number' || e.hp > 0));
-        const isSinglePlayerUnit = activeCrew.length === 1;
-        const middleLaneY = 2; // Center-back position (middle lane instead of top lane)
         let activeIdx = 0;
 
         (this.data?.crew || []).forEach((e, index) => {
@@ -885,6 +908,11 @@ export function CombatManagerRedux() {
             } else if (e.type === 'monk') {
                 e.attacks = e.attacks || [];
                 if (!e.attacks.includes('punch') && !e.attacks.includes('monk_punch')) e.attacks.push('punch');
+            } else if (e.type === 'hollow' || e.class === 'hollow' || e.image === 'hollow') {
+                e.attacks = e.attacks || [];
+                if (!e.attacks.includes('void_touch')) e.attacks.push('void_touch');
+                e.specials = e.specials || [];
+                if (!e.specials.includes('death_grasp')) e.specials.push('death_grasp');
             }
 
             // Check if unit has archaic_rune equipped in their pet slot, grant them the summon_familiar special skill
@@ -901,7 +929,9 @@ export function CombatManagerRedux() {
                 }
             }
 
-            e.coordinates = { x: 0, y: isSinglePlayerUnit ? middleLaneY : activeIdx };
+            const laneY = CENTER_OUT_LANES[activeIdx % CENTER_OUT_LANES.length];
+            const laneX = Math.floor(activeIdx / CENTER_OUT_LANES.length);
+            e.coordinates = { x: laneX, y: laneY };
             e.color = colors[activeIdx % colors.length];
             activeIdx++;
 
@@ -1076,7 +1106,10 @@ export function CombatManagerRedux() {
                     image: typeName,
                     class: typeName,
                     facing: e.facing || 'left',
-                    coordinates: { x: MAX_DEPTH, y: isSingleOpponent ? 2 : Math.min(opponentIdx, 5) }
+                    coordinates: {
+                        x: MAX_DEPTH - Math.floor(opponentIdx / CENTER_OUT_LANES.length),
+                        y: CENTER_OUT_LANES[opponentIdx % CENTER_OUT_LANES.length]
+                    }
                 };
                 opponentIdx++;
 
@@ -4185,6 +4218,7 @@ export function CombatManagerRedux() {
             case 'glitterburn': return this._aiGlitterburn(unit);
             case 'starlight_decoy': return;
             case 'summoner': return this._aiSummoner(unit);
+            case 'hollow': return this._aiHollow(unit);
             case 'engineer': return this._aiEngineer(unit);
             case 'turret': return this._aiTurret(unit);
             case 'walker': return this._aiWalker(unit);
@@ -5636,6 +5670,71 @@ export function CombatManagerRedux() {
         const notchAction = { ...pick, cooldown: 0 };
         this.useAbility(unit, notchAction, unit);
         unit.arrowNotched = true;
+    };
+
+    // HOLLOW: Necrotic void wanderer with lifesteal, void touch, and spectral evasion
+    this._aiHollow = (unit) => {
+        this.acquireTarget(unit, true);
+        const target = this.combatants[unit.targetId];
+        if (!target) return;
+
+        // Ultimate check: dark_apotheosis if ready
+        if (this._abilityReady(unit, 'dark_apotheosis')) {
+            const pick = this.resolveSpecial(unit, 'dark_apotheosis');
+            if (pick) {
+                this.useAbility(unit, pick, target);
+                return;
+            }
+        }
+
+        // Low HP defensive check: spectral_step
+        const isLowHp = unit.hp <= (unit.starting_hp || 1) * 0.45;
+        if (isLowHp && this._abilityReady(unit, 'spectral_step')) {
+            const pick = this.resolveSpecial(unit, 'spectral_step');
+            if (pick) {
+                this.useAbility(unit, pick, unit);
+                return;
+            }
+        }
+
+        // Lifesteal if damaged: soul_rend
+        const isDamaged = unit.hp < (unit.starting_hp || 1) * 0.8;
+        if (isDamaged && this._abilityReady(unit, 'soul_rend') && this.targetInRange(unit, target, 'medium')) {
+            const pick = this.resolveSpecial(unit, 'soul_rend');
+            if (pick) {
+                this.useAbility(unit, pick, target);
+                return;
+            }
+        }
+
+        // Crowd control: abyssal_chains
+        if (this._abilityReady(unit, 'abyssal_chains') && this.targetInRange(unit, target, 'medium') && !target.ensnared) {
+            const pick = this.resolveSpecial(unit, 'abyssal_chains');
+            if (pick) {
+                this.useAbility(unit, pick, target);
+                return;
+            }
+        }
+
+        // Death grasp (ranged necrotic crush)
+        if (this._abilityReady(unit, 'death_grasp') && this.targetInRange(unit, target, 'medium')) {
+            const pick = this.resolveSpecial(unit, 'death_grasp');
+            if (pick) {
+                this.useAbility(unit, pick, target);
+                return;
+            }
+        }
+
+        // Close range attack or pathfind
+        if (this.targetInRange(unit, target, 'close')) {
+            if (this._abilityReady(unit, 'void_touch')) {
+                const pick = this.resolveSpecial(unit, 'void_touch') || { id: 'void_touch', range: 'close', type: 'damage', atkPercentage: 110, damageType: 'necrotic' };
+                this.useAbility(unit, pick, target);
+                return;
+            }
+        }
+
+        return this._aiGeneric(unit);
     };
 
     // SUMMONER: Support/summon. Opens rift first, then summons minions based on priority.
@@ -10095,7 +10194,7 @@ export function CombatManagerRedux() {
             'claw_strike', 'claws', 'bite', 'crush', 'tackle', 'stomp', 'head_butt',
             'slash', 'barbarian_slash', 'cleave', 'barbarian_cleave', 'imbued_strike',
             'monk_punch', 'punch', 'force_punch', 'shield_slam', 'shield_bash',
-            'sword_swing', 'rake', 'gore_horns'
+            'sword_swing', 'rake', 'gore_horns', 'void_touch'
         ].includes(abilityId);
         if (abilityId === 'notch') {
             unit.arrowNotched = true;
@@ -11257,6 +11356,53 @@ export function CombatManagerRedux() {
 
             if (this.animManagerRedux && typeof this.animManagerRedux.triggerAbility === 'function') {
                 this.animManagerRedux.triggerAbility(unit.coordinates, unit.coordinates, 'stomp', false, null, unit.id);
+            }
+            if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
+            return;
+        }
+
+        if (abilityId === 'spectral_step') {
+            const dur = 2;
+            this._applyBuff(unit, { evasion: 40 }, 'Spectral Step', dur);
+            unit.damageIndicators = unit.damageIndicators || [];
+            unit.damageIndicators.push({ id: combatClock.now() + Math.random(), value: '+Evasion', source: 'Spectral Step', type: 'buff' });
+            this.appendCombatLog(`${this.getCombatantLogName(unit)} activates Spectral Step (+40% Evasion)!`);
+            if (this.animManagerRedux && typeof this.animManagerRedux.triggerAbility === 'function') {
+                this.animManagerRedux.triggerAbility(unit.coordinates, unit.coordinates, 'spectral_step', false, null, unit.id);
+            }
+            if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
+            return;
+        }
+
+        if (abilityId === 'dark_apotheosis') {
+            let hitCount = 0;
+            const atkDmg = unit.stats.atk || 12;
+            const rawDamage = Math.round(atkDmg * 2.0);
+
+            Object.values(this.combatants).forEach(c => {
+                if (!c || c.dead || c.isVCT) return;
+                const isEnemy = (!!unit.isMonster !== !!c.isMonster);
+                if (!isEnemy) return;
+
+                const finalDmg = this.damageCheck(unit, c, rawDamage, true);
+                c.hp = Math.max(0, c.hp - finalDmg);
+                this.checkShrinerConcentrationDamage(unit, c, finalDmg);
+                if (finalDmg > 0) this.wakeSleepingTarget(c, 'Dark Apotheosis');
+                c.damageIndicators = c.damageIndicators || [];
+                c.damageIndicators.push({
+                    id: combatClock.now() + Math.random(),
+                    value: `-${finalDmg}`,
+                    source: 'Dark Apotheosis',
+                    type: 'crit'
+                });
+                hitCount++;
+                if (c.hp <= 0) this.targetKilled(c);
+            });
+
+            this.appendCombatLog(`💥 ${this.getCombatantLogName(unit)} unleashes Dark Apotheosis! Strikes ${hitCount} enemies with necrotic energy!`);
+
+            if (this.animManagerRedux && typeof this.animManagerRedux.triggerAbility === 'function') {
+                this.animManagerRedux.triggerAbility(unit.coordinates, target ? target.coordinates : unit.coordinates, 'dark_apotheosis', false, null, unit.id);
             }
             if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
             return;
@@ -12834,6 +12980,23 @@ export function CombatManagerRedux() {
                         unit.damageIndicators = unit.damageIndicators || [];
                         unit.damageIndicators.push({ id: combatClock.now() + Math.random() + 50, value: `+${healAmt}`, source: 'Vampiric Bite', type: 'heal' });
                         this.appendCombatLog(`${this.getCombatantLogName(unit)} heals for ${healAmt} from Vampiric Bite.`);
+                    }
+
+                    if (abilityId === 'soul_rend' || (ability && ability.lifestealPercent)) {
+                        const lifestealPct = (ability && ability.lifestealPercent) ? (ability.lifestealPercent / 100) : 0.25;
+                        const healAmt = Math.max(1, Math.round(finalDmg * lifestealPct));
+                        unit.hp = Math.min(unit.starting_hp || unit.hp, unit.hp + healAmt);
+                        unit.damageIndicators = unit.damageIndicators || [];
+                        unit.damageIndicators.push({ id: combatClock.now() + Math.random() + 50, value: `+${healAmt}`, source: ability.name || 'Soul Rend', type: 'heal' });
+                        this.appendCombatLog(`${this.getCombatantLogName(unit)} siphons ${healAmt} HP from ${this.getCombatantLogName(target)} via ${ability.name || 'Soul Rend'}.`);
+                    }
+
+                    if (abilityId === 'abyssal_chains') {
+                        const dur = 2;
+                        target.ensnared = true;
+                        target.ensnaredRounds = Math.max(target.ensnaredRounds || 0, dur);
+                        this._applyDebuff(target, { decrease_stats: { stats: [{ stat: 'def', amount: 3 }] } }, 'Ensnared', dur);
+                        this.appendCombatLog(`${this.getCombatantLogName(target)} is ensnared by Abyssal Chains!`);
                     }
 
                     if (abilityId === 'voidbite' && !this.isFamiliarUnit(target)) {

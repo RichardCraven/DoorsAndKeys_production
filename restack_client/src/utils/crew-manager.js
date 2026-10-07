@@ -1525,7 +1525,7 @@ export function CrewManager() {
                 { id: 'mira', name: 'Mira', defaultName: 'Mira', portrait: images['hollow_alt_portrait'], image: 'hollow_alt' }
             ],
             inventory: [],
-            skills: ['void_touch', 'death_grasp'],
+            skills: ['void_touch', 'death_grasp', 'soul_rend', 'spectral_step', 'abyssal_chains', 'dark_apotheosis'],
             passives: ['undying_presence', 'dungeon_sense'],
             weaknesses: ['fire', 'electricity', 'crushing'],
             description: 'A wanderer caught between the living realm and the eternal dark, resurrected by the dungeon itself to walk its haunted corridors.',

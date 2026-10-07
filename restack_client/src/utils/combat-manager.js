@@ -677,8 +677,7 @@ export function CombatManager() {
         // const colors_withColorSquare = [' #b710d5',' #6495ed',' #73b746',' #f4d013']
         const colors = ['#b710d5', '#6495ed', '#73b746', '#f4d013']
 
-        const activeCrew = (this.data?.crew || []).filter(e => e && !e.dead && (typeof e.hp !== 'number' || e.hp > 0));
-        const isSinglePlayerUnit = activeCrew.length === 1;
+        const CENTER_OUT_LANES = [2, 3, 1, 4, 0, 5];
         let activeIdx = 0;
 
         this.data.crew.forEach((e, index) => {
@@ -686,7 +685,9 @@ export function CombatManager() {
             if (e && (e.dead === true || e.hp === 0)) {
                 return;
             }
-            e.coordinates = { x: 0, y: isSinglePlayerUnit ? 2 : activeIdx };
+            const laneY = CENTER_OUT_LANES[activeIdx % CENTER_OUT_LANES.length];
+            const laneX = Math.floor(activeIdx / CENTER_OUT_LANES.length);
+            e.coordinates = { x: laneX, y: laneY };
             // e.coordinates = {x:0, y:index}
             e.manualMovesCurrent = 20;
             // e.manualMovesTotal = 25
@@ -954,14 +955,17 @@ export function CombatManager() {
                 return occupied;
             };
 
-            this.data.minions.forEach((e, i) => {
+            const CENTER_OUT_LANES = [2, 3, 1, 4, 0, 5];
+
+            this.populateSingleMinion = (e) => {
+                if (!e) return null;
                 e.isMinion = true;
                 const currentlyOccupied = getCurrentlyOccupied();
                 let assignedCoord = null;
 
                 for (let colOffset = 0; colOffset < 5; colOffset++) {
                     const targetX = MAX_DEPTH - colOffset;
-                    for (let targetY = 0; targetY < MAX_LANES; targetY++) {
+                    for (const targetY of CENTER_OUT_LANES) {
                         if (!currentlyOccupied.some(o => o.x === targetX && o.y === targetY)) {
                             assignedCoord = { x: targetX, y: targetY };
                             break;
@@ -971,7 +975,7 @@ export function CombatManager() {
                 }
 
                 if (!assignedCoord) {
-                    assignedCoord = { x: MAX_DEPTH, y: 0 };
+                    assignedCoord = { x: MAX_DEPTH, y: 2 };
                 }
 
                 e.coordinates = assignedCoord;
@@ -983,12 +987,38 @@ export function CombatManager() {
                 
                 const ai = this.monsterAI.roster[m.type];
                 if (ai && ai.initialize) ai.initialize(m);
-            });
+                return m;
+            };
+
+            this.populateMinions = () => {
+                if (this.data && this.data.minions) {
+                    this.data.minions.forEach((e) => {
+                        this.populateSingleMinion(e);
+                    });
+                }
+            };
         }
     }
     this.beginGreeting = () => {
-        this.triggerMonsterGreeting().then(e => {
-            this.populateMinions();
+        this.triggerMonsterGreeting().then(async e => {
+            if (this.data && this.data.minions && this.data.minions.length > 0 && typeof this.populateSingleMinion === 'function') {
+                for (let i = 0; i < this.data.minions.length; i++) {
+                    const minion = this.populateSingleMinion(this.data.minions[i]);
+                    if (minion) {
+                        minion.fadingIn = true;
+                        setTimeout(() => {
+                            minion.fadingIn = false;
+                            this.broadcastDataUpdate();
+                        }, 500);
+                    }
+                    this.broadcastDataUpdate();
+                    if (i < this.data.minions.length - 1) {
+                        await new Promise(res => setTimeout(res, 220));
+                    }
+                }
+            } else {
+                this.populateMinions();
+            }
             this.greetingComplete();
             this.kickOffTurnCycles();
             this.broadcastDataUpdate();
