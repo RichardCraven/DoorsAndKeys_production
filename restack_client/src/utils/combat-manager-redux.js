@@ -54,7 +54,7 @@ export function CombatManagerRedux() {
     this.roundTimeRemainingRatio = 1.0;
     this.roundTimeElapsedMs = 0;
     this.gameSpeed = 'slow'; // 'slowest' | 'slow' | 'fast'
-    this.roundDurationMs = 2000;
+    this.roundDurationMs = 2800;
     this.combatPaused = false;
     this.combatOver = false;
     this.turnsExecuting = false;
@@ -73,7 +73,7 @@ export function CombatManagerRedux() {
 
     // Mummy status change logging/diagnostic helper removed
 
-    const getRoundDurationMs = () => this.roundDurationMs || (this.gameSpeed === 'fast' ? 1000 : 2000);
+    const getRoundDurationMs = () => this.roundDurationMs || (this.gameSpeed === 'fast' ? 1000 : this.gameSpeed === 'slowest' ? 4200 : 2800);
     const getDurationMsFromRounds = (rounds) => Math.max(0, (rounds || 0) * getRoundDurationMs());
 
     const getUnitStaggerDelay = (unit) => {
@@ -373,17 +373,27 @@ export function CombatManagerRedux() {
     };
 
     this.updateAllFightIntervals = (newInterval) => {
-        this.FIGHT_INTERVAL = newInterval;
-        if (newInterval === INTERVALS[0]) {
+        const normalizedInterval = typeof newInterval === 'number'
+            ? newInterval
+            : (newInterval === 'slowest' ? INTERVALS[0] : newInterval === 'fast' ? INTERVALS[2] : INTERVALS[1]);
+
+        this.FIGHT_INTERVAL = normalizedInterval;
+        if (normalizedInterval === INTERVALS[0] || newInterval === 'slowest') {
             this.gameSpeed = 'slowest';
-            this.roundDurationMs = 3000;
-        } else if (newInterval === INTERVALS[1]) {
+            this.roundDurationMs = 4200;
+        } else if (normalizedInterval === INTERVALS[1] || newInterval === 'slow' || normalizedInterval === 40) {
             this.gameSpeed = 'slow';
-            this.roundDurationMs = 2000;
+            this.roundDurationMs = 2800;
         } else {
             this.gameSpeed = 'fast';
             this.roundDurationMs = 1000;
         }
+
+        Object.values(this.combatants || {}).forEach(c => {
+            if (c && typeof c.setFightInterval === 'function') {
+                c.setFightInterval(this.FIGHT_INTERVAL);
+            }
+        });
     };
 
     try {
@@ -12944,7 +12954,7 @@ export function CombatManagerRedux() {
 
                     if (abilityId === 'hex') {
                         const dur = getDurationRounds(ability.duration || 'medium');
-                        const durMs = dur * (this.roundDurationMs || (this.gameSpeed === 'fast' ? 1000 : 2000));
+                        const durMs = dur * (this.roundDurationMs || (this.gameSpeed === 'fast' ? 1000 : this.gameSpeed === 'slowest' ? 4200 : 2800));
                         target.hexed = true;
                         target.hexRounds = dur;
                         target.hexTotalRounds = dur;
@@ -14103,7 +14113,7 @@ export function CombatManagerRedux() {
                 return;
             }
 
-            const roundDurationMs = this.roundDurationMs || (this.gameSpeed === 'fast' ? 1000 : 2000);
+            const roundDurationMs = this.roundDurationMs || (this.gameSpeed === 'fast' ? 1000 : this.gameSpeed === 'slowest' ? 4200 : 2800);
             const quarterRoundMs = roundDurationMs / 4;
 
             unit.soulSuckChanneling.elapsedMs += deltaMs;
@@ -14167,7 +14177,7 @@ export function CombatManagerRedux() {
         });
 
         // Tick and move spider minions
-        const spiderRoundDurationMs = this.roundDurationMs || (this.gameSpeed === 'fast' ? 1000 : 2000);
+        const spiderRoundDurationMs = this.roundDurationMs || (this.gameSpeed === 'fast' ? 1000 : this.gameSpeed === 'slowest' ? 4200 : 2800);
         const halfRoundMs = spiderRoundDurationMs / 2;
         Object.values(this.combatants).forEach(c => {
             if (c && c.type === 'spider_minion' && !c.dead) {
@@ -14212,7 +14222,7 @@ export function CombatManagerRedux() {
             const deltaMs = now - lastTickTime;
             lastTickTime = now;
 
-            const roundDurationMs = this.roundDurationMs || (this.gameSpeed === 'fast' ? 1000 : 2000);
+            const roundDurationMs = this.roundDurationMs || (this.gameSpeed === 'fast' ? 1000 : this.gameSpeed === 'slowest' ? 4200 : 2800);
             this.roundTimeElapsedMs += deltaMs;
 
             if (this.roundTimeElapsedMs >= roundDurationMs) {

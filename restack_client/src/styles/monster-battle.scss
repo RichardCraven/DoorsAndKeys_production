@@ -7297,11 +7297,11 @@
 
 @keyframes fireballTravel {
     0% {
-        transform: translate(0, 0);
+        transform: translate3d(0, 0, 0);
     }
 
     100% {
-        transform: translate(var(--fb-dx), var(--fb-dy));
+        transform: translate3d(var(--fb-dx), var(--fb-dy), 0);
     }
 }
 
