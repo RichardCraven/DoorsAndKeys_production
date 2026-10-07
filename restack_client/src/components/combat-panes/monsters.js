@@ -1,6 +1,6 @@
 import React from 'react';
 import Overlay from '../Overlay';
-import { ROCK_DURATION } from '../../utils/shared-constants';
+import { ROCK_DURATION, FIGHTER_MOVE_TRANSITION_MS } from '../../utils/shared-constants';
 
 const getMonsterPortrait = (monster, battleData, greetingInProcess) => {
     const liveUnit = battleData?.[monster.id] || monster;
@@ -325,7 +325,7 @@ const MonstersCombatGrid = ({
         // Accept teleportingFighterId as a prop (passed in destructured args)
         return (typeof teleportingFighterId !== 'undefined' && teleportingFighterId === id);
     };
-    const transitionStyle = (id) => ({ transition: isTeleporting(id) ? 'none' : '1s' });
+    const transitionStyle = (id) => ({ transition: isTeleporting(id) ? 'none' : `top ${FIGHTER_MOVE_TRANSITION_MS}ms ease-out, left ${FIGHTER_MOVE_TRANSITION_MS}ms ease-out` });
     // Helper: compute inline CSS vars for hit animations so wrappers always expose
     // --portrait-* properties even if stylesheet selectors fail to match.
     // DEBUG: toggle to temporarily increase bulge so the effect is visible while testing.

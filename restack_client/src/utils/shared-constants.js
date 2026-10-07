@@ -1,6 +1,6 @@
 // Shared constants for combat speed intervals and their display names
 
-export const INTERVALS = [90, 40, 10, 1];
+export const INTERVALS = [110, 65, 10, 1];
 // Number of FIGHT_INTERVAL ticks in one full turn cycle at reference speed-10.
 // Used by kickoffSpecialCooldown (combat-manager.js) and duration timers in AI profiles.
 // 1 "era" in specials-matrix = TICKS_PER_ERA interval ticks.

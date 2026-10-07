@@ -16,7 +16,7 @@ const NUM_COLUMNS = 8;
 const MAX_LANES = 5
 // const this.FIGHT_INTERVAL = 8;
 // const intervals = [5, 10, 40, 90]
-const FIGHT_INTERVAL = INTERVALS[1]; // 'Slow' (40)
+const FIGHT_INTERVAL = INTERVALS[1]; // 'Slow' (65)
 // Number of FIGHT_INTERVAL ticks in one full turn cycle at reference speed-10.
 // Imported from shared-constants (TICKS_PER_ERA = 250). Used by kickoffSpecialCooldown.
 const DEBUG_STEPS = false;
@@ -42,15 +42,18 @@ const formatCombatText = (value) => String(value || '')
 export function CombatManager() {
     // Update all combatants' intervals and restart their turn cycles
     this.updateAllFightIntervals = (newInterval) => {
-        this.FIGHT_INTERVAL = newInterval;
+        const normalizedInterval = typeof newInterval === 'number'
+            ? newInterval
+            : (newInterval === 'slowest' ? INTERVALS[0] : newInterval === 'fast' ? INTERVALS[2] : INTERVALS[1]);
+        this.FIGHT_INTERVAL = normalizedInterval;
         Object.values(this.combatants).forEach(c => {
             if (typeof c.setFightInterval === 'function') {
-                c.setFightInterval(newInterval);
+                c.setFightInterval(normalizedInterval);
             }
         });
         // Notify AI modules so their internal data.INTERVAL_TIME stays in sync
         if (this._intervalTimeListeners) {
-            this._intervalTimeListeners.forEach(cb => { try { cb(newInterval); } catch (e) { } });
+            this._intervalTimeListeners.forEach(cb => { try { cb(normalizedInterval); } catch (e) { } });
         }
     }
     // Assign this.FIGHT_INTERVAL to the instance for external access
