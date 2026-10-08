@@ -1098,17 +1098,7 @@ ul.dropdown-menu.show {
             radial-gradient(ellipse at 50% 0%, rgba(60, 45, 15, 0.45) 0%, transparent 65%),
             radial-gradient(ellipse at 0% 50%, rgba(30, 20, 5, 0.6) 0%, transparent 50%),
             radial-gradient(ellipse at 100% 50%, rgba(30, 20, 5, 0.6) 0%, transparent 50%),
-            radial-gradient(ellipse at 50% 100%, rgba(15, 10, 3, 0.7) 0%, transparent 55%),
-            repeating-linear-gradient(0deg,
-                transparent,
-                transparent 48px,
-                rgba(249, 177, 21, 0.018) 48px,
-                rgba(249, 177, 21, 0.018) 49px),
-            repeating-linear-gradient(90deg,
-                transparent,
-                transparent 48px,
-                rgba(249, 177, 21, 0.018) 48px,
-                rgba(249, 177, 21, 0.018) 49px);
+            radial-gradient(ellipse at 50% 100%, rgba(15, 10, 3, 0.7) 0%, transparent 55%);
         overflow: scroll;
 
         .level-wrapper {
@@ -1243,16 +1233,8 @@ ul.dropdown-menu.show {
                 .plane-board-display {
                     min-height: 250px;
                     min-width: 250px;
-                    border: 1px solid rgba(249, 177, 21, 0.12);
-                    // Empty drag target: dark stone with subtle dashed amber border
-                    background-color: #0f0d0a;
-                    background-image:
-                        radial-gradient(ellipse at center, rgba(40, 28, 8, 0.8) 0%, rgba(8, 6, 3, 0.95) 100%),
-                        repeating-linear-gradient(45deg,
-                            transparent,
-                            transparent 6px,
-                            rgba(249, 177, 21, 0.015) 6px,
-                            rgba(249, 177, 21, 0.015) 7px);
+                    border: none;
+                    background-color: transparent;
                     display: flex;
                     align-items: center;
                     justify-content: center;
@@ -1264,9 +1246,15 @@ ul.dropdown-menu.show {
                     letter-spacing: 0.5px;
                     transition: border-color 0.2s ease, background-color 0.2s ease;
 
-                    &:hover {
-                        border-color: rgba(249, 177, 21, 0.35);
-                        background-color: rgba(20, 14, 4, 0.98);
+                    &:not(:has(.plane-preview)) {
+                        background-color: #0f0d0a;
+                        background-image: radial-gradient(ellipse at center, rgba(40, 28, 8, 0.8) 0%, rgba(8, 6, 3, 0.95) 100%);
+                        border: 1px dashed rgba(249, 177, 21, 0.2);
+
+                        &:hover {
+                            border-color: rgba(249, 177, 21, 0.45);
+                            background-color: rgba(20, 14, 4, 0.98);
+                        }
                     }
 
                     .canvas-overlay-container {

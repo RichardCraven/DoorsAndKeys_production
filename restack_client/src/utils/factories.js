@@ -69,7 +69,7 @@ export function createFighter(fighter, callbacks, FIGHT_INTERVAL) {
     let rawAttacks = [];
     let rawSpecials = [];
     const BASIC_ATTACK_KEYS = [
-        'slash', 'magic_missile', 'monk_punch', 'punch', 'heal', 'loose', 
+        'slash', 'magic_missile', 'monk_punch', 'punch', 'heal', 'loose', 'hunting_knife',
         'barbarian_slash', 'sword_swing', 'axe_throw', 'summon_skeleton', 
         'claw_strike', 'claws', 'rake', 'gore_horns', 'snake_strike', 
         'grasp', 'void_lance', 'crush', 'tackle', 'major_magic_missile', 'greater_magic_missile', 

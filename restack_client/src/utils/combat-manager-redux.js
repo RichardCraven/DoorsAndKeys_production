@@ -901,6 +901,7 @@ export function CombatManagerRedux() {
                 if (!e.specials.includes('notch')) e.specials.push('notch');
                 e.attacks = e.attacks || [];
                 if (!e.attacks.includes('loose')) e.attacks.push('loose');
+                if (!e.attacks.includes('hunting_knife')) e.attacks.push('hunting_knife');
             } else if (e.type === 'engineer' || e.class === 'engineer' || e.image === 'engineer') {
                 e.specials = e.specials || [];
                 if (!e.specials.includes('build_turret')) e.specials.push('build_turret');
@@ -5556,6 +5557,30 @@ export function CombatManagerRedux() {
             this.repositionUnit(unit, adjacentEnemies[0], 'retreat');
         }
 
+        // Close-quarters combat fallback: if an enemy remains adjacent / in close range after repositioning,
+        // or if Ranger gets cornered, strike with Hunting Knife!
+        const closeEnemies = Object.values(this.combatants).filter(enemy => {
+            if (!enemy || enemy.dead || enemy.hp <= 0) return false;
+            if (!!enemy.isMonster === !!unit.isMonster) return false;
+            return this.targetInRange(unit, enemy, 'close');
+        });
+
+        if (closeEnemies.length > 0 && this._abilityReady(unit, 'hunting_knife')) {
+            const meleeTarget = closeEnemies[0];
+            const pick = this.resolveSpecial(unit, 'hunting_knife') || {
+                id: 'hunting_knife',
+                name: 'Hunting Knife',
+                range: 'close',
+                type: 'damage',
+                damageType: 'piercing',
+                atkPercentage: 110,
+                cooldown: 1
+            };
+            this.useAbility(unit, pick, meleeTarget);
+            this._setCooldown(unit, 'hunting_knife', pick.cooldown !== undefined ? pick.cooldown : 1);
+            return;
+        }
+
         // Fire Phase (arrow is notched)
         if (unit.arrowNotched) {
             if (!this.targetInRange(unit, target, 'far') && unit.movesTakenThisRound === 0) {
@@ -10209,7 +10234,7 @@ export function CombatManagerRedux() {
             'claw_strike', 'claws', 'bite', 'crush', 'tackle', 'stomp', 'head_butt',
             'slash', 'barbarian_slash', 'cleave', 'barbarian_cleave', 'imbued_strike',
             'monk_punch', 'punch', 'force_punch', 'shield_slam', 'shield_bash',
-            'sword_swing', 'rake', 'gore_horns', 'void_touch'
+            'sword_swing', 'rake', 'gore_horns', 'void_touch', 'hunting_knife'
         ].includes(abilityId);
         if (abilityId === 'notch') {
             unit.arrowNotched = true;

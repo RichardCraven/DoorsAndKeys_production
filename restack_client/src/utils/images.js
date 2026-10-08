@@ -888,6 +888,15 @@ import ranger_ensnare from '../assets/icons/combat-icons/specials/ranger/ensnare
 import ranger_net_throw from '../assets/icons/combat-icons/specials/ranger/net-throw.png'
 import eagle_eye from '../assets/icons/combat-icons/specials/ranger/eagle_eye.png'
 import ranger_acid_bomb from '../assets/icons/combat-icons/specials/ranger/acid bomb.png';
+import ranger_hunting_knife from '../assets/icons/combat-icons/specials/ranger/hunting_knife.png';
+import horologist_future_echo from '../assets/icons/combat-icons/specials/horologist/future_echo.png';
+import horologist_set_anchor from '../assets/icons/combat-icons/specials/horologist/set_anchor.png';
+import horologist_recall from '../assets/icons/combat-icons/specials/horologist/recall.png';
+import horologist_hour_of_reckoning from '../assets/icons/combat-icons/specials/horologist/hour_of_reckoning.png';
+import horologist_clockwork_heart from '../assets/icons/combat-icons/specials/horologist/clockwork_heart.png';
+import horologist_ledger_of_hours from '../assets/icons/combat-icons/specials/horologist/ledger_of_hours.png';
+import horologist_rewind_step from '../assets/icons/combat-icons/specials/horologist/rewind_step.png';
+import horologist_stopwatch from '../assets/icons/combat-icons/specials/horologist/stopwatch.png';
 import healing_hands from '../assets/icons/combat-icons/specials/sage/healing_hands.png'
 import circle_of_protection from '../assets/icons/combat-icons/specials/sage/circle_of_protection.png'
 import circle_of_deflection from '../assets/icons/combat-icons/specials/sage/circle_of_deflection.png'
@@ -1094,6 +1103,7 @@ import arcane_sense_wizard from '../assets/icons/global skills/Wizard/unlock.png
 import ley_tap_wizard from '../assets/icons/global skills/Wizard/ley tap.png';
 import dimensional_pocket_wizard from '../assets/icons/global skills/Wizard/dimensional pocket.png';
 import scry_wizard from '../assets/icons/global skills/Wizard/scry.png';
+import astral_conduit_wizard from '../assets/icons/global skills/Wizard/astral conduit.png';
 import minor_glyph from '../assets/icons/global skills/Wizard/minor_glyph.png';
 import major_glyph from '../assets/icons/global skills/Wizard/major_glyph.png';
 import supreme_glyph from '../assets/icons/global skills/Wizard/supreme_glyph.png';
@@ -2549,6 +2559,24 @@ export {
     ranger_net_throw,
     eagle_eye,
     ranger_acid_bomb,
+    ranger_hunting_knife,
+    ranger_hunting_knife as hunting_knife,
+    horologist_future_echo,
+    horologist_future_echo as future_echo,
+    horologist_set_anchor,
+    horologist_set_anchor as set_anchor,
+    horologist_recall,
+    horologist_recall as recall,
+    horologist_hour_of_reckoning,
+    horologist_hour_of_reckoning as hour_of_reckoning,
+    horologist_clockwork_heart,
+    horologist_clockwork_heart as clockwork_heart,
+    horologist_ledger_of_hours,
+    horologist_ledger_of_hours as ledger_of_hours,
+    horologist_rewind_step,
+    horologist_rewind_step as rewind_step,
+    horologist_stopwatch,
+    horologist_stopwatch as stopwatch,
     healing_hands,
     perceive,
     weakness_doubled,
@@ -2791,6 +2819,7 @@ export {
     ley_tap_wizard,
     dimensional_pocket_wizard,
     scry_wizard,
+    astral_conduit_wizard,
     minor_glyph,
     major_glyph,
     supreme_glyph,

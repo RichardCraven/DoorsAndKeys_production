@@ -31,7 +31,7 @@ const DEFAULT_CLASS_SKILLS = {
   barbarian: ['sword_swing', 'barbarian_cleave', 'barbarian_berserker', 'fury'],
   engineer: ['build_turret', 'build_walker', 'build_wall', 'engineer_repair', 'wrench_strike'],
   wizard: ['fireball', 'ice_bolt', 'arcane_shield', 'mana_overflow'],
-  ranger: ['loose', 'notch', 'mark', 'nimble_dodge', 'eagle_eye'],
+  ranger: ['loose', 'hunting_knife', 'notch', 'mark', 'nimble_dodge', 'eagle_eye'],
   sage: ['heal', 'circle_of_protection', 'owls_insight', 'herbalism', 'breadcrumbs']
 };
 

@@ -27,8 +27,19 @@ import {
   wizard,
   barbarian,
   monk,
-  summoner,
   engineer,
+  summoner,
+  ranger_alt_portrait,
+  sage_alt_portrait,
+  soldier_alt_portrait,
+  wizard_alt_portrait,
+  barbarian_alt_portrait,
+  monk_alt_portrait,
+  summoner_alt_portrait,
+  engineer_alt_portrait,
+  glitterburn_alt_portrait,
+  hollow_alt_portrait,
+  horologist_alt_portrait,
   goblin_portrait,
   soldier_portrait,
   skeleton_portrait,
@@ -528,12 +539,28 @@ const monstersData = [
   }
 ];
 
+// Map of alternate portraits for crew fighter classes
+const ALT_PORTRAITS_MAP = {
+  ranger: ranger_alt_portrait,
+  sage: sage_alt_portrait,
+  soldier: soldier_alt_portrait,
+  wizard: wizard_alt_portrait,
+  barbarian: barbarian_alt_portrait,
+  monk: monk_alt_portrait,
+  summoner: summoner_alt_portrait,
+  engineer: engineer_alt_portrait,
+  glitterburn: glitterburn_alt_portrait,
+  hollow: hollow_alt_portrait,
+  horologist: horologist_alt_portrait,
+};
+
 // Predefined list of 8 crew fighters and their test abilities
 const fightersData = [
   {
     id: 'ranger',
     name: 'Ranger',
     portrait: ranger,
+    altPortrait: ranger_alt_portrait,
     abilities: [
       { id: 'notch', name: 'Notch', desc: 'Select arrow type to load.', icon: ranger_notch, type: 'notch' },
       { id: 'loose', name: 'Loose', desc: 'Shoot the selected notched arrow.', icon: ranger_loose, type: 'loose' },
@@ -547,6 +574,7 @@ const fightersData = [
     id: 'sage',
     name: 'Sage',
     portrait: sage,
+    altPortrait: sage_alt_portrait,
     abilities: [
       { id: 'heal', name: 'Heal', desc: 'Restore 30 HP to an ally.', icon: healing_hands, type: 'heal' },
       { id: 'circle_of_protection', name: 'Circle of Protection', desc: 'Create a sanctuary that increases the Defense of all allies within a 2.25-tile radius by 15 for 6 rounds.', icon: circle_of_protection, type: 'circle_of_protection' },
@@ -558,6 +586,7 @@ const fightersData = [
     id: 'soldier',
     name: 'Soldier',
     portrait: soldier,
+    altPortrait: soldier_alt_portrait,
     abilities: [
       { id: 'slash', name: 'Slash', desc: 'Execute a heavy steel blade slash.', icon: soldier_slash, type: 'melee' },
       { id: 'shield_wall', name: 'Shield Wall', desc: 'Deploy a protective energetic wall overlay.', icon: shield_wall, type: 'shield_wall' },
@@ -574,6 +603,7 @@ const fightersData = [
     id: 'wizard',
     name: 'Wizard',
     portrait: wizard,
+    altPortrait: wizard_alt_portrait,
     abilities: [
       { id: 'fireball', name: 'Fireball', desc: 'Launch an explosive orb of flame.', icon: fireball, type: 'fireball' },
       { id: 'ice_blast', name: 'Ice Blast', desc: 'Freeze target in a block of absolute-zero ice.', icon: ice_blast_icon, type: 'ice_blast_proj' },
@@ -590,6 +620,7 @@ const fightersData = [
     id: 'barbarian',
     name: 'Barbarian',
     portrait: barbarian,
+    altPortrait: barbarian_alt_portrait,
     abilities: [
       { id: 'barbarian_slash', name: 'Slash', desc: 'Execute a fast horizontal slash.', icon: barbarian_slash, type: 'barbarian_slash' },
       { id: 'barbarian_cleave', name: 'Cleave', desc: 'Crush target skull with axe, causing bleed.', icon: barbarian_cleave, type: 'barbarian_cleave' },
@@ -603,6 +634,7 @@ const fightersData = [
     id: 'monk',
     name: 'Monk',
     portrait: monk,
+    altPortrait: monk_alt_portrait,
     abilities: [
       { id: 'monk_ethereal_speed', name: 'Ethereal Speed', desc: 'Flow like wind, gaining extreme speed and yellow glow.', icon: monk_ethereal_speed, type: 'monk_ethereal' },
       { id: 'monk_astral_focus', name: 'Astral Focus', desc: 'Enter astral focus, boosting concentration.', icon: monk_astral_focus, type: 'monk_astral_focus_type' },
@@ -622,6 +654,7 @@ const fightersData = [
     id: 'summoner',
     name: 'Summoner',
     portrait: summoner,
+    altPortrait: summoner_alt_portrait,
     abilities: [
       { id: 'open_rift', name: 'Open the Rift', desc: 'Summon a rift portal at a random open tile on the board for 3 long durations.', icon: open_rift_icon, type: 'open_rift_type', tier: 'rift' },
       { id: 'summon_skeleton', name: 'Summon Skeleton', desc: 'Summon a skeleton warrior to the field.', icon: summon_skeleton_icon, type: 'summon_skeleton_type', tier: 1 },
@@ -640,6 +673,7 @@ const fightersData = [
     id: 'engineer',
     name: 'Engineer',
     portrait: engineer,
+    altPortrait: engineer_alt_portrait,
     abilities: [
       { id: 'shoot_rifle', name: 'Shoot Rifle', desc: 'Fire a rifle shot with mechanical precision.', icon: bow_and_arrow, type: 'projectile', projectileIcon: arrowUp },
       { id: 'throw_grenade', name: 'Throw Grenade', desc: 'Toss a shrapnel bomb in an arc.', icon: fireball, type: 'projectile_arc', projectileIcon: fireball },
@@ -780,6 +814,34 @@ const SandboxPage = () => {
   const [selectedRune, setSelectedRune] = useState('archaic');
 
   // --- Combat Animations States ---
+  const [altPortraits, setAltPortraits] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('sandboxAltPortraits')) || {};
+    } catch (e) {
+      return {};
+    }
+  });
+
+  const toggleAltPortrait = (unitId, e) => {
+    if (e && typeof e.stopPropagation === 'function') {
+      e.stopPropagation();
+    }
+    setAltPortraits(prev => {
+      const next = { ...prev, [unitId]: !prev[unitId] };
+      try {
+        localStorage.setItem('sandboxAltPortraits', JSON.stringify(next));
+      } catch (err) {}
+      return next;
+    });
+  };
+
+  const getUnitPortrait = (unitId, defaultPortrait) => {
+    if (altPortraits[unitId] && (ALT_PORTRAITS_MAP[unitId] || (fightersData.find(f => f.id === unitId)?.altPortrait))) {
+      return ALT_PORTRAITS_MAP[unitId] || fightersData.find(f => f.id === unitId)?.altPortrait;
+    }
+    return defaultPortrait;
+  };
+
   const [selectedUnitType, setSelectedUnitType] = useState(localStorage.getItem('sandboxUnitType') || 'fighter');
   const [selectedFighterId, setSelectedFighterId] = useState(localStorage.getItem('sandboxFighter') || 'ranger');
   const [selectedMonsterId, setSelectedMonsterId] = useState(localStorage.getItem('sandboxMonster') || 'goblin');
@@ -6585,6 +6647,10 @@ const SandboxPage = () => {
             </div>
             {(selectedUnitType === 'monster' ? monstersData : fightersData).map(f => {
               const isSelected = selectedUnitType === 'monster' ? selectedMonsterId === f.id : selectedFighterId === f.id;
+              const hasAlt = selectedUnitType === 'fighter' && !!(f.altPortrait || ALT_PORTRAITS_MAP[f.id]);
+              const isAltActive = selectedUnitType === 'fighter' && !!altPortraits[f.id];
+              const displayPortrait = selectedUnitType === 'fighter' ? getUnitPortrait(f.id, f.portrait) : f.portrait;
+
               return (
                 <div
                   key={f.id}
@@ -6662,6 +6728,7 @@ const SandboxPage = () => {
                     setRangerPos({ row: 3, col: 0 });
                     setBetrayalBeamActive(false);
                     setBetrayalHitActive(false);
+                    setBetrayalHitActive(false);
                     setRangerBetrayalEffectActive(false);
                     setRangerBetrayalEffectEndTime(null);
                     if (selectedUnitType === 'fighter' && f.id === 'sage') {
@@ -6671,8 +6738,9 @@ const SandboxPage = () => {
                   style={{
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '15px',
-                    padding: '10px',
+                    justifyContent: 'space-between',
+                    gap: '12px',
+                    padding: '10px 14px',
                     borderRadius: '8px',
                     background: isSelected ? 'rgba(255, 183, 3, 0.12)' : 'rgba(255, 255, 255, 0.03)',
                     border: isSelected ? '2px solid #ffb703' : '2px solid transparent',
@@ -6681,11 +6749,58 @@ const SandboxPage = () => {
                     boxShadow: isSelected ? '0 0 15px rgba(255, 183, 3, 0.15)' : 'none'
                   }}
                 >
-                  <img src={f.portrait} alt={f.name} style={{ width: '50px', height: '50px', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.15)', objectFit: 'cover' }} />
-                  <div>
-                    <div style={{ fontWeight: 'bold', fontSize: '15px' }}>{f.name}</div>
-                    <div style={{ fontSize: '11px', color: '#888', textTransform: 'uppercase', marginTop: '2px', letterSpacing: '0.04em' }}>{f.id}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <img
+                      src={displayPortrait}
+                      alt={f.name}
+                      style={{
+                        width: '50px',
+                        height: '50px',
+                        borderRadius: '6px',
+                        border: isAltActive ? '2px solid #a855f7' : (isSelected ? '2px solid #ffb703' : '1px solid rgba(255,255,255,0.15)'),
+                        boxShadow: isAltActive ? '0 0 10px rgba(168, 85, 247, 0.4)' : (isSelected ? '0 0 10px rgba(255, 183, 3, 0.3)' : 'none'),
+                        objectFit: 'cover',
+                        display: 'block'
+                      }}
+                    />
+                    <div>
+                      <div style={{ fontWeight: 'bold', fontSize: '15px' }}>{f.name}</div>
+                      <div style={{ fontSize: '11px', color: '#888', textTransform: 'uppercase', marginTop: '2px', letterSpacing: '0.04em' }}>{f.id}</div>
+                    </div>
                   </div>
+
+                  {hasAlt && (
+                    <button
+                      onClick={(e) => toggleAltPortrait(f.id, e)}
+                      title={isAltActive ? "Switch to Default Portrait" : "Switch to Alt Portrait"}
+                      style={{
+                        padding: '4px 10px',
+                        fontSize: '10px',
+                        fontWeight: '700',
+                        letterSpacing: '0.05em',
+                        borderRadius: '12px',
+                        border: isAltActive ? '1px solid #c084fc' : '1px solid rgba(255,255,255,0.2)',
+                        background: isAltActive ? 'linear-gradient(135deg, #7e22ce, #a855f7)' : 'rgba(255,255,255,0.06)',
+                        color: isAltActive ? '#ffffff' : '#aaa',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease',
+                        boxShadow: isAltActive ? '0 0 8px rgba(168, 85, 247, 0.5)' : 'none',
+                        outline: 'none',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!isAltActive) e.currentTarget.style.borderColor = '#c084fc';
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!isAltActive) e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)';
+                      }}
+                    >
+                      <span>ALT</span>
+                      <span style={{ fontSize: '11px' }}>{isAltActive ? '✓' : '↻'}</span>
+                    </button>
+                  )}
                 </div>
               );
             })}
@@ -7112,7 +7227,7 @@ const SandboxPage = () => {
                             borderRadius: '8px',
                             border: '2px solid #8ecae6',
                             backgroundColor: '#222',
-                            backgroundImage: `url(${ranger})`,
+                            backgroundImage: `url(${getUnitPortrait('ranger', ranger)})`,
                             backgroundSize: 'cover',
                             backgroundPosition: 'center',
                             position: 'relative',
@@ -7270,7 +7385,7 @@ const SandboxPage = () => {
                             borderRadius: '8px',
                             border: '2px solid #ffb703',
                             backgroundColor: '#222',
-                            backgroundImage: `url(${barbarian})`,
+                            backgroundImage: `url(${getUnitPortrait('barbarian', barbarian)})`,
                             backgroundSize: 'cover',
                             backgroundPosition: 'center',
                             position: 'relative',
@@ -7310,7 +7425,7 @@ const SandboxPage = () => {
                             borderRadius: '8px',
                             border: '2px solid #ff9f1c',
                             backgroundColor: '#222',
-                            backgroundImage: `url(${monk})`,
+                            backgroundImage: `url(${getUnitPortrait('monk', monk)})`,
                             backgroundSize: 'cover',
                             backgroundPosition: 'center',
                             position: 'relative',
@@ -7410,7 +7525,7 @@ const SandboxPage = () => {
                             borderRadius: '8px',
                             border: '2px solid #2a9d8f',
                             backgroundColor: '#222',
-                            backgroundImage: `url(${soldier})`,
+                            backgroundImage: `url(${getUnitPortrait('soldier', soldier)})`,
                             backgroundSize: 'cover',
                             backgroundPosition: 'center',
                             position: 'relative',
@@ -7739,7 +7854,7 @@ const SandboxPage = () => {
                       borderRadius: '8px',
                       border: '2px solid #ffb703',
                       backgroundColor: '#222',
-                      backgroundImage: `url(${selectedFighter.portrait})`,
+                      backgroundImage: `url(${selectedUnitType === 'fighter' ? getUnitPortrait(selectedFighter.id, selectedFighter.portrait) : selectedFighter.portrait})`,
                       backgroundSize: 'cover',
                       backgroundPosition: 'center',
                       opacity: 0.75,
@@ -7762,7 +7877,7 @@ const SandboxPage = () => {
                     backgroundColor: '#222',
                     backgroundImage: `url(${(selectedUnitType === 'monster' && selectedMonsterId === 'skeleton' && skeletonReassemblyActive)
                       ? bones
-                      : selectedFighter.portrait
+                      : (selectedUnitType === 'fighter' ? getUnitPortrait(selectedFighter.id, selectedFighter.portrait) : selectedFighter.portrait)
                       })`,
                     backgroundSize: 'cover',
                     backgroundPosition: 'center',

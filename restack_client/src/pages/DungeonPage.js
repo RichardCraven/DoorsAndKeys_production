@@ -19746,7 +19746,8 @@ class DungeonPage extends React.Component {
                                 rally: { name: 'Rally', desc: '+5 bonus Resolve on combat victory' },
                                 iron_will: { name: 'Iron Will', desc: 'Party Resolve never drops below 20 from deaths' },
                                 arcane_sense: { name: 'Arcane Sense', desc: 'Identifies chest tier before opening' },
-                                ley_tap: { name: 'Ley Tap', desc: 'Draw energy at Magic Nexus — recover 15% endurance' },
+                                ley_tap: { name: 'Ley Tap', desc: 'Draw energy from Shrines — restores +15 Resolve' },
+                                astral_conduit: { name: 'Astral Conduit', desc: 'Recovers +5 Resolve for every 10 steps & reveals adjacent rooms' },
                                 dimensional_pocket: { name: 'Dimensional Pocket', desc: '+2 shared inventory slots' },
                                 scry: { name: 'Scry', desc: 'Reveals all chests and monsters for 30s once per run' },
                                 iron_gut: { name: 'Iron Gut', desc: 'Barbarian does not count toward camping food cost' },
@@ -21937,6 +21938,7 @@ class DungeonPage extends React.Component {
                                                     const isFlashing = this.state.flashingSkillSlot === slotIdx;
                                                     const currentMember = selectedMember || this.state.selectedCrewMember;
                                                     const defaultExpSkills = {
+                                                        wizard: ['astral_conduit', 'ley_tap', 'scry'],
                                                         sage: ['healing_ground', 'sing'],
                                                         ranger: ['sneak_attack', 'spike_trap'],
                                                         soldier: ['soldier_shield', 'breacher'],
@@ -28153,25 +28155,25 @@ class DungeonPage extends React.Component {
     }
 
     handleBoardTouchEnd = (e) => {
-        this._lastTouchHandledTime = Date.now();
         if (this.state.mobileTouchTileId !== null) {
             const tile = this.state.tiles[this.state.mobileTouchTileId];
             if (tile) {
-                this.handleClick(tile);
+                this.handleClick(tile, true);
             }
             this.setState({ mobileTouchTileId: null });
         }
+        this._lastTouchHandledTime = Date.now();
         if (e && typeof e.preventDefault === 'function' && e.cancelable) {
             e.preventDefault();
         }
     }
 
-    handleClick = (tile) => {
+    handleClick = (tile, isTouch = false) => {
         if (!tile || !tile.coordinates) return;
         if (this.state.keysLocked || this.state.inMonsterBattle || this.state.playerAnimating || this.state.activeConstruction) return;
 
         // Prevent synthetic mouse clicks following a touch event handled in handleBoardTouchEnd
-        if (Date.now() - (this._lastTouchHandledTime || 0) < 400) {
+        if (!isTouch && Date.now() - (this._lastTouchHandledTime || 0) < 400) {
             return;
         }
 
@@ -31250,6 +31252,7 @@ class DungeonPage extends React.Component {
         const memberName = selectedMember ? (selectedMember.name || selectedMember.type || 'Crew member') : 'Crew member';
         const memberClass = ((selectedMember && (selectedMember.type || selectedMember.image)) || '').toLowerCase();
         const defaultExpSkills = {
+            wizard: ['astral_conduit', 'ley_tap', 'scry'],
             sage: ['healing_ground', 'sing'],
             ranger: ['sneak_attack', 'spike_trap'],
             soldier: ['soldier_shield', 'breacher'],
@@ -31443,6 +31446,29 @@ class DungeonPage extends React.Component {
             } else {
                 this.displayMessage("🌈 Prismatic Flare illuminated the area!");
             }
+            return;
+        }
+
+        if (skillKey === 'astral_conduit') {
+            const bm = this.props.boardManager;
+            if (bm && Array.isArray(bm.tiles)) {
+                let roomsRevealed = 0;
+                bm.tiles.forEach(tile => {
+                    if (tile && tile.hidden) {
+                        tile.hidden = false;
+                        roomsRevealed++;
+                    }
+                });
+                if (typeof bm.refreshTiles === 'function') bm.refreshTiles();
+                this.displayMessage(`🔮 Astral Conduit activated! Focused ethereal energy and revealed ${roomsRevealed} obscured area(s).`);
+            } else {
+                this.displayMessage("🔮 Astral Conduit activated! Focused ethereal energy.");
+            }
+            return;
+        }
+
+        if (skillKey === 'ley_tap') {
+            this.displayMessage("✨ Ley Tap: Taps ambient energy at Magic Nexus points to restore endurance.");
             return;
         }
 
@@ -39677,7 +39703,7 @@ class DungeonPage extends React.Component {
                         ranger: [{ key: 'keen_eye', name: 'Keen Eye', desc: 'L1: Reveals nearby traps. L2: +3 DEX to trap saves.' }, { key: 'hunters_quarry', name: "Hunter's Quarry", desc: '+10% food drop on monster defeat' }, { key: 'trapper', name: 'Trapper', desc: '25% chance to negate any trap entirely.' }, { key: 'trailblaze', name: 'Trailblaze', desc: 'Visual breadcrumb to last camp spot' }, { key: 'scrounging_rat', name: 'Scrounging Rat', desc: 'Forage for food in camp: 15-30 food (3h) / 30-50 food (2h) / 50-80 food (1h).' }, { key: 'fastidious_crow', name: 'Fastidious Crow', desc: 'Scout a 10x10 board area for 24h. Process: 20m. Cooldown: 6h / 3h. Reward: 5-20g / 25-80g + 30% shard chance.' }],
                         sage: [{ key: 'herbalism', name: 'Herbalism', desc: 'Camp costs 1 less food per member' }, { key: 'mend', name: 'Mend', desc: 'Out-of-combat potions restore +15% HP' }, { key: 'ritual_efficiency', name: 'Ritual Efficiency', desc: 'Ritual prep time -25%' }, { key: 'revive', name: 'Revive', desc: 'Once per run: fallen member revived at 25% HP' }, { key: 'awake_refreshed', name: 'Awake Refreshed', desc: 'Recuperates an additional +10/+20/+40 Resolve after camping.' }],
                         soldier: [{ key: 'fortify', name: 'Fortify', desc: 'Resolve does not decay while camping' }, { key: 'breacher', name: 'Breacher', desc: 'Force open any Major or Minor Gate' }, { key: 'rally', name: 'Rally', desc: '+5 bonus Resolve on combat victory' }, { key: 'iron_will', name: 'Iron Will', desc: 'Party Resolve never drops below 20 from deaths' }, { key: 'awake_refreshed', name: 'Awake Refreshed', desc: 'Recuperates an additional +10/+20/+40 Resolve after camping.' }, { key: 'strong_resolve', name: 'Strong Resolve', desc: 'Reduces Resolve penalties by 40%/75%/90%.' }],
-                        wizard: [{ key: 'arcane_sense', name: 'Arcane Sense', desc: 'Identifies chest tier before opening' }, { key: 'ley_tap', name: 'Ley Tap', desc: 'Draw energy at Magic Nexus — recover 15% endurance' }, { key: 'dimensional_pocket', name: 'Dimensional Pocket', desc: '+2 shared inventory slots' }, { key: 'scry', name: 'Scry', desc: 'Reveals all chests and monsters for 30s once per run' }],
+                        wizard: [{ key: 'arcane_sense', name: 'Arcane Sense', desc: 'Identifies chest tier before opening' }, { key: 'ley_tap', name: 'Ley Tap', desc: 'Draw energy from Shrines — restores +15 Resolve' }, { key: 'astral_conduit', name: 'Astral Conduit', desc: 'Recovers +5 Resolve for every 10 steps & reveals adjacent rooms' }, { key: 'dimensional_pocket', name: 'Dimensional Pocket', desc: '+2 shared inventory slots' }, { key: 'scry', name: 'Scry', desc: 'Reveals all chests and monsters for 30s once per run' }],
                         barbarian: [{ key: 'iron_gut', name: 'Iron Gut', desc: 'Barbarian does not count toward camping food cost' }, { key: 'savage_haul', name: 'Savage Haul', desc: 'Grants +2/+4/+6 Strength and +10/+20/+30 Max HP' }, { key: 'bloodhound', name: 'Bloodhound', desc: 'Reveals all monsters on miniboard entry' }, { key: 'endure', name: 'Endure', desc: 'Zero-food camp: no Resolve penalty, crew heals to 50%. Auto-triggers on camp; 20% chance during 10m exhaustion window.' }],
                         monk: [{ key: 'swift_step', name: 'Swift Step', desc: 'Movement animation 30% faster' }, { key: 'focused_rest', name: 'Focused Rest', desc: 'Camping duration -30% (same healing)' }, { key: 'silent_awareness', name: 'Silent Awareness', desc: 'Cuts ambush chance in obscured spaces by 50% when Monk is selected' }, { key: 'pressure_points', name: 'Pressure Points', desc: '15% vendor discount once per vendor' }, { key: 'astral_map', name: 'Astral Map', desc: 'Full fog reveal for 60s once per run' }],
                         summoner: [{ key: 'spirit_sight', name: 'Spirit Sight', desc: 'Narrative tiles and shrines glow through fog' }, { key: 'plunder', name: 'Plunder', desc: 'Open a chest a second time once per run' }, { key: 'soul_tap', name: 'Soul Tap', desc: 'Transfers accumulated power of fallen friendly units to the Summoner' }, { key: 'soul_tithe', name: 'Soul Tithe', desc: '+1 Shimmering Dust per combat victory' }, { key: 'dark_pact', name: 'Dark Pact', desc: 'Trade Shimmering Dust at vendors (1 Dust = 25g)' }],

@@ -895,11 +895,30 @@ class CrewManagerPage extends React.Component {
             <div className="crew-manager">
                 {this.state.navToLanding && <Redirect to='/' />}
                 <div className="content-container">
-                    <div className="button-row-top">
-                        <button onClick={() => this.submit()}>Back</button>
-                    </div>
-                    <div className="title" style={{ marginTop: '-24px', marginBottom: '12px', fontSize: '1.4em', fontWeight: 'bold', fontFamily: "'Cinzel', serif", color: '#f9b115', letterSpacing: '0.06em' }}>
-                        Choose your crew
+                    <div className="crew-header-bar" style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        position: 'relative',
+                        width: '100%',
+                        minHeight: '38px',
+                        marginBottom: '16px'
+                    }}>
+                        <div className="button-row-top" style={{ position: 'absolute', left: 0, top: '50%', transform: 'translateY(-50%)', padding: 0 }}>
+                            <button onClick={() => this.submit()}>Back</button>
+                        </div>
+                        <div className="title" style={{
+                            margin: 0,
+                            fontSize: '1.4em',
+                            fontWeight: 'bold',
+                            fontFamily: "'Cinzel', serif",
+                            color: '#f9b115',
+                            letterSpacing: '0.06em',
+                            textAlign: 'center',
+                            display: 'block'
+                        }}>
+                            Choose your crew
+                        </div>
                     </div>
                     <div className="crew-selector">
                         <div className="crew-options">

@@ -352,7 +352,8 @@ export class AnimationManagerRedux {
         break;
       case 'sword_swing':
       case 'slash':
-      case 'barbarian_slash': {
+      case 'barbarian_slash':
+      case 'hunting_knife': {
         let facing = 'right';
         if (targetCoords.x === sourceCoords.x) {
           facing = targetCoords.y > sourceCoords.y ? 'down' : 'up';

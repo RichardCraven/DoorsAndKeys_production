@@ -539,7 +539,7 @@ class ShrineScreen extends React.Component {
             ranger:   [{ key: 'keen_eye', name: 'Keen Eye', desc: 'L1: Reveals nearby traps. L2: +3 DEX to trap saves.' }, { key: 'hunters_quarry', name: "Hunter's Quarry", desc: '+10% food drop on monster defeat' }, { key: 'trapper', name: 'Trapper', desc: '25% chance to negate any trap entirely.' }, { key: 'trailblaze', name: 'Trailblaze', desc: 'Visual breadcrumb to last camp spot' }, { key: 'scrounging_rat', name: 'Scrounging Rat', desc: 'Forage for food in camp: 15-30 food (3h) / 30-50 food (2h) / 50-80 food (1h).' }, { key: 'fastidious_crow', name: 'Fastidious Crow', desc: 'Scout a 10x10 board area for 24h.' }],
             sage:     [{ key: 'herbalism', name: 'Herbalism', desc: 'Camp costs 1 less food per member' }, { key: 'mend', name: 'Mend', desc: 'Out-of-combat potions restore +15% HP' }, { key: 'ritual_efficiency', name: 'Ritual Efficiency', desc: 'Ritual prep time -25%' }, { key: 'revive', name: 'Revive', desc: 'Once per run: fallen member revived at 25% HP' }, { key: 'awake_refreshed', name: 'Awake Refreshed', desc: 'Recuperates an additional +10/+20/+40 Resolve after camping.' }],
             soldier:  [{ key: 'fortify', name: 'Fortify', desc: 'Resolve does not decay while camping' }, { key: 'breacher', name: 'Breacher', desc: 'Force open any Major or Minor Gate' }, { key: 'rally', name: 'Rally', desc: '+5 bonus Resolve on combat victory' }, { key: 'iron_will', name: 'Iron Will', desc: "Party Resolve never drops below 20 from deaths" }, { key: 'awake_refreshed', name: 'Awake Refreshed', desc: 'Recuperates an additional +10/+20/+40 Resolve after camping.' }, { key: 'strong_resolve', name: 'Strong Resolve', desc: 'Reduces Resolve penalties by 40%/75%/90%.' }],
-            wizard:   [{ key: 'arcane_sense', name: 'Arcane Sense', desc: 'Identifies chest tier before opening' }, { key: 'ley_tap', name: 'Ley Tap', desc: 'Draw energy at Magic Nexus — recover 15% endurance' }, { key: 'dimensional_pocket', name: 'Dimensional Pocket', desc: '+2 shared inventory slots' }, { key: 'scry', name: 'Scry', desc: 'Reveals all chests and monsters for 30s once per run' }],
+            wizard:   [{ key: 'arcane_sense', name: 'Arcane Sense', desc: 'Identifies chest tier before opening' }, { key: 'ley_tap', name: 'Ley Tap', desc: 'Draw energy from Shrines — restores +15 Resolve' }, { key: 'astral_conduit', name: 'Astral Conduit', desc: 'Recovers +5 Resolve for every 10 steps & reveals adjacent rooms' }, { key: 'dimensional_pocket', name: 'Dimensional Pocket', desc: '+2 shared inventory slots' }, { key: 'scry', name: 'Scry', desc: 'Reveals all chests and monsters for 30s once per run' }],
             barbarian:[{ key: 'iron_gut', name: 'Iron Gut', desc: 'Barbarian does not count toward camping food cost' }, { key: 'savage_haul', name: 'Savage Haul', desc: 'Grants +2/+4/+6 Strength and +10/+20/+30 Max HP' }, { key: 'bloodhound', name: 'Bloodhound', desc: 'Reveals all monsters on miniboard entry' }, { key: 'endure', name: 'Endure', desc: 'Zero-food camp: no Resolve penalty, crew heals to 50%. Auto-triggers on camp; 20% chance during 10m exhaustion window.' }],
             monk:     [{ key: 'swift_step', name: 'Swift Step', desc: 'Movement animation 30% faster' }, { key: 'focused_rest', name: 'Focused Rest', desc: 'Camping duration -30% (same healing)' }, { key: 'silent_awareness', name: 'Silent Awareness', desc: 'Cuts ambush chance in obscured spaces by 50% when Monk is selected' }, { key: 'pressure_points', name: 'Pressure Points', desc: '15% vendor discount once per vendor' }, { key: 'astral_map', name: 'Astral Map', desc: 'Full fog reveal for 60s once per run' }],
             summoner: [{ key: 'spirit_sight', name: 'Spirit Sight', desc: 'Narrative tiles and shrines glow through fog' }, { key: 'plunder', name: 'Plunder', desc: 'Open a chest a second time once per run' }, { key: 'soul_tap', name: 'Soul Tap', desc: 'Transfers accumulated power of fallen friendly units to the Summoner' }, { key: 'soul_tithe', name: 'Soul Tithe', desc: '+1 Shimmering Dust per combat victory' }, { key: 'dark_pact', name: 'Dark Pact', desc: 'Trade Shimmering Dust at vendors (1 Dust = 25g)' }],
@@ -744,15 +744,15 @@ class ShrineScreen extends React.Component {
                         );
                     })()}
 
-                    {/* Speech bubble message from the guardians */}
+                    {/* Esoteric Greeting Dialogue Banner from the guardians */}
                     {this.state.message && (() => {
-                        const mainMonster = Object.values(this.state.battleData).find(c => c && c.isMonster && !c.isMinion);
+                        const mainMonster = Object.values(this.state.battleData || {}).find(c => c && c.isMonster && !c.isMinion);
                         if (!mainMonster || !mainMonster.coordinates) return null;
                         
                         const mx = mainMonster.coordinates.x;
                         const my = mainMonster.coordinates.y;
                         
-                        const isHuge = mainMonster.tier === 4 || mainMonster.type === 'dragon' || mainMonster.key === 'dragon' || mainMonster.huge === true || mainMonster.size === 3;
+                        const isHuge = mainMonster.huge === true || mainMonster.isHuge === true || mainMonster.tier === 4 || mainMonster.type === 'dragon' || mainMonster.key === 'dragon' || mainMonster.size === 3 || mainMonster.scale === 3;
                         
                         let bubbleCenterX = 0;
                         let bubbleCenterY = 0;
@@ -779,46 +779,82 @@ class ShrineScreen extends React.Component {
                             bubbleCenterY = my * TILE_SIZE;
                         }
 
+                        // 3x3 monsters enlarge vertically by 0.3 * TILE_SIZE during greeting, requiring higher yOffset so bubble floats cleanly above portrait
+                        const yOffset = isHuge ? 88 : ((mainMonster.isLarge || mainMonster.size === 2) ? 52 : 45);
+
                         return (
-                            <div
-                                className="message-container speech-bubble"
-                                style={{
-                                    position: 'absolute',
-                                    left: `${bubbleCenterX}px`,
-                                    top: `${bubbleCenterY - 45}px`,
-                                    transform: 'translateX(-50%)',
-                                    width: 'max-content',
-                                    maxWidth: '220px',
-                                    height: 'auto',
-                                    padding: '10px 14px',
-                                    background: 'rgba(20, 20, 22, 0.96)',
-                                    border: '2px solid #ff5400',
-                                    borderRadius: '12px',
-                                    color: '#ffffff',
-                                    fontSize: '14px',
-                                    fontWeight: '600',
-                                    textAlign: 'center',
-                                    boxShadow: '0 8px 24px rgba(0,0,0,0.8), 0 0 15px rgba(255, 84, 0, 0.4)',
-                                    zIndex: 450,
-                                    pointerEvents: 'none',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                }}
-                            >
-                                {this.state.message}
-                                <div style={{
-                                    position: 'absolute',
-                                    bottom: '-8px',
-                                    left: '50%',
-                                    transform: 'translateX(-50%)',
-                                    width: '0',
-                                    height: '0',
-                                    borderLeft: '8px solid transparent',
-                                    borderRight: '8px solid transparent',
-                                    borderTop: '8px solid #ff5400',
-                                }} />
-                            </div>
+                            <React.Fragment key="esoteric-dialogue-banner-shrine">
+                                <style>{`
+                                    @keyframes esoteric-bubble-float-shrine {
+                                        0% { transform: translateX(-50%) translateY(0px); filter: drop-shadow(0 0 12px rgba(255, 84, 0, 0.3)); }
+                                        50% { transform: translateX(-50%) translateY(-4px); filter: drop-shadow(0 0 20px rgba(255, 84, 0, 0.55)); }
+                                        100% { transform: translateX(-50%) translateY(0px); filter: drop-shadow(0 0 12px rgba(255, 84, 0, 0.3)); }
+                                    }
+                                `}</style>
+                                <div
+                                    className="message-container esoteric-dialogue-banner"
+                                    style={{
+                                        position: 'absolute',
+                                        left: `${bubbleCenterX}px`,
+                                        top: `${bubbleCenterY - yOffset}px`,
+                                        transform: 'translateX(-50%)',
+                                        width: 'max-content',
+                                        maxWidth: '260px',
+                                        height: 'auto',
+                                        padding: '10px 18px',
+                                        background: 'linear-gradient(135deg, rgba(14, 10, 24, 0.97), rgba(28, 14, 22, 0.97))',
+                                        border: '1.5px solid rgba(255, 110, 30, 0.85)',
+                                        outline: '1px solid rgba(212, 175, 55, 0.35)',
+                                        outlineOffset: '-4px',
+                                        borderRadius: '4px',
+                                        color: '#f5e6ca',
+                                        fontFamily: "'Palatino Linotype', 'Cinzel', 'Georgia', serif",
+                                        fontSize: '13.5px',
+                                        fontWeight: '600',
+                                        fontStyle: 'italic',
+                                        letterSpacing: '0.8px',
+                                        textAlign: 'center',
+                                        boxShadow: '0 12px 32px rgba(0, 0, 0, 0.9), 0 0 20px rgba(255, 84, 0, 0.3), inset 0 0 14px rgba(147, 51, 234, 0.2)',
+                                        zIndex: 450,
+                                        pointerEvents: 'none',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '6px',
+                                        animation: 'esoteric-bubble-float-shrine 3s ease-in-out infinite',
+                                    }}
+                                >
+                                    <span style={{ color: '#d4af37', fontSize: '11px', opacity: 0.8, fontStyle: 'normal' }}>✦</span>
+                                    <span style={{ textShadow: '0 0 8px rgba(255, 100, 30, 0.6), 0 2px 4px rgba(0, 0, 0, 0.9)' }}>
+                                        {this.state.message}
+                                    </span>
+                                    <span style={{ color: '#d4af37', fontSize: '11px', opacity: 0.8, fontStyle: 'normal' }}>✦</span>
+
+                                    {/* Esoteric sharp sigil pointer stem */}
+                                    <div style={{
+                                        position: 'absolute',
+                                        bottom: '-11px',
+                                        left: '50%',
+                                        transform: 'translateX(-50%)',
+                                        width: '0',
+                                        height: '0',
+                                        borderLeft: '7px solid transparent',
+                                        borderRight: '7px solid transparent',
+                                        borderTop: '11px solid rgba(255, 110, 30, 0.85)',
+                                    }}>
+                                        <div style={{
+                                            position: 'absolute',
+                                            top: '-12px',
+                                            left: '-5px',
+                                            width: '0',
+                                            height: '0',
+                                            borderLeft: '5px solid transparent',
+                                            borderRight: '5px solid transparent',
+                                            borderTop: '9px solid rgba(14, 10, 24, 0.97)',
+                                        }} />
+                                    </div>
+                                </div>
+                            </React.Fragment>
                         );
                     })()}
                 </div>

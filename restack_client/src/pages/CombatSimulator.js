@@ -458,6 +458,103 @@ class CrewManagerPage extends React.Component {
             selectedCrewMember: crewMember
         });
     }
+    toggleCrewMemberPortrait = (event, targetMember) => {
+        if (event) {
+            event.stopPropagation();
+            event.preventDefault();
+        }
+        const member = targetMember || this.state.selectedCrewMember;
+        if (!member) return;
+
+        const { options, selectedCrew, selectedCrewMember } = this.state;
+        const adventurers = (this.props.crewManager && this.props.crewManager.adventurers) || [];
+        const template = adventurers.find(a => (a.id && a.id === member.id) || (a.type && a.type === member.type));
+
+        const portraitOptions = member.portraitOptions || (template && template.portraitOptions);
+        if (!portraitOptions || portraitOptions.length <= 1) return;
+
+        const currentPortrait = member.portrait;
+        let currentIndex = portraitOptions.findIndex(p => p.portrait === currentPortrait);
+        if (currentIndex === -1 && typeof member.portraitIndex === 'number') {
+            currentIndex = member.portraitIndex;
+        }
+        if (currentIndex === -1) currentIndex = 0;
+
+        const nextIndex = (currentIndex + 1) % portraitOptions.length;
+        const currentOpt = portraitOptions[currentIndex];
+        const nextOpt = portraitOptions[nextIndex];
+
+        const currentDefaultName = currentOpt ? (currentOpt.defaultName || currentOpt.name) : null;
+        const nextDefaultName = nextOpt ? (nextOpt.defaultName || nextOpt.name) : null;
+
+        const getUpdatedName = (existingName) => {
+            if (!existingName) return nextDefaultName || existingName;
+            if (currentDefaultName && existingName.trim().toLowerCase() === currentDefaultName.trim().toLowerCase()) {
+                return nextDefaultName || existingName;
+            }
+            return existingName;
+        };
+
+        const updatedOptions = options.map(o => {
+            if (o && ((o.id && member.id && o.id === member.id) || (o.type && member.type && o.type === member.type))) {
+                const nextName = getUpdatedName(o.name);
+                return {
+                    ...o,
+                    portrait: nextOpt.portrait,
+                    image: nextOpt.image || o.image,
+                    portraitIndex: nextIndex,
+                    portraitOptions: portraitOptions,
+                    name: nextName
+                };
+            }
+            return o;
+        });
+
+        const updatedSelectedCrew = selectedCrew.map(c => {
+            if (c && ((c.id && member.id && c.id === member.id) || (c.type && member.type && c.type === member.type))) {
+                const nextName = getUpdatedName(c.name);
+                return {
+                    ...c,
+                    portrait: nextOpt.portrait,
+                    image: nextOpt.image || c.image,
+                    portraitIndex: nextIndex,
+                    portraitOptions: portraitOptions,
+                    name: nextName
+                };
+            }
+            return c;
+        });
+
+        let updatedSelectedMember = selectedCrewMember;
+        if (selectedCrewMember && ((selectedCrewMember.id && member.id && selectedCrewMember.id === member.id) || (selectedCrewMember.type && member.type && selectedCrewMember.type === member.type))) {
+            const nextName = getUpdatedName(selectedCrewMember.name);
+            updatedSelectedMember = {
+                ...selectedCrewMember,
+                portrait: nextOpt.portrait,
+                image: nextOpt.image || selectedCrewMember.image,
+                portraitIndex: nextIndex,
+                portraitOptions: portraitOptions,
+                name: nextName
+            };
+        }
+
+        if (this.tempCrewManager && Array.isArray(this.tempCrewManager.crew)) {
+            const tempMember = this.tempCrewManager.crew.find(c => (c.id && member.id && c.id === member.id) || (c.type && member.type && c.type === member.type));
+            if (tempMember) {
+                tempMember.portrait = nextOpt.portrait;
+                tempMember.image = nextOpt.image || tempMember.image;
+                tempMember.portraitIndex = nextIndex;
+                tempMember.name = getUpdatedName(tempMember.name);
+            }
+        }
+
+        this.setState({
+            options: updatedOptions,
+            selectedCrew: updatedSelectedCrew,
+            selectedCrewMember: updatedSelectedMember,
+            isRealCrewCloned: false
+        });
+    }
     addMember = (index) => {
         let member = this.state.selectedCrewMember
         let crew = this.state.selectedCrew;
@@ -967,7 +1064,7 @@ class CrewManagerPage extends React.Component {
 
                         if (member.skills) {
                             const BASIC_ATTACK_KEYS = [
-                                'slash', 'magic_missile', 'monk_punch', 'heal', 'loose', 
+                                'slash', 'magic_missile', 'monk_punch', 'heal', 'loose', 'hunting_knife',
                                 'barbarian_slash', 'sword_swing', 'axe_throw', 'summon_skeleton', 
                                 'claw_strike', 'claws', 'rake', 'gore_horns', 'snake_strike', 
                                 'grasp', 'void_lance', 'crush', 'tackle', 'major_magic_missile', 'greater_magic_missile',
@@ -980,6 +1077,7 @@ class CrewManagerPage extends React.Component {
                             if (member.type === 'ranger') {
                                 if (!specials.includes('notch')) specials.push('notch');
                                 if (!basics.includes('loose')) basics.push('loose');
+                                if (!basics.includes('hunting_knife')) basics.push('hunting_knife');
                             } else if (member.type === 'sage') {
                                 if (!basics.includes('heal')) basics.push('heal');
                             } else if (member.type === 'soldier') {
@@ -1137,7 +1235,7 @@ class CrewManagerPage extends React.Component {
                     const selectedTier = this.getSimSkillTier(pvpMember.type);
                     if (pvpMember.skills) {
                         const BASIC_ATTACK_KEYS = [
-                            'slash', 'magic_missile', 'monk_punch', 'heal', 'loose', 
+                            'slash', 'magic_missile', 'monk_punch', 'heal', 'loose', 'hunting_knife',
                             'barbarian_slash', 'sword_swing', 'axe_throw', 'summon_skeleton', 
                             'claw_strike', 'claws', 'rake', 'gore_horns', 'snake_strike', 
                             'grasp', 'void_lance', 'crush', 'tackle', 'major_magic_missile', 'greater_magic_missile',
@@ -1150,6 +1248,7 @@ class CrewManagerPage extends React.Component {
                         if (pvpMember.type === 'ranger') {
                             if (!specials.includes('notch')) specials.push('notch');
                             if (!basics.includes('loose')) basics.push('loose');
+                            if (!basics.includes('hunting_knife')) basics.push('hunting_knife');
                         } else if (pvpMember.type === 'sage') {
                             if (!basics.includes('heal')) basics.push('heal');
                         } else if (pvpMember.type === 'soldier') {
@@ -1576,21 +1675,98 @@ class CrewManagerPage extends React.Component {
                                         (c.name && e.name && c.name === e.name) ||
                                         (c.type && e.type && c.type === e.type)
                                     ));
-                                    return <ProgressiveBgImage className={`portrait${isSelected ? ' selected' : ''}${isAssigned ? ' assigned' : ''}`} key={i}
-                                        src={e.portrait}
-                                        style={{
-                                            filter: isAssigned ? 'grayscale(1) brightness(0.4) contrast(0.85)' : undefined,
-                                            opacity: isAssigned ? 0.55 : 1
-                                        }}
-                                        onClick={(event) => this.selectCrewMember(event, e)}
-                                    />
+                                    const template = (this.props.crewManager && this.props.crewManager.adventurers && this.props.crewManager.adventurers.find(a => (a.id && a.id === e.id) || (a.type && a.type === e.type)));
+                                    const portraitOpts = e.portraitOptions || (template && template.portraitOptions);
+                                    const hasAltPortraits = portraitOpts && portraitOpts.length > 1;
+
+                                    return (
+                                        <div key={i} style={{ position: 'relative', display: 'inline-block' }}>
+                                            <ProgressiveBgImage className={`portrait${isSelected ? ' selected' : ''}${isAssigned ? ' assigned' : ''}`}
+                                                src={e.portrait}
+                                                style={{
+                                                    filter: isAssigned ? 'grayscale(1) brightness(0.4) contrast(0.85)' : undefined,
+                                                    opacity: isAssigned ? 0.55 : 1
+                                                }}
+                                                onClick={(event) => this.selectCrewMember(event, e)}
+                                            />
+                                            {hasAltPortraits && (
+                                                <button
+                                                    className="portrait-variant-toggle-btn"
+                                                    title="Toggle alternate portrait"
+                                                    onClick={(event) => this.toggleCrewMemberPortrait(event, e)}
+                                                    style={{
+                                                        position: 'absolute',
+                                                        bottom: '6px',
+                                                        right: '6px',
+                                                        background: 'rgba(0, 0, 0, 0.85)',
+                                                        color: '#c084fc',
+                                                        border: '1px solid #c084fc',
+                                                        borderRadius: '50%',
+                                                        width: '22px',
+                                                        height: '22px',
+                                                        fontSize: '12px',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        cursor: 'pointer',
+                                                        zIndex: 10,
+                                                        boxShadow: '0 2px 6px rgba(0,0,0,0.6)'
+                                                    }}
+                                                >
+                                                    ↻
+                                                </button>
+                                            )}
+                                        </div>
+                                    );
                                 }
                                 )}
                             </div>
                             <div className="member-panel">
-                                {this.state.selectedCrewMember && <ProgressiveBgImage className='giant-portrait'
-                                    src={this.state.selectedCrewMember.portrait}
-                                />}
+                                {this.state.selectedCrewMember && (
+                                    <div style={{ position: 'relative', display: 'inline-block' }}>
+                                        <ProgressiveBgImage className='giant-portrait'
+                                            src={this.state.selectedCrewMember.portrait}
+                                        />
+                                        {(() => {
+                                            const member = this.state.selectedCrewMember;
+                                            const template = (this.props.crewManager && this.props.crewManager.adventurers && this.props.crewManager.adventurers.find(a => (a.id && a.id === member.id) || (a.type && a.type === member.type)));
+                                            const portraitOpts = member.portraitOptions || (template && template.portraitOptions);
+                                            if (portraitOpts && portraitOpts.length > 1) {
+                                                const currIdx = portraitOpts.findIndex(p => p.portrait === member.portrait);
+                                                const nextIdx = (currIdx + 1) % portraitOpts.length;
+                                                const nextName = portraitOpts[nextIdx]?.name || 'Alt Version';
+                                                return (
+                                                    <button
+                                                        className="giant-portrait-variant-toggle-btn"
+                                                        onClick={(event) => this.toggleCrewMemberPortrait(event, member)}
+                                                        title={`Switch portrait to ${nextName}`}
+                                                        style={{
+                                                            position: 'absolute',
+                                                            bottom: '12px',
+                                                            right: '12px',
+                                                            background: 'rgba(24, 24, 27, 0.9)',
+                                                            color: '#c084fc',
+                                                            border: '1px solid #c084fc',
+                                                            borderRadius: '6px',
+                                                            padding: '4px 10px',
+                                                            fontSize: '12px',
+                                                            fontWeight: '600',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            gap: '6px',
+                                                            cursor: 'pointer',
+                                                            zIndex: 10,
+                                                            boxShadow: '0 4px 12px rgba(0,0,0,0.6)'
+                                                        }}
+                                                    >
+                                                        <span>↻ Switch Portrait</span>
+                                                    </button>
+                                                );
+                                            }
+                                            return null;
+                                        })()}
+                                    </div>
+                                )}
                                 {this.state.selectedCrewMember && <div className="details-pane">
                                     <div className="member-name">{this.state.selectedCrewMember.name}</div>
                                     <div className="description">
@@ -1654,20 +1830,59 @@ class CrewManagerPage extends React.Component {
                                             {member ? '\u2296' : '\u2295'}
                                         </div>
 
-                                        {this.state.selectedCrew[i] && <ProgressiveBgImage
-                                            className="portrait"
-                                            src={this.state.selectedCrew[i].portrait}
-                                            title="Double-click to remove"
-                                            onClick={(e) => {
-                                                const now = Date.now();
-                                                const isDoubleTap = this._lastCrewRemoveTap === i && (now - this._lastCrewRemoveTapTime < 300);
-                                                this._lastCrewRemoveTap = i;
-                                                this._lastCrewRemoveTapTime = now;
-                                                if (e.detail === 2 || isDoubleTap) {
-                                                    this.removeMember(i);
-                                                }
-                                            }}
-                                        />}
+                                        {this.state.selectedCrew[i] && (
+                                            <div style={{ position: 'relative', display: 'inline-block' }}>
+                                                <ProgressiveBgImage
+                                                    className="portrait"
+                                                    src={this.state.selectedCrew[i].portrait}
+                                                    title="Double-click to remove"
+                                                    onClick={(e) => {
+                                                        const now = Date.now();
+                                                        const isDoubleTap = this._lastCrewRemoveTap === i && (now - this._lastCrewRemoveTapTime < 300);
+                                                        this._lastCrewRemoveTap = i;
+                                                        this._lastCrewRemoveTapTime = now;
+                                                        if (e.detail === 2 || isDoubleTap) {
+                                                            this.removeMember(i);
+                                                        }
+                                                    }}
+                                                />
+                                                {(() => {
+                                                    const memberItem = this.state.selectedCrew[i];
+                                                    const template = (this.props.crewManager && this.props.crewManager.adventurers && this.props.crewManager.adventurers.find(a => (a.id && a.id === memberItem.id) || (a.type && a.type === memberItem.type)));
+                                                    const portraitOpts = memberItem.portraitOptions || (template && template.portraitOptions);
+                                                    if (portraitOpts && portraitOpts.length > 1) {
+                                                        return (
+                                                            <button
+                                                                className="tray-portrait-variant-toggle-btn"
+                                                                title="Toggle alternate portrait"
+                                                                onClick={(event) => this.toggleCrewMemberPortrait(event, memberItem)}
+                                                                style={{
+                                                                    position: 'absolute',
+                                                                    bottom: '4px',
+                                                                    right: '4px',
+                                                                    background: 'rgba(0, 0, 0, 0.85)',
+                                                                    color: '#c084fc',
+                                                                    border: '1px solid #c084fc',
+                                                                    borderRadius: '50%',
+                                                                    width: '20px',
+                                                                    height: '20px',
+                                                                    fontSize: '11px',
+                                                                    display: 'flex',
+                                                                    alignItems: 'center',
+                                                                    justifyContent: 'center',
+                                                                    cursor: 'pointer',
+                                                                    zIndex: 10,
+                                                                    boxShadow: '0 2px 4px rgba(0,0,0,0.5)'
+                                                                }}
+                                                            >
+                                                                ↻
+                                                            </button>
+                                                        );
+                                                    }
+                                                    return null;
+                                                })()}
+                                            </div>
+                                        )}
 
                                         {this.state.selectedCrew[i] && <div className="sim-level-control" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', marginTop: '4px' }}>
                                             <button style={{ padding: '0 5px', fontSize: '11px', lineHeight: '16px' }}

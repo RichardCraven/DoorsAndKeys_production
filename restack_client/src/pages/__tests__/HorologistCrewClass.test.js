@@ -27,9 +27,12 @@ describe('Horologist crew class', () => {
         expect(horo.stats.timeDebt).toBe(0);
     });
 
-    test('Horologist skills exist in the skills matrix', () => {
-        ['future_echo', 'set_anchor', 'recall', 'hour_of_reckoning', 'clockwork_heart', 'ledger_of_hours']
-            .forEach(k => expect(skillsMatrix[k]).toBeDefined());
+    test('Horologist skills exist in the skills matrix and have dedicated icons', () => {
+        ['future_echo', 'set_anchor', 'recall', 'hour_of_reckoning', 'clockwork_heart', 'ledger_of_hours', 'rewind_step', 'stopwatch']
+            .forEach(k => {
+                expect(skillsMatrix[k]).toBeDefined();
+                expect(skillsMatrix[k].icon).toBeDefined();
+            });
     });
 });
 
