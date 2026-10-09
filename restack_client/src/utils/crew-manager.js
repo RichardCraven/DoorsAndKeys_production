@@ -97,7 +97,6 @@ export function computeTemporalStrainTier(debtMs, level) {
 }
 
 export const BASE_AND_ALT_CREW_NAMES = [
-    'Theodora (Ascetic)',
     'Glitterburn',
     'Loryastes',
     'Zildjikan',
@@ -1391,8 +1390,7 @@ export function CrewManager() {
             portrait: images['sage_portrait'],
             portraitOptions: [
                 { id: 'loryastes', name: 'Loryastes', defaultName: 'Loryastes', portrait: images['sage_portrait'], image: 'sage' },
-                { id: 'theodora', name: 'Theodora', defaultName: 'Theodora', portrait: images['sage_alt_grandmotherly_portrait'] || images['sage_alt_portrait'], image: 'sage_alt' },
-                { id: 'theodora_ascetic', name: 'Theodora (Ascetic)', defaultName: 'Theodora (Ascetic)', portrait: images['sage_alt_shaved_portrait'] || images['sage_alt_shaved'], image: 'sage_alt_shaved' }
+                { id: 'theodora', name: 'Theodora', defaultName: 'Theodora', portrait: images['sage_alt_portrait'], image: 'sage_alt' }
             ],
             inventory: [],
             skills: ['heal', 'circle_of_protection'],

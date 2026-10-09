@@ -2788,7 +2788,7 @@ const skillsMatrix = {
         tier: 1,
         knownByDefault: true,
         name: 'Death Grasp',
-        desc: 'Crush a distant foe with phantom force drawn from the underworld.',
+        desc: 'Crush a distant foe with phantom force drawn from the underworld, dealing 125% necrotic damage.',
         icon: images.soul_tithe_summoner || images.soul_tap_summoner || images.sword,
         cooldown: 4,
         initialCooldown: 0,

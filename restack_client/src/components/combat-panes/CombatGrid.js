@@ -1801,8 +1801,8 @@ export default function CombatGrid(props) {
                                 position: 'absolute',
                                 top: '-10px',
                                 left: '-10px',
-                                width: '120px',
-                                height: '120px',
+                                width: `${TILE_SIZE + 20}px`,
+                                height: `${TILE_SIZE + 20}px`,
                                 borderRadius: '50%',
                                 background: 'radial-gradient(circle, rgba(33, 230, 193, 0.82) 0%, rgba(0, 191, 255, 0.28) 45%, transparent 68%)',
                                 boxShadow: '0 0 10px 1px rgba(33, 230, 193, 0.18), 0 0 18px 2px rgba(0, 191, 255, 0.04)',
@@ -1851,6 +1851,9 @@ export default function CombatGrid(props) {
                                 ? 'stone_familiar_glowing'
                                 : (fighter.portrait || fighter.type || fighter.class || 'soldier')
                             )}")`,
+                            position: 'relative',
+                            width: '100%',
+                            height: '100%',
                             opacity: getLiveCombatant(fighter.id)?.astralBeingActive ? 0.55 : 1,
                             filter: [
                                 isUltimateCasting ? 'drop-shadow(0 0 15px #ffd700) brightness(1.35) contrast(1.2)' : null,
@@ -2678,7 +2681,7 @@ export default function CombatGrid(props) {
 
         const portraitClasses = [
             'portrait',
-            isOpponent ? 'fighter-portrait opponent-portrait' : (isMinion ? 'minion-portrait' : 'monster-portrait'),
+            unit.isNaturalBarrier ? 'natural-barrier-portrait' : (isOpponent ? 'fighter-portrait opponent-portrait' : (isMinion ? 'minion-portrait' : 'monster-portrait')),
             isDamagedMonster ? 'hit-flash' : '',
             (!isOpponent && isHuge) ? 'huge-portrait' : ((!isOpponent && isLarge) ? 'large-portrait' : ''),
             (!isOpponent && showEnlarged) ? 'enlarged' : '',
@@ -2735,10 +2738,11 @@ export default function CombatGrid(props) {
         return (
             <div
                 key={unit.id}
-                className={unitTileClasses}
+                className={unitTileClasses + (unit.isNaturalBarrier ? ' natural-barrier-tile' : '')}
                 data-monster-id={unit.id}
                 data-monster-name={unit.name || unit.type || ''}
                 data-dead={isDead ? 'true' : 'false'}
+                data-natural-barrier={unit.isNaturalBarrier ? 'true' : undefined}
                 style={{
                     position: 'absolute',
                     transform: `translate3d(${leftPos}px, ${topPos}px, 0px)`,
@@ -2746,7 +2750,7 @@ export default function CombatGrid(props) {
                     height: `${height}px`,
                     overflow: 'visible',
                     pointerEvents: 'none',
-                    zIndex: isDead ? 0 : (isMonster ? 200 : 100),
+                    zIndex: isDead ? 0 : (unit.isNaturalBarrier ? 110 : (isMonster ? 200 : 100)),
                     transition: (isTelep || isBatFlying || activeReturnTrialAnim || !shouldTransition)
                         ? 'none'
                         : riftPushbackAnim
@@ -2790,7 +2794,7 @@ export default function CombatGrid(props) {
                     onClick={() => monsterCombatPortraitClicked(unit.id)}
                     style={{
                         position: 'relative',
-                        pointerEvents: (unit.opacity === 0) ? 'none' : 'auto',
+                        pointerEvents: (unit.opacity === 0 || unit.isNaturalBarrier) ? 'none' : 'auto',
                         width: '100%',
                         height: '100%',
                         borderRadius: '8px',
@@ -3442,7 +3446,7 @@ export default function CombatGrid(props) {
                         left: 0,
                         width: '100%',
                         pointerEvents: 'none',
-                        opacity: (hideBars || unit.isWall || unit.type === 'engineer_wall') ? 0 : 1,
+                        opacity: (hideBars || unit.isWall || unit.type === 'engineer_wall' || unit.isNaturalBarrier || unit.isBarrier) ? 0 : 1,
                         transition: 'opacity 0.5s ease-in-out'
                     }}>
                         <div className="monster-hp-bar hp-bar" style={{ position: 'relative', bottom: 'auto', top: 'auto', height: '4px' }}>
@@ -8107,7 +8111,7 @@ export default function CombatGrid(props) {
     };
 
     // ── Monster units — exclude VCT and trials_icon (rendered separately) ─────
-    const monsterUnits = Object.values(battleData).filter(u => u && (u.isMonster || u.isMinion || u.isOpponent) && !crewIds.has(u.id) && !u.isVCT && !u.isTrialIcon);
+    const monsterUnits = Object.values(battleData).filter(u => u && (u.isMonster || u.isMinion || u.isOpponent || u.isNaturalBarrier) && !crewIds.has(u.id) && !u.isVCT && !u.isTrialIcon);
 
     const getUnitCenterPx = (unitId) => {
         // Find in crew

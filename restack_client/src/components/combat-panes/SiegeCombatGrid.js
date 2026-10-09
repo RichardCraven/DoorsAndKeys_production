@@ -1715,6 +1715,7 @@ export default function SiegeCombatGrid(props) {
                                 ? 'stone_familiar_glowing'
                                 : fighter.portrait
                             )}")`,
+                            position: 'relative',
                             width: '100%',
                             height: '100%',
                             opacity: getLiveCombatant(fighter.id)?.astralBeingActive ? 0.55 : 1,

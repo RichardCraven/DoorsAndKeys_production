@@ -451,25 +451,29 @@ describe('Pocket Dimension Melee Autofire & Non-Military Building Filtering', ()
     });
 
     describe('Range Ring Specification Check', () => {
-        test('Barbarian and Soldier do NOT receive range rings', () => {
+        test('Glitterburn does not receive range ring, while Barbarian and Soldier receive 1-tile melee rings', () => {
             const barbMember = { type: 'barbarian', name: 'Ulaf' };
             const soldierMember = { type: 'soldier', name: 'Sardonis' };
+            const glitterMember = { type: 'glitterburn', name: 'Glitter' };
 
-            expect(getCrewRangeRingSpecs(barbMember, '', true, 48)).toBeNull();
-            expect(getCrewRangeRingSpecs(soldierMember, '', true, 48)).toBeNull();
+            expect(getCrewRangeRingSpecs(glitterMember, '', true, 48)).toBeNull();
+            expect(getCrewRangeRingSpecs(barbMember, '', true, 48).isMelee).toBe(true);
+            expect(getCrewRangeRingSpecs(soldierMember, '', true, 48).isMelee).toBe(true);
         });
 
-        test('Wizard and Ranger DO receive range rings', () => {
+        test('Wizard and Ranger DO receive range rings with 3 and 5 tiles respectively', () => {
             const wizMember = { type: 'wizard', name: 'Zildjikan' };
             const rangerMember = { type: 'ranger', name: 'Dormund' };
 
             const wizSpecs = getCrewRangeRingSpecs(wizMember, '', true, 48);
             expect(wizSpecs).not.toBeNull();
             expect(wizSpecs.isWizard).toBe(true);
+            expect(wizSpecs.rangeTiles).toBe(3);
 
             const rangerSpecs = getCrewRangeRingSpecs(rangerMember, '', true, 48);
             expect(rangerSpecs).not.toBeNull();
             expect(rangerSpecs.isRanger).toBe(true);
+            expect(rangerSpecs.rangeTiles).toBe(5);
         });
     });
 });

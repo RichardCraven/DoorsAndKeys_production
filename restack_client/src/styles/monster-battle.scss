@@ -256,14 +256,14 @@
 // properties regardless of DOM ancestry.
 .unit-tile {
     .portrait.fighter-portrait {
-        width: 100px;
-        height: 100px;
+        width: 100%;
+        height: 100%;
         aspect-ratio: 1/1;
-        border-radius: 100px;
+        border-radius: 50%;
         background-size: 100% 100%;
         background-repeat: no-repeat;
         background-position: center;
-        position: absolute;
+        position: relative;
         top: 0;
         left: 0;
         cursor: pointer;
@@ -335,14 +335,14 @@
     }
 
     .portrait.opponent-portrait {
-        width: 100px;
-        height: 100px;
+        width: 100%;
+        height: 100%;
         aspect-ratio: 1/1;
-        border-radius: 100px;
+        border-radius: 50%;
         background-size: 100% 100%;
         background-repeat: no-repeat;
         background-position: center;
-        position: absolute;
+        position: relative;
         top: 0;
         left: 0;
         cursor: pointer;
@@ -356,13 +356,13 @@
     }
 
     .portrait.monster-portrait {
-        width: 100px;
-        height: 100px;
-        border-radius: 100px;
+        width: 100%;
+        height: 100%;
+        border-radius: 50%;
         background-size: 100% 100%;
         background-repeat: no-repeat;
         background-position: center;
-        position: absolute;
+        position: relative;
         top: 0;
         left: 0;
         
@@ -426,14 +426,29 @@
         }
     }
 
+    .portrait.natural-barrier-portrait {
+        width: 100%;
+        height: 100%;
+        border-radius: 4px;
+        background-size: cover;
+        background-repeat: no-repeat;
+        background-position: center;
+        transform: none !important;
+        cursor: default;
+        pointer-events: none;
+        box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.75), 0 2px 6px rgba(0, 0, 0, 0.5);
+        border: 1px solid rgba(100, 100, 100, 0.4);
+        z-index: 2;
+    }
+
     .portrait.minion-portrait {
-        width: 100px;
-        height: 100px;
-        border-radius: 100px;
+        width: 100%;
+        height: 100%;
+        border-radius: 50%;
         background-size: 100% 100%;
         background-repeat: no-repeat;
         background-position: center;
-        position: absolute;
+        position: relative;
         top: 0;
         left: 0;
         

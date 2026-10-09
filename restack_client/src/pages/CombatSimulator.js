@@ -1702,9 +1702,18 @@ class CrewManagerPage extends React.Component {
                                                         color: '#c084fc',
                                                         border: '1px solid #c084fc',
                                                         borderRadius: '50%',
-                                                        width: '22px',
-                                                        height: '22px',
-                                                        fontSize: '12px',
+                                                        width: '24px',
+                                                        height: '24px',
+                                                        minWidth: '24px',
+                                                        minHeight: '24px',
+                                                        maxWidth: '24px',
+                                                        maxHeight: '24px',
+                                                        padding: 0,
+                                                        margin: 0,
+                                                        boxSizing: 'border-box',
+                                                        aspectRatio: '1 / 1',
+                                                        fontSize: '13px',
+                                                        lineHeight: '1',
                                                         display: 'flex',
                                                         alignItems: 'center',
                                                         justifyContent: 'center',
@@ -1722,51 +1731,9 @@ class CrewManagerPage extends React.Component {
                                 )}
                             </div>
                             <div className="member-panel">
-                                {this.state.selectedCrewMember && (
-                                    <div style={{ position: 'relative', display: 'inline-block' }}>
-                                        <ProgressiveBgImage className='giant-portrait'
-                                            src={this.state.selectedCrewMember.portrait}
-                                        />
-                                        {(() => {
-                                            const member = this.state.selectedCrewMember;
-                                            const template = (this.props.crewManager && this.props.crewManager.adventurers && this.props.crewManager.adventurers.find(a => (a.id && a.id === member.id) || (a.type && a.type === member.type)));
-                                            const portraitOpts = member.portraitOptions || (template && template.portraitOptions);
-                                            if (portraitOpts && portraitOpts.length > 1) {
-                                                const currIdx = portraitOpts.findIndex(p => p.portrait === member.portrait);
-                                                const nextIdx = (currIdx + 1) % portraitOpts.length;
-                                                const nextName = portraitOpts[nextIdx]?.name || 'Alt Version';
-                                                return (
-                                                    <button
-                                                        className="giant-portrait-variant-toggle-btn"
-                                                        onClick={(event) => this.toggleCrewMemberPortrait(event, member)}
-                                                        title={`Switch portrait to ${nextName}`}
-                                                        style={{
-                                                            position: 'absolute',
-                                                            bottom: '12px',
-                                                            right: '12px',
-                                                            background: 'rgba(24, 24, 27, 0.9)',
-                                                            color: '#c084fc',
-                                                            border: '1px solid #c084fc',
-                                                            borderRadius: '6px',
-                                                            padding: '4px 10px',
-                                                            fontSize: '12px',
-                                                            fontWeight: '600',
-                                                            display: 'flex',
-                                                            alignItems: 'center',
-                                                            gap: '6px',
-                                                            cursor: 'pointer',
-                                                            zIndex: 10,
-                                                            boxShadow: '0 4px 12px rgba(0,0,0,0.6)'
-                                                        }}
-                                                    >
-                                                        <span>↻ Switch Portrait</span>
-                                                    </button>
-                                                );
-                                            }
-                                            return null;
-                                        })()}
-                                    </div>
-                                )}
+                                {this.state.selectedCrewMember && <ProgressiveBgImage className='giant-portrait'
+                                    src={this.state.selectedCrewMember.portrait}
+                                />}
                                 {this.state.selectedCrewMember && <div className="details-pane">
                                     <div className="member-name">{this.state.selectedCrewMember.name}</div>
                                     <div className="description">
@@ -1830,59 +1797,20 @@ class CrewManagerPage extends React.Component {
                                             {member ? '\u2296' : '\u2295'}
                                         </div>
 
-                                        {this.state.selectedCrew[i] && (
-                                            <div style={{ position: 'relative', display: 'inline-block' }}>
-                                                <ProgressiveBgImage
-                                                    className="portrait"
-                                                    src={this.state.selectedCrew[i].portrait}
-                                                    title="Double-click to remove"
-                                                    onClick={(e) => {
-                                                        const now = Date.now();
-                                                        const isDoubleTap = this._lastCrewRemoveTap === i && (now - this._lastCrewRemoveTapTime < 300);
-                                                        this._lastCrewRemoveTap = i;
-                                                        this._lastCrewRemoveTapTime = now;
-                                                        if (e.detail === 2 || isDoubleTap) {
-                                                            this.removeMember(i);
-                                                        }
-                                                    }}
-                                                />
-                                                {(() => {
-                                                    const memberItem = this.state.selectedCrew[i];
-                                                    const template = (this.props.crewManager && this.props.crewManager.adventurers && this.props.crewManager.adventurers.find(a => (a.id && a.id === memberItem.id) || (a.type && a.type === memberItem.type)));
-                                                    const portraitOpts = memberItem.portraitOptions || (template && template.portraitOptions);
-                                                    if (portraitOpts && portraitOpts.length > 1) {
-                                                        return (
-                                                            <button
-                                                                className="tray-portrait-variant-toggle-btn"
-                                                                title="Toggle alternate portrait"
-                                                                onClick={(event) => this.toggleCrewMemberPortrait(event, memberItem)}
-                                                                style={{
-                                                                    position: 'absolute',
-                                                                    bottom: '4px',
-                                                                    right: '4px',
-                                                                    background: 'rgba(0, 0, 0, 0.85)',
-                                                                    color: '#c084fc',
-                                                                    border: '1px solid #c084fc',
-                                                                    borderRadius: '50%',
-                                                                    width: '20px',
-                                                                    height: '20px',
-                                                                    fontSize: '11px',
-                                                                    display: 'flex',
-                                                                    alignItems: 'center',
-                                                                    justifyContent: 'center',
-                                                                    cursor: 'pointer',
-                                                                    zIndex: 10,
-                                                                    boxShadow: '0 2px 4px rgba(0,0,0,0.5)'
-                                                                }}
-                                                            >
-                                                                ↻
-                                                            </button>
-                                                        );
-                                                    }
-                                                    return null;
-                                                })()}
-                                            </div>
-                                        )}
+                                        {this.state.selectedCrew[i] && <ProgressiveBgImage
+                                            className="portrait"
+                                            src={this.state.selectedCrew[i].portrait}
+                                            title="Double-click to remove"
+                                            onClick={(e) => {
+                                                const now = Date.now();
+                                                const isDoubleTap = this._lastCrewRemoveTap === i && (now - this._lastCrewRemoveTapTime < 300);
+                                                this._lastCrewRemoveTap = i;
+                                                this._lastCrewRemoveTapTime = now;
+                                                if (e.detail === 2 || isDoubleTap) {
+                                                    this.removeMember(i);
+                                                }
+                                            }}
+                                        />}
 
                                         {this.state.selectedCrew[i] && <div className="sim-level-control" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', marginTop: '4px' }}>
                                             <button style={{ padding: '0 5px', fontSize: '11px', lineHeight: '16px' }}

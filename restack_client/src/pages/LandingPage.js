@@ -1223,7 +1223,7 @@ export default function LandingPage(props) {
       <header className="landing-header">
         <div className="header-logo" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '2px' }}>
           <span className="logo-title">Dream Tower</span>
-          <span className="logo-subtitle" style={{ textAlign: 'left', alignSelf: 'flex-start' }}>v 0.9.4  BETA</span>
+          <span className="logo-subtitle" style={{ textAlign: 'left', alignSelf: 'flex-start' }}>v 0.9.5  BETA</span>
           {serverWarming && (
             <span style={{
               marginLeft: '8px',

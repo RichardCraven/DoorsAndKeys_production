@@ -1,7 +1,7 @@
 import { createFighter } from './factories';
 import attacksMatrix from './attacks-matrix';
 import specialsMatrix from './specials-matrix';
-import { activeShieldWalls, crossesShieldWall, MAX_DEPTH, setMaxDepth, MAX_LANES, setMaxLanes } from './shared-ai-methods/movement-methods';
+import { activeShieldWalls, crossesShieldWall, MAX_DEPTH, setMaxDepth, MAX_LANES, setMaxLanes, activeNaturalBarriers, setNaturalBarriers, isNaturalBarrierAt, getBarrierCollision, isPathBlockedByBarrier, MovementMethods } from './shared-ai-methods/movement-methods';
 import { INTERVALS, getDurationRounds, RANGE_LIMITS } from './shared-constants';
 import * as images from './images';
 import { getMeta, storeMeta, applyResolvePenalty } from './session-handler';
@@ -83,7 +83,7 @@ export function CombatManagerRedux() {
 
     const getUnitStaggerDelay = (unit) => {
         if (!unit) return 0;
-        const activeUnits = Object.values(this.combatants).filter(c => c && !c.dead && c.hp > 0 && !c.isVCT && !c.skipAI && !c.isWall && c.type !== 'engineer_wall' && typeof c.inTrial !== 'number');
+        const activeUnits = Object.values(this.combatants).filter(c => c && !c.dead && c.hp > 0 && !c.isVCT && !c.skipAI && !c.isWall && !c.isBarrier && !c.isNaturalBarrier && c.type !== 'engineer_wall' && typeof c.inTrial !== 'number');
         activeUnits.sort((a, b) => {
             let speedA = (a.stats && (a.stats.speed || a.stats.dex)) || a.speed || 1;
             if (a.etherealSpeedActive) speedA += 15;
@@ -243,6 +243,8 @@ export function CombatManagerRedux() {
         this.numColumns = 8;
         this.numRows = 6;
         this.boardSize = 'small';
+        setNaturalBarriers([]);
+        this.naturalBarriers = [];
         this.entropicKindredActive = false;
         if (this.roundTimerInterval) combatClock.clearInterval(this.roundTimerInterval);
         this.combatPaused = false;
@@ -269,6 +271,61 @@ export function CombatManagerRedux() {
         this.concentrationProgress = 0;
         this.meteorWarnings = null;
         if (typeof this.updateData === 'function') this.updateData({});
+    };
+
+    this.getBarrierCollision = (sourceCoord, targetCoord) => {
+        return getBarrierCollision(sourceCoord, targetCoord, this.naturalBarriers || activeNaturalBarriers);
+    };
+
+    this.isPathBlockedByBarrier = (sourceCoord, targetCoord) => {
+        return isPathBlockedByBarrier(sourceCoord, targetCoord, this.naturalBarriers || activeNaturalBarriers);
+    };
+
+    this._spawnNaturalBarriers = () => {
+        const barrierCoords = [
+            // Barrier 1: West barrier at x=5, y=0..2 (3 vertical tiles)
+            { x: 5, y: 0 },
+            { x: 5, y: 1 },
+            { x: 5, y: 2 },
+            // Barrier 2: East barrier at x=6, y=5..7 (3 vertical tiles)
+            // Leaves rows y=3 and y=4 as a contiguous 2-tile corridor for large units (2x2)
+            { x: 6, y: 5 },
+            { x: 6, y: 6 },
+            { x: 6, y: 7 }
+        ];
+        this.naturalBarriers = barrierCoords;
+        setNaturalBarriers(barrierCoords);
+
+        barrierCoords.forEach(coord => {
+            const bId = `natural_barrier_${coord.x}_${coord.y}`;
+            const barrierUnit = {
+                id: bId,
+                type: 'natural_barrier',
+                name: 'Natural Barrier',
+                isMinion: true,
+                isConstruct: true,
+                isWall: true,
+                isBarrier: true,
+                isNaturalBarrier: true,
+                skipAI: true,
+                stationary: true,
+                unkillable: true,
+                dead: false,
+                coordinates: { ...coord },
+                hp: 99999,
+                starting_hp: 99999,
+                stats: { hp: 99999, atk: 0, def: 999, speed: 0 },
+                hasStamina: false,
+                isMonster: false,
+                isOpponent: false,
+                portrait: images.terrain_mountain_1 || images.terrain_1,
+                cooldowns: {},
+                activeBuffs: [],
+                activeDebuffs: []
+            };
+            this.combatants[bId] = barrierUnit;
+            this._setCombatantOccupiedCoords(barrierUnit);
+        });
     };
 
     // Direct accessor methods — available without calling initialize()
@@ -839,6 +896,13 @@ export function CombatManagerRedux() {
         this.combatOver = false;
         this.combatPaused = false;
         this.showBars = false;
+
+        if (isLargeBoard) {
+            this._spawnNaturalBarriers();
+        } else {
+            this.naturalBarriers = [];
+            setNaturalBarriers([]);
+        }
 
         const callbacks = {
             broadcastDataUpdate: (c) => {
@@ -1477,6 +1541,11 @@ export function CombatManagerRedux() {
         }
     };
 
+    this._clearCombatantOccupiedCoords = (combatant) => {
+        if (!combatant) return;
+        combatant.occupiedCoords = [];
+    };
+
     this._setCombatantOccupiedCoords = (combatant, battleData) => {
         if (!combatant) return;
         combatant.occupiedCoords = [];
@@ -1485,6 +1554,9 @@ export function CombatManagerRedux() {
         if (combatant.isOpponent) {
             return;
         }
+
+        const maxRows = this.numRows || (this.boardSize === 'large' ? 8 : 6);
+        const maxCols = this.numColumns || (this.boardSize === 'large' ? 12 : 8);
 
         const isHuge = !combatant.isShrineGuardian && (
             (typeof combatant.huge === 'boolean' && combatant.huge === true)
@@ -1523,7 +1595,7 @@ export function CombatManagerRedux() {
                 { x: combatant.coordinates.x + 2 * hOffset, y: combatant.coordinates.y - 2 }
             ];
             extraCoords.forEach(coord => {
-                if (coord.x >= 0 && coord.x < (this.numColumns || 8) && coord.y >= 0 && coord.y < 6) {
+                if (coord.x >= 0 && coord.x < maxCols && coord.y >= 0 && coord.y < maxRows) {
                     if (!combatant.occupiedCoords.some(c => c.x === coord.x && c.y === coord.y)) {
                         combatant.occupiedCoords.push(coord);
                     }
@@ -1576,7 +1648,7 @@ export function CombatManagerRedux() {
                 { x: combatant.coordinates.x + hOffset, y: combatant.coordinates.y - 1 }
             ];
             extraCoords.forEach(coord => {
-                if (coord.x >= 0 && coord.x < (this.numColumns || 8) && coord.y >= 0 && coord.y < 6) {
+                if (coord.x >= 0 && coord.x < maxCols && coord.y >= 0 && coord.y < maxRows) {
                     if (!combatant.occupiedCoords.some(c => c.x === coord.x && c.y === coord.y)) {
                         combatant.occupiedCoords.push(coord);
                     }
@@ -1634,6 +1706,7 @@ export function CombatManagerRedux() {
     };
 
     this.isTileOccupied = (x, y, excludeUnitId = null) => {
+        if (isNaturalBarrierAt({ x, y })) return true;
         return Object.values(this.combatants).some(c => {
             if (!c || c.dead) return false;
             if (c.id === excludeUnitId) return false;
@@ -1645,7 +1718,7 @@ export function CombatManagerRedux() {
     };
     this.shouldPushbackSucceed = (target, forceBoost = false) => {
         if (!target) return true;
-        if (target.stationary || target.isWall || target.type === 'turret' || target.type === 'engineer_wall') return false;
+        if (target.stationary || target.isWall || target.isBarrier || target.isNaturalBarrier || target.type === 'turret' || target.type === 'engineer_wall' || target.type === 'natural_barrier') return false;
         const isMonster = target.isMonster === true;
         const isMinion = target.isMinion === true;
         if (isMonster && !isMinion) {
@@ -1684,6 +1757,7 @@ export function CombatManagerRedux() {
     this.canFitAt = (unit, x, y) => {
         if (!unit) return false;
         if (x < 0 || x > MAX_DEPTH || y < 0 || y >= MAX_LANES) return false;
+        if (isNaturalBarrierAt({ x, y })) return false;
 
         // Block moves that cross an active shield wall
         const intelTier = this.getUnitIntelligenceTier(unit);
@@ -2328,6 +2402,9 @@ export function CombatManagerRedux() {
                 siegeLog(`[targetInRange] cc:`, cc, `tc:`, tc, `crossesShieldWall:`, crosses);
                 return false;
             }
+            if (rangeType !== 'close' && rangeType !== 'self' && cc && tc && this.isPathBlockedByBarrier(cc, tc)) {
+                return false;
+            }
             const dx = Math.abs(cc.x - tc.x);
             const dy = Math.abs(cc.y - tc.y);
             if (rangeType === 'close') {
@@ -2394,6 +2471,7 @@ export function CombatManagerRedux() {
 
         let candidateTargets = Object.values(this.combatants).filter(c => {
             if (!c || c.dead || c.isVCT || typeof c.inTrial === 'number') return false;
+            if (c.isWall || c.isBarrier || c.isNaturalBarrier || c.type === 'engineer_wall' || (c.stationary && c.unkillable)) return false;
             if (excludeTargetIds && excludeTargetIds.includes(c.id)) return false;
 
             // Invisibility check: cannot target invisible units unless caller has Eagle Eye
@@ -2411,6 +2489,7 @@ export function CombatManagerRedux() {
         if (candidateTargets.length === 0 && excludeTargetIds && excludeTargetIds.length > 0) {
             candidateTargets = Object.values(this.combatants).filter(c => {
                 if (!c || c.dead || c.isVCT || typeof c.inTrial === 'number') return false;
+                if (c.isWall || c.isBarrier || c.isNaturalBarrier || c.type === 'engineer_wall' || (c.stationary && c.unkillable)) return false;
                 if (checkHashmallimDominatedTarget(c)) return true;
                 const callerIsEnemy = !!caller.isMonster;
                 const cIsEnemy = !!c.isMonster;
@@ -2733,7 +2812,7 @@ export function CombatManagerRedux() {
         let monstersAlive = false;
 
         Object.values(this.combatants).forEach(c => {
-            if (!c || c.dead || c.isVCT) return;
+            if (!c || c.dead || c.isVCT || c.isWall || c.isBarrier || c.isNaturalBarrier || c.type === 'engineer_wall') return;
             const isTemporarilyDominatedCrew = c.dominated && c._dominatedOriginalIsMonster === false && !c.permanentlyDominated;
             if (c.isMonster && !isTemporarilyDominatedCrew) {
                 monstersAlive = true;
@@ -2912,7 +2991,7 @@ export function CombatManagerRedux() {
         if (this.combatPaused || this.combatOver) return;
         this.rebuildActiveShieldWalls();
 
-        const activeUnits = Object.values(this.combatants).filter(c => c && !c.dead && c.hp > 0 && !c.isVCT && !c.skipAI && !c.isWall && c.type !== 'engineer_wall' && typeof c.inTrial !== 'number');
+        const activeUnits = Object.values(this.combatants).filter(c => c && !c.dead && c.hp > 0 && !c.isVCT && !c.skipAI && !c.isWall && !c.isBarrier && !c.isNaturalBarrier && c.type !== 'engineer_wall' && typeof c.inTrial !== 'number');
         if (activeUnits.length === 0) {
             this.turnsExecuting = false;
         } else {
@@ -12228,7 +12307,7 @@ export function CombatManagerRedux() {
         if (abilityId === 'barbarian_leap_attack') {
             const targetTiles = (Array.isArray(target.occupiedCoords) && target.occupiedCoords.length > 0)
                 ? target.occupiedCoords
-                : [target.coordinates];
+                : (target.coordinates ? [target.coordinates] : []);
 
             let bestAdj = null;
             let minSelfDist = Infinity;
@@ -12239,7 +12318,12 @@ export function CombatManagerRedux() {
                         const nx = tile.x + dx;
                         const ny = tile.y + dy;
                         if (nx < 0 || nx > MAX_DEPTH || ny < 0 || ny >= MAX_LANES) continue;
+                        if (targetTiles.some(t => t.x === nx && t.y === ny)) continue;
+                        if (target.coordinates && target.coordinates.x === nx && target.coordinates.y === ny) continue;
+                        if (isNaturalBarrierAt({ x: nx, y: ny })) continue;
                         if (this.isTileOccupied(nx, ny, unit.id)) continue;
+                        if (!this.canFitAt(unit, nx, ny)) continue;
+                        if (!MovementMethods.isAvailableToMoveInto({ x: nx, y: ny }, this.combatants, origCallerCoords, unit)) continue;
                         const dSelf = Math.abs(origCallerCoords.x - nx) + Math.abs(origCallerCoords.y - ny);
                         if (dSelf < minSelfDist) {
                             minSelfDist = dSelf;
@@ -12300,52 +12384,69 @@ export function CombatManagerRedux() {
         if (this.animationManager && typeof this.animationManager.triggerVisualAbility === 'function') {
             this.animationManager.triggerVisualAbility(unit.id, target.id, ability);
         }
+
+        const callerTiles = (origCallerOccupied && origCallerOccupied.length > 0) ? origCallerOccupied : [origCallerCoords];
+        const targetTiles = (Array.isArray(target.occupiedCoords) && target.occupiedCoords.length > 0) ? target.occupiedCoords : [target.coordinates];
+        let bestCallerCoord = origCallerCoords;
+        let bestTargetCoord = target.coordinates;
+        let minDistance = Infinity;
+        callerTiles.forEach(cc => {
+            targetTiles.forEach(tc => {
+                const dist = Math.abs(cc.x - tc.x) + Math.abs(cc.y - tc.y);
+                if (dist < minDistance) {
+                    minDistance = dist;
+                    bestCallerCoord = cc;
+                    bestTargetCoord = tc;
+                }
+            });
+        });
+
+        const isCallerLarge = !unit.isShrineGuardian && (unit.isMonster || unit.isMinion) && (!unit.isMinion || unit.tier === 3 || unit.tier === 4) && (
+            unit.tier === 4 || unit.tier === 3 || unit.type === 'dragon' || unit.key === 'dragon' || unit.huge === true || unit.size === 3 ||
+            unit.type === 'sphinx' || unit.key === 'sphinx' ||
+            ['beholder', 'ogre', 'manticore', 'wyvern', 'wyvern_alt', 'mummy', 'djinn', 'vampire'].includes(unit.type)
+        );
+
+        let sourceCoord = bestCallerCoord;
+        if (isCallerLarge && !isMeleeAbility) {
+            sourceCoord = unit.coordinates;
+        }
+
+        let targetCoord = bestTargetCoord;
+        let isTargetLarge = !target.isShrineGuardian && (target.isLarge
+            || target.size === 2
+            || (target.isMonster === true && target.isMinion !== true && (target.tier === 3 || target.tier === 4))
+            || (target.type && ['dragon', 'beholder', 'ogre', 'sphinx', 'manticore', 'wyvern', 'wyvern_alt', 'mummy', 'djinn', 'vampire', 'summoned_djinn', 'summoned_mummy', 'summoned_ogre', 'summoned_vampire'].includes(target.type) && (target.isMinion !== true || target.tier === 3 || target.tier === 4))
+            || (target.tier === 3 || target.tier === 4));
+        if (isTargetLarge && !isMeleeAbility) {
+            targetCoord = target.coordinates;
+        }
+        if (abilityId === 'barbarian_leap_attack') {
+            targetCoord = { x: unit.coordinates.x, y: unit.coordinates.y };
+        }
+
         const isRangedProj = ability.range && ability.range !== 'close' && ability.range !== 'self' && abilityId !== 'inspire' && ability.type !== 'summon';
         const isSpellOrProj = isMagicalAbility || isRangedProj;
-        const negatedByBarrier = !!(target && target.arcaneBarrierActive && target.id !== unit.id && ability.range !== 'self' && isSpellOrProj && combatRng.random() < 0.5);
+
+        let activeTargetTiles = targetTiles;
+        const barrierHitCoord = isRangedProj ? this.getBarrierCollision(sourceCoord, targetCoord) : null;
+        if (barrierHitCoord) {
+            targetCoord = barrierHitCoord;
+            isTargetLarge = false;
+            activeTargetTiles = [barrierHitCoord];
+        }
+
+        const negatedByBarrier = !barrierHitCoord && !!(target && target.arcaneBarrierActive && target.id !== unit.id && ability.range !== 'self' && isSpellOrProj && combatRng.random() < 0.5);
 
         if (negatedByBarrier) {
             this.appendCombatLog(`${this.getCombatantLogName(target)}'s Arcane Barrier negated ${this.getCombatantLogName(unit)}'s ${ability.name || abilityId}!`);
             
             if (this.animManagerRedux && typeof this.animManagerRedux.triggerAbility === 'function') {
-                const isTargetLarge = target.isLarge
-                    || target.size === 2
-                    || (target.isMonster === true && target.isMinion !== true && (target.tier === 3 || target.tier === 4))
-                    || (target.type && ['dragon', 'beholder', 'ogre', 'sphinx', 'manticore', 'wyvern', 'wyvern_alt', 'mummy', 'djinn', 'vampire', 'summoned_djinn', 'summoned_mummy', 'summoned_ogre', 'summoned_vampire'].includes(target.type) && (target.isMinion !== true || target.tier === 3 || target.tier === 4))
-                    || (target.tier === 3 || target.tier === 4);
-                const callerTiles = (origCallerOccupied && origCallerOccupied.length > 0) ? origCallerOccupied : [origCallerCoords];
-                const targetTiles = (Array.isArray(target.occupiedCoords) && target.occupiedCoords.length > 0) ? target.occupiedCoords : [target.coordinates];
-                let bestCallerCoord = origCallerCoords;
-                let bestTargetCoord = target.coordinates;
-                let minDistance = Infinity;
-                callerTiles.forEach(cc => {
-                    targetTiles.forEach(tc => {
-                        const dist = Math.abs(cc.x - tc.x) + Math.abs(cc.y - tc.y);
-                        if (dist < minDistance) {
-                            minDistance = dist;
-                            bestCallerCoord = cc;
-                            bestTargetCoord = tc;
-                        }
-                    });
-                });
-                const isCallerLarge = !unit.isShrineGuardian && (unit.isMonster || unit.isMinion) && (!unit.isMinion || unit.tier === 3 || unit.tier === 4) && (
-                    unit.tier === 4 || unit.tier === 3 || unit.type === 'dragon' || unit.key === 'dragon' || unit.huge === true || unit.size === 3 ||
-                    unit.type === 'sphinx' || unit.key === 'sphinx' ||
-                    ['beholder', 'ogre', 'manticore', 'wyvern', 'wyvern_alt', 'mummy', 'djinn', 'vampire'].includes(unit.type)
-                );
-                let sourceCoord = bestCallerCoord;
-                if (isCallerLarge && !isMeleeAbility) {
-                    sourceCoord = unit.coordinates;
-                }
-                let targetCoord = bestTargetCoord;
-                if (isTargetLarge && !isMeleeAbility) {
-                    targetCoord = target.coordinates;
-                }
                 const activeDarkSphere = isRangedProj ? Object.values(this.combatants).find(c =>
                     c && !c.dead && c.type === 'darkness_sphere' && !!c.isMonster === !!target.isMonster
                 ) : null;
                 const sphereCoords = activeDarkSphere ? activeDarkSphere.coordinates : null;
-                this.animManagerRedux.triggerAbility(sourceCoord, targetCoord, abilityId, isTargetLarge, targetTiles, unit.id, activeArrowType, null, preRolledHits, sphereCoords, true);
+                this.animManagerRedux.triggerAbility(sourceCoord, targetCoord, abilityId, isTargetLarge, activeTargetTiles, unit.id, activeArrowType, null, preRolledHits, sphereCoords, true);
             }
             
             if (abilityId === 'loose' || abilityId === 'execute' || abilityId === 'deadeye_shot' || abilityId === 'burst_shot' || abilityId === 'burst_attack') {
@@ -12359,53 +12460,11 @@ export function CombatManagerRedux() {
         // Sandbox-style Redux animation hook (pure CSS/state)
         // Exclude abilities that manage their own animations inside their custom blocks further down
         if (this.animManagerRedux && typeof this.animManagerRedux.triggerAbility === 'function' && !['mind_swap', 'displacement_ray', 'chainbolt'].includes(abilityId)) {
-            const isTargetLarge = !target.isShrineGuardian && (target.isLarge
-                || target.size === 2
-                || (target.isMonster === true && target.isMinion !== true && (target.tier === 3 || target.tier === 4))
-                || (target.type && ['dragon', 'beholder', 'ogre', 'sphinx', 'manticore', 'wyvern', 'wyvern_alt', 'mummy', 'djinn', 'vampire', 'summoned_djinn', 'summoned_mummy', 'summoned_ogre', 'summoned_vampire'].includes(target.type) && (target.isMinion !== true || target.tier === 3 || target.tier === 4))
-                || (target.tier === 3 || target.tier === 4));
-            // Find closest tiles between caller and target
-            const callerTiles = (origCallerOccupied && origCallerOccupied.length > 0) ? origCallerOccupied : [origCallerCoords];
-            const targetTiles = (Array.isArray(target.occupiedCoords) && target.occupiedCoords.length > 0) ? target.occupiedCoords : [target.coordinates];
-            let bestCallerCoord = origCallerCoords;
-            let bestTargetCoord = target.coordinates;
-            let minDistance = Infinity;
-            callerTiles.forEach(cc => {
-                targetTiles.forEach(tc => {
-                    const dist = Math.abs(cc.x - tc.x) + Math.abs(cc.y - tc.y);
-                    if (dist < minDistance) {
-                        minDistance = dist;
-                        bestCallerCoord = cc;
-                        bestTargetCoord = tc;
-                    }
-                });
-            });
-
-            const isCallerLarge = !unit.isShrineGuardian && (unit.isMonster || unit.isMinion) && (!unit.isMinion || unit.tier === 3 || unit.tier === 4) && (
-                unit.tier === 4 || unit.tier === 3 || unit.type === 'dragon' || unit.key === 'dragon' || unit.huge === true || unit.size === 3 ||
-                unit.type === 'sphinx' || unit.key === 'sphinx' ||
-                ['beholder', 'ogre', 'manticore', 'wyvern', 'wyvern_alt', 'mummy', 'djinn', 'vampire'].includes(unit.type)
-            );
-            // isMeleeAbility is defined in outer useAbility scope
-
-            let sourceCoord = bestCallerCoord;
-            if (isCallerLarge && !isMeleeAbility) {
-                sourceCoord = unit.coordinates;
-            }
-
-            let targetCoord = bestTargetCoord;
-            if (isTargetLarge && !isMeleeAbility) {
-                targetCoord = target.coordinates;
-            }
-            if (abilityId === 'barbarian_leap_attack') {
-                targetCoord = { x: unit.coordinates.x, y: unit.coordinates.y };
-            }
-            const isRangedProj = ability.range && ability.range !== 'close' && ability.range !== 'self' && abilityId !== 'inspire' && ability.type !== 'summon';
             const activeDarkSphere = isRangedProj ? Object.values(this.combatants).find(c =>
                 c && !c.dead && c.type === 'darkness_sphere' && !!c.isMonster === !!target.isMonster
             ) : null;
             const sphereCoords = activeDarkSphere ? activeDarkSphere.coordinates : null;
-            this.animManagerRedux.triggerAbility(sourceCoord, targetCoord, abilityId, isTargetLarge, targetTiles, unit.id, activeArrowType, null, preRolledHits, sphereCoords, false, null, isUltimateActivation);
+            this.animManagerRedux.triggerAbility(sourceCoord, targetCoord, abilityId, isTargetLarge, activeTargetTiles, unit.id, activeArrowType, null, preRolledHits, sphereCoords, false, null, isUltimateActivation);
         }
 
         if (abilityId === 'loose' || abilityId === 'execute' || abilityId === 'deadeye_shot' || abilityId === 'burst_shot' || abilityId === 'burst_attack') {
@@ -12903,6 +12962,12 @@ export function CombatManagerRedux() {
             if (target.hp <= 0 || target.dead) return;
 
             const isRangedProjectile = ability.range && ability.range !== 'close' && ability.range !== 'self' && abilityId !== 'inspire' && ability.type !== 'summon';
+            if (isRangedProjectile && barrierHitCoord) {
+                if (h === 0 || !anyHitConnected) {
+                    this.appendCombatLog(`The projectile struck a natural barrier and was stopped!`);
+                }
+                return;
+            }
             const activeDarknessSphere = isRangedProjectile ? Object.values(this.combatants).find(c =>
                 c && !c.dead && c.type === 'darkness_sphere' && !!c.isMonster === !!target.isMonster
             ) : null;
@@ -13880,6 +13945,9 @@ export function CombatManagerRedux() {
             }
         }
 
+        const maxRows = this.numRows || (this.boardSize === 'large' ? 8 : 6);
+        const maxCols = this.numColumns || (this.boardSize === 'large' ? 12 : 8);
+
         const getDistance = (x, y) => {
             if (targetUnit) {
                 const unitTiles = [{ x, y }];
@@ -13896,7 +13964,7 @@ export function CombatManagerRedux() {
                         { x: x + 2 * hOffset, y: y - 2 }
                     ];
                     extraCoords.forEach(coord => {
-                        if (coord.x >= 0 && coord.x < (this.numColumns || 8) && coord.y >= 0 && coord.y < 6) {
+                        if (coord.x >= 0 && coord.x < maxCols && coord.y >= 0 && coord.y < maxRows) {
                             if (!unitTiles.some(c => c.x === coord.x && c.y === coord.y)) {
                                 unitTiles.push(coord);
                             }
@@ -13910,7 +13978,7 @@ export function CombatManagerRedux() {
                         { x: x + hOffset, y: y - 1 }
                     ];
                     extraCoords.forEach(coord => {
-                        if (coord.x >= 0 && coord.x < (this.numColumns || 8) && coord.y >= 0 && coord.y < 6) {
+                        if (coord.x >= 0 && coord.x < maxCols && coord.y >= 0 && coord.y < maxRows) {
                             if (!unitTiles.some(c => c.x === coord.x && c.y === coord.y)) {
                                 unitTiles.push(coord);
                             }
@@ -14464,9 +14532,9 @@ export function CombatManagerRedux() {
             this.activeWebs = this.activeWebs.filter(web => web.roundsLeft > 0);
         }
 
-        // Decrement wall duration
+        // Decrement wall duration (exclude permanent natural barriers)
         Object.values(this.combatants).forEach(c => {
-            if (c && !c.dead && (c.isWall || c.type === 'engineer_wall')) {
+            if (c && !c.dead && !c.isNaturalBarrier && (c.isWall || c.type === 'engineer_wall')) {
                 c.roundsRemaining = (c.roundsRemaining !== undefined ? c.roundsRemaining : 10) - 1;
                 if (c.roundsRemaining <= 0) {
                     c.dead = true;

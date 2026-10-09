@@ -152,6 +152,14 @@ export class AnimationManagerRedux {
    */
    triggerAbility(sourceCoords, targetCoords, abilityName, isTargetLarge = false, targetOccupiedCoords = null, sourceUnitId = null, arrowType = null, customDuration = null, hitResults = null, sphereCoords = null, negatedByBarrier = false, casterId = null, isUltimate = false) {
     if (!sourceCoords || !targetCoords) return;
+    if (this.combatManager && typeof this.combatManager.getBarrierCollision === 'function') {
+      const bHit = this.combatManager.getBarrierCollision(sourceCoords, targetCoords);
+      if (bHit) {
+        targetCoords = bHit;
+        isTargetLarge = false;
+        targetOccupiedCoords = null;
+      }
+    }
     const name = String(abilityName || '').toLowerCase().replace(/\s+/g, '_');
     this._currentTargetCoords = targetCoords;
     this._isTargetLarge = isTargetLarge;
@@ -2168,6 +2176,10 @@ export class AnimationManagerRedux {
 
   _adjustTargetForWall(src, tgt) {
     if (!src || !tgt || !this.combatManager) return tgt;
+    if (typeof this.combatManager.getBarrierCollision === 'function') {
+      const bHit = this.combatManager.getBarrierCollision(src, tgt);
+      if (bHit) return bHit;
+    }
     const combatants = this.combatManager.combatants || {};
     const dx = tgt.x - src.x;
     const dy = tgt.y - src.y;
@@ -2178,7 +2190,7 @@ export class AnimationManagerRedux {
         const cx = Math.round(src.x + (dx * i) / steps);
         const cy = Math.round(src.y + (dy * i) / steps);
         const wall = Object.values(combatants).find(c => 
-            c && !c.dead && (c.isWall || c.type === 'engineer_wall') &&
+            c && !c.dead && (c.isWall || c.type === 'engineer_wall' || c.isBarrier || c.isNaturalBarrier) &&
             c.coordinates && c.coordinates.x === cx && c.coordinates.y === cy
         );
         if (wall) {

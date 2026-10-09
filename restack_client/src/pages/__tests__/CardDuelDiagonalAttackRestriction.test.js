@@ -92,7 +92,7 @@ describe('CardDuel Diagonal Attack Restriction (Limited to Wizard)', () => {
         expect(targets.attacks).not.toContain('4_2');
     });
 
-    test('multi-tile pygmy war band (1x2) CAN attack to the side', () => {
+    test('all pygmy units regardless of size (including multi-tile pygmy war band) can only move and attack forward', () => {
         const warband = {
             id: 'player_warband',
             name: 'Pygmy War Band',
@@ -124,10 +124,10 @@ describe('CardDuel Diagonal Attack Restriction (Limited to Wizard)', () => {
 
         const targets = instance.getValidTargetTiles(warband);
 
-        // Multi-tile pygmy warband can attack in front AND to the sides
+        // Multi-tile pygmy warband can ONLY attack directly in front, NOT to the sides
         expect(targets.attacks).toContain('1_2'); // Front
-        expect(targets.attacks).toContain('2_1'); // Left
-        expect(targets.attacks).toContain('2_3'); // Right
+        expect(targets.attacks).not.toContain('2_1'); // Left
+        expect(targets.attacks).not.toContain('2_3'); // Right
     });
 
     test('standard non-pygmy units (e.g. soldier) CAN attack to the side', () => {
@@ -428,7 +428,7 @@ describe('CardDuel Diagonal Attack Restriction (Limited to Wizard)', () => {
         expect(playerUnit.hp).toBe(3);
     });
 
-    test('executeReaperTurn allows AI multi-tile pygmy war band to attack sideways', () => {
+    test('executeReaperTurn restricts AI multi-tile pygmy war band from attacking sideways', () => {
         const reaperWarBand = {
             id: 'reaper_warband',
             name: 'Pygmy War Band',
@@ -468,7 +468,56 @@ describe('CardDuel Diagonal Attack Restriction (Limited to Wizard)', () => {
 
         instance.executeReaperTurn();
 
-        // Multi-tile war band can attack to the side: player unit damaged from 4 to 1
-        expect(playerUnit.hp).toBe(1);
+        // Multi-tile war band cannot attack to the side: player unit takes NO damage
+        expect(playerUnit.hp).toBe(4);
+    });
+
+    test('all pygmy units regardless of size (2x2 Giant Pygmy) can only move and attack forward', () => {
+        const giantPygmy = {
+            id: 'player_giant_pygmy',
+            name: 'Giant Pygmy',
+            type: 'giant_pygmy',
+            owner: 'player',
+            atk: 4,
+            hp: 4,
+            maxHp: 4,
+            width: 2,
+            height: 2,
+            anchorRow: 2,
+            anchorCol: 1,
+            summoningSickness: false,
+            hasActedThisTurn: false,
+            occupiedKeys: ['2_1', '2_2', '3_1', '3_2']
+        };
+
+        const enemyFrontLeft = { id: 'enemy_fl', owner: 'reaper', hp: 2, anchorRow: 1, anchorCol: 1 };
+        const enemySideLeft = { id: 'enemy_sl', owner: 'reaper', hp: 2, anchorRow: 2, anchorCol: 0 };
+        const enemySideRight = { id: 'enemy_sr', owner: 'reaper', hp: 2, anchorRow: 2, anchorCol: 3 };
+
+        instance.state.grid = {
+            '2_1': giantPygmy,
+            '2_2': giantPygmy,
+            '3_1': giantPygmy,
+            '3_2': giantPygmy,
+            '1_1': enemyFrontLeft,
+            '2_0': enemySideLeft,
+            '2_3': enemySideRight
+        };
+
+        const targets = instance.getValidTargetTiles(giantPygmy);
+
+        // Giant pygmy can attack directly in front of occupied columns
+        expect(targets.attacks).toContain('1_1');
+        // Cannot attack sideways
+        expect(targets.attacks).not.toContain('2_0');
+        expect(targets.attacks).not.toContain('2_3');
+
+        // Movement: can only move forward into row 1 (1_2 is empty forward anchor slot)
+        expect(targets.moves).toContain('1_2');
+        // Cannot move sideways or backward
+        expect(targets.moves).not.toContain('2_0');
+        expect(targets.moves).not.toContain('2_3');
+        expect(targets.moves).not.toContain('4_1');
+        expect(targets.moves).not.toContain('4_2');
     });
 });

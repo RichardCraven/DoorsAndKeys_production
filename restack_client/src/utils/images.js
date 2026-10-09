@@ -651,8 +651,6 @@ import monk_eyes_glow_gold from '../assets/portraits/crew/monk/monk_eyes_glow_go
 import monk_eyes_glow_red from '../assets/portraits/crew/monk/monk_eyes_glow_red.png'
 import sage_portrait from '../assets/portraits/crew/sage/sage_compressed.png'
 import sage_alt_portrait from '../assets/portraits/crew/sage/sage_alt_compressed.png'
-import sage_alt_grandmotherly_portrait from '../assets/portraits/crew/sage/sage_alt_grandmotherly_compressed.png'
-import sage_alt_shaved_portrait from '../assets/portraits/crew/sage/sage_alt_shaved_compressed.png'
 import wizard_portrait from '../assets/portraits/crew/wizard/wizard_compressed.png'
 import wizard_alt_portrait from '../assets/portraits/crew/wizard/wizard_alt_compressed.png'
 import soldier_portrait from '../assets/portraits/crew/soldier/soldier_compressed.png'
@@ -2305,9 +2303,6 @@ export {
     monk_eyes_glow_red,
     sage_portrait,
     sage_alt_portrait,
-    sage_alt_grandmotherly_portrait,
-    sage_alt_shaved_portrait,
-    sage_alt_shaved_portrait as sage_alt_shaved,
     wizard_portrait,
     wizard_alt_portrait,
     ranger_portrait,
@@ -3120,8 +3115,6 @@ const portraitMap = {
     rogue: ranger_portrait || ranger,
     sage: sage_portrait || sage,
     sage_alt: sage_alt_portrait,
-    sage_alt_grandmotherly: sage_alt_grandmotherly_portrait,
-    sage_alt_shaved: sage_alt_shaved_portrait,
     engineer: engineer,
     engineer_alt: engineer_alt_portrait,
     summoner: summoner,

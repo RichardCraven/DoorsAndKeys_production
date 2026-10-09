@@ -49,6 +49,21 @@ const CLEAR_UNIQUE_DUNGEON_INSTANCES_VALUE = '__clear_unique_dungeon_instances__
 const GENERATE_DUNGEON_VALUE = '__generate_dungeon__';
 const UNIQUE_DUNGEON_INSTANCE_NAME_REGEX = /.+_.+_[^_]{4}$/i;
 
+const toCssUrl = (rawUrl) => {
+  if (!rawUrl || typeof rawUrl !== 'string') return 'none';
+  const trimmed = rawUrl.trim();
+  if (trimmed.startsWith('url(')) return trimmed;
+  return `url("${trimmed}")`;
+};
+
+const resolvePortraitUrl = (portraitVal) => {
+  if (!portraitVal) return '';
+  if (typeof portraitVal === 'string' && (portraitVal.startsWith('/') || portraitVal.startsWith('data:') || portraitVal.startsWith('http'))) {
+    return portraitVal;
+  }
+  return images[portraitVal] || portraitVal;
+};
+
 export function createEmptySuperboard() {
   const miniboards = [];
   for (let mbIdx = 0; mbIdx < 9; mbIdx++) {
@@ -3049,7 +3064,79 @@ class MapMakerPage extends React.Component {
     }
   }
 
-  handleClick = (tile) => {
+  handleSelectMonsterBehavior = (behavior) => {
+    const menu = this.state.monsterBehaviorRadialMenu;
+    if (!menu || menu.tileId === null || menu.tileId === undefined) return;
+
+    const tileId = menu.tileId;
+    const superboardKey = menu.superboardKey;
+
+    const updateTileContains = (tile) => {
+      if (!tile) return tile;
+      const cObj = typeof tile.contains === 'object' && tile.contains ? tile.contains : { type: 'monster', subtype: tile.contains };
+      return {
+        ...tile,
+        contains: {
+          ...cObj,
+          behavior: behavior
+        }
+      };
+    };
+
+    let nextTiles = [...this.state.tiles];
+    if (nextTiles[tileId]) {
+      nextTiles[tileId] = updateTileContains(nextTiles[tileId]);
+    }
+
+    const updatedLoadedBoard = this.state.loadedBoard ? {
+      ...this.state.loadedBoard,
+      tiles: nextTiles
+    } : null;
+
+    let dungeon = this.state.loadedDungeon ? clone(this.state.loadedDungeon) : null;
+    if (dungeon) {
+      if (superboardKey && dungeon.superboards?.[superboardKey]) {
+        const sb = dungeon.superboards[superboardKey];
+        if (Array.isArray(sb.miniboards)) {
+          sb.miniboards.forEach(mb => {
+            if (mb && Array.isArray(mb.tiles) && mb.tiles[tileId]) {
+              mb.tiles[tileId] = updateTileContains(mb.tiles[tileId]);
+            }
+          });
+        }
+      }
+
+      if (Array.isArray(dungeon.levels)) {
+        dungeon.levels.forEach(level => {
+          ['front', 'back'].forEach(orientation => {
+            const plane = level[orientation];
+            if (plane && Array.isArray(plane.miniboards)) {
+              plane.miniboards.forEach(mb => {
+                if (mb && (mb.id === this.state.loadedBoard?.id || mb.name === this.state.loadedBoard?.name)) {
+                  if (mb.tiles && mb.tiles[tileId]) {
+                    mb.tiles[tileId] = updateTileContains(mb.tiles[tileId]);
+                  }
+                }
+              });
+            }
+          });
+        });
+      }
+    }
+
+    this.setState({
+      tiles: nextTiles,
+      loadedBoard: updatedLoadedBoard,
+      loadedDungeon: dungeon || this.state.loadedDungeon,
+      dungeonHasUnsavedChanges: true,
+      boardHasUnsavedChanges: true,
+      monsterBehaviorRadialMenu: { visible: false }
+    });
+
+    this.toast(`Monster behavior set to: ${behavior.toUpperCase()}`);
+  };
+
+  handleClick = (tile, e) => {
     if (tile.type === 'palette-tile') {
       if (tile.optionType === 'voidfill') {
         const arr = this.state.tiles.map(e => {
@@ -3096,17 +3183,52 @@ class MapMakerPage extends React.Component {
         pinnedOption: tile
       })
     } else {
-      // Catch-all: treat as a board tile. We intentionally use `else` rather than
-      // `else if (tile.type === 'board-tile')` because board tiles in state can carry
-      // their content type ('void', 'empty_space', etc.) as the structural `type` field
-      // depending on how they were initialized. All specific non-board types (palette-tile,
-      // monster-tile, passage-tool-tile, etc.) are already handled in the branches above.
-
+      // Catch-all: treat as a board tile.
       const actualTile = this.state.tiles[tile.id] || tile;
       const actualContains = actualTile.contains;
       const containsType = this.getContainsType(actualContains);
       const containsSubtype = typeof actualContains === 'object' ? (actualContains?.subtype || actualContains?.key || actualContains?.building) : (typeof actualContains === 'string' ? actualContains : null);
       const sKey = (actualTile.building || containsSubtype || containsType || (typeof actualContains === 'object' ? actualContains?.building || actualContains?.key || actualContains?.name : actualContains) || '').toString().toLowerCase();
+
+      // Check if tile contains a placed monster
+      const isMonsterTile = containsType === 'monster' || containsType === 'pygmies' || actualTile.type === 'monster-tile' || (typeof actualContains === 'object' && actualContains?.type === 'monster');
+
+      if (isMonsterTile) {
+        const pinnedOption = this.state.pinnedOption;
+        let pinnedPaletteTile = null;
+        if (pinnedOption?.type === 'palette-tile' && this.props.mapMaker?.paletteTiles?.[pinnedOption.id]) {
+          pinnedPaletteTile = this.props.mapMaker.paletteTiles[pinnedOption.id];
+        }
+
+        if (pinnedPaletteTile && pinnedPaletteTile.optionType === 'delete') {
+          // Allow delete to proceed
+        } else {
+          // Left-clicking a placed monster opens radial menu to choose behavior!
+          const evt = e || (typeof window !== 'undefined' && window.event ? window.event : null);
+          const screenX = (evt && typeof evt.clientX === 'number') ? evt.clientX : (window.innerWidth / 2);
+          const screenY = (evt && typeof evt.clientY === 'number') ? evt.clientY : (window.innerHeight / 2);
+          const cObj = typeof actualContains === 'object' && actualContains ? actualContains : { type: 'monster', subtype: actualContains };
+
+          const monsterMatch = Object.values(this.props.monsterManager?.monsters || {}).find(m => m.key === cObj.subtype);
+          const mName = monsterMatch?.name || (cObj.subtype ? String(cObj.subtype).replace(/_/g, ' ') : 'Monster');
+          const mPortrait = actualTile.image || monsterMatch?.portrait || cObj.subtype;
+
+          this.setState({
+            monsterBehaviorRadialMenu: {
+              visible: true,
+              tileId: tile.id,
+              superboardKey: this.state.superboardZoom || null,
+              x: screenX,
+              y: screenY,
+              currentBehavior: cObj.behavior || 'default',
+              monsterName: mName,
+              monsterPortrait: mPortrait
+            }
+          });
+          return;
+        }
+      }
+
       const militaryKeys = ['war_camp', 'war_fort', 'earthen_fort', 'outpost', 'fortress', 'keep', 'domain_monolith', 'dark_domain_monolith', 'domain_node', 'dark_domain_node', 'monolith', 'generator', 'cultivation_vat', 'observer_platform', 'observation_platform', 'observer', 'buildable_observer_platform', 'watchtower'];
       const isMilitaryBuilding = militaryKeys.some(k => sKey.includes(k));
 
@@ -3118,6 +3240,7 @@ class MapMakerPage extends React.Component {
         });
         return;
       }
+
 
       if (containsType === 'dungeon_portal' || containsType === 'dungeon portal') {
         const pinnedOption = this.state.pinnedOption;
@@ -10300,7 +10423,164 @@ class MapMakerPage extends React.Component {
             </div>
           </div>
         )}
+        {/* Monster Behavior Radial Selection Menu */}
+        {this.state.monsterBehaviorRadialMenu?.visible && (() => {
+          const menu = this.state.monsterBehaviorRadialMenu;
+          const behaviors = [
+            { key: 'asleep', label: 'Asleep', icon: '💤', desc: 'Enters combat only if stepped on or attacked', color: '#a855f7', bg: 'rgba(168, 85, 247, 0.35)', border: '#c084fc', glow: 'rgba(168, 85, 247, 0.7)' },
+            { key: 'default', label: 'Default', icon: '🛡️', desc: 'Attacks player when within 1 tile', color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.35)', border: '#93c5fd', glow: 'rgba(59, 130, 246, 0.7)' },
+            { key: 'aggressive', label: 'Aggressive', icon: '⚔️', desc: 'Attacks player when within 2 tiles', color: '#ef4444', bg: 'rgba(239, 68, 68, 0.35)', border: '#fca5a5', glow: 'rgba(239, 68, 68, 0.8)' },
+            { key: 'patrol', label: 'Patrol', icon: '🔄', desc: 'Periodically moves along route & attacks within 1 tile', color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.35)', border: '#fde68a', glow: 'rgba(245, 158, 11, 0.7)' }
+          ];
+
+          const positions = [
+            { x: 0, y: -95 },  // Asleep (Top)
+            { x: 95, y: 0 },   // Default (Right)
+            { x: 0, y: 95 },   // Aggressive (Bottom)
+            { x: -95, y: 0 }   // Patrol (Left)
+          ];
+
+          const menuX = Math.min(Math.max(menu.x, 140), window.innerWidth - 140);
+          const menuY = Math.min(Math.max(menu.y, 140), window.innerHeight - 140);
+
+          return (
+            <div
+              className="radial-menu-backdrop"
+              style={{
+                position: 'fixed',
+                top: 0, left: 0, right: 0, bottom: 0,
+                zIndex: 999999,
+                background: 'rgba(0, 0, 0, 0.5)',
+                backdropFilter: 'blur(4px)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+              onClick={() => this.setState({ monsterBehaviorRadialMenu: { visible: false } })}
+            >
+              <div
+                className="radial-menu-container"
+                style={{
+                  position: 'fixed',
+                  left: `${menuX}px`,
+                  top: `${menuY}px`,
+                  transform: 'translate(-50%, -50%)',
+                  width: '250px',
+                  height: '250px',
+                  pointerEvents: 'auto'
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <svg
+                  style={{
+                    position: 'absolute',
+                    top: 0, left: 0,
+                    width: '100%', height: '100%',
+                    overflow: 'visible',
+                    pointerEvents: 'none'
+                  }}
+                >
+                  {positions.map((pos, idx) => (
+                    <line
+                      key={idx}
+                      x1="125"
+                      y1="125"
+                      x2={125 + pos.x}
+                      y2={125 + pos.y}
+                      stroke={behaviors[idx].border}
+                      strokeWidth="2.5"
+                      strokeDasharray="4 3"
+                      opacity="0.75"
+                    />
+                  ))}
+                </svg>
+
+                {/* Central Monster Badge Node */}
+                <div
+                  style={{
+                    position: 'absolute',
+                    left: '125px',
+                    top: '125px',
+                    transform: 'translate(-50%, -50%)',
+                    width: '76px',
+                    height: '76px',
+                    borderRadius: '50%',
+                    background: 'radial-gradient(circle, #1e1b2e 0%, #0d0b18 100%)',
+                    border: '2.5px solid #f9b115',
+                    boxShadow: '0 0 30px rgba(249, 177, 21, 0.5), inset 0 0 15px rgba(0, 0, 0, 0.8)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 10
+                  }}
+                >
+                  {menu.monsterPortrait && (
+                    <div
+                      style={{
+                        width: '42px',
+                        height: '42px',
+                        borderRadius: '50%',
+                        backgroundImage: toCssUrl(resolvePortraitUrl(menu.monsterPortrait)),
+                        backgroundSize: 'cover',
+                        backgroundPosition: 'center',
+                        border: '1.5px solid rgba(255, 255, 255, 0.4)'
+                      }}
+                    />
+                  )}
+                  <span style={{ fontSize: '9px', fontWeight: 'bold', color: '#f9b115', textTransform: 'uppercase', letterSpacing: '0.5px', marginTop: '2px', textAlign: 'center', maxWidth: '68px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {menu.monsterName || 'Monster'}
+                  </span>
+                </div>
+
+                {/* 4 Radial Option Nodes */}
+                {behaviors.map((b, idx) => {
+                  const pos = positions[idx];
+                  const isSelected = menu.currentBehavior === b.key;
+                  return (
+                    <div
+                      key={b.key}
+                      title={`${b.label}: ${b.desc}`}
+                      onClick={() => this.handleSelectMonsterBehavior(b.key)}
+                      style={{
+                        position: 'absolute',
+                        left: `${125 + pos.x}px`,
+                        top: `${125 + pos.y}px`,
+                        transform: 'translate(-50%, -50%)',
+                        width: isSelected ? '58px' : '52px',
+                        height: isSelected ? '58px' : '52px',
+                        borderRadius: '50%',
+                        background: isSelected ? b.color : 'rgba(20, 16, 32, 0.95)',
+                        border: `2px solid ${b.border}`,
+                        boxShadow: isSelected ? `0 0 24px ${b.glow}, inset 0 0 12px rgba(255, 255, 255, 0.5)` : `0 0 12px ${b.glow}`,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                        transition: 'transform 0.15s ease-in-out, box-shadow 0.15s ease-in-out',
+                        zIndex: 15
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.transform = 'translate(-50%, -50%) scale(1.15)';
+                        e.currentTarget.style.boxShadow = `0 0 28px ${b.glow}`;
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.transform = 'translate(-50%, -50%) scale(1)';
+                        e.currentTarget.style.boxShadow = isSelected ? `0 0 24px ${b.glow}` : `0 0 12px ${b.glow}`;
+                      }}
+                    >
+                      <span style={{ fontSize: '18px', lineHeight: 1 }}>{b.icon}</span>
+                      <span style={{ fontSize: '9px', fontWeight: 'bold', color: isSelected ? '#ffffff' : b.border, marginTop: '2px' }}>{b.label}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
         <PerformanceOverlay onPurgeMemory={this.purgeMemoryAndArrays} />
+
       </div>
     )
 

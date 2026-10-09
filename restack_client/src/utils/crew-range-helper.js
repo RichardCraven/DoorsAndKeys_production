@@ -47,9 +47,9 @@ export function getCrewRangeRingSpecs(selectedMember, bgStr = '', inSuperboard =
         };
     }
 
-    // Wizard: regular vision radius = 2 tiles
-    // Ranger: enhanced vision radius = 4 tiles (chemical lantern vision radius)
-    const rangeTiles = isRanger ? 4 : 2;
+    // Wizard: regular vision radius = 3 tiles
+    // Ranger: enhanced vision radius = 5 tiles (chemical lantern vision radius)
+    const rangeTiles = isRanger ? 5 : 3;
     const diameterPx = rangeTiles * 2 * tileSize;
     const color = isWizard ? '#38bdf8' : '#4ade80';
     const bgGlow = isWizard ? 'rgba(56, 189, 248, 0.08)' : 'rgba(74, 222, 128, 0.08)';
