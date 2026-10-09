@@ -984,6 +984,18 @@ ul.dropdown-menu.show {
             border-radius: 8px;
             top: calc(50% - 4px);
             left: 18px;
+            cursor: pointer;
+            z-index: 20;
+
+            &::after {
+                content: '';
+                position: absolute;
+                top: -6px;
+                left: -6px;
+                right: -6px;
+                bottom: -6px;
+                border-radius: 50%;
+            }
 
             &.valid {
                 background-color: lightgreen;
@@ -991,6 +1003,59 @@ ul.dropdown-menu.show {
 
             &.invalid {
                 background-color: red;
+            }
+
+            .validation-errors-tooltip {
+                display: none;
+                position: absolute;
+                top: calc(100% + 10px);
+                left: 0;
+                background: rgba(20, 20, 20, 0.95);
+                border: 1px solid rgba(249, 177, 21, 0.4);
+                box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.6), 0 0 8px rgba(229, 62, 62, 0.2);
+                border-radius: 6px;
+                padding: 8px 12px;
+                color: #f7fafc;
+                font-size: 11px;
+                line-height: 1.4;
+                z-index: 99999;
+                width: max-content;
+                max-width: 380px;
+                text-align: left;
+                pointer-events: none;
+                opacity: 0;
+                transition: opacity 0.15s ease-in-out;
+                white-space: normal;
+
+                ul {
+                    margin: 0;
+                    padding-left: 14px;
+                    list-style-type: disc;
+
+                    li {
+                        margin-bottom: 4px;
+                        color: #feb2b2;
+                        font-weight: normal;
+                        letter-spacing: 0.2px;
+
+                        &:last-child {
+                            margin-bottom: 0;
+                        }
+                    }
+                }
+
+                .valid-text {
+                    color: #a3e635;
+                    font-weight: 600;
+                    white-space: nowrap;
+                }
+            }
+
+            &:hover {
+                .validation-errors-tooltip {
+                    display: block;
+                    opacity: 1;
+                }
             }
         }
 
@@ -1786,8 +1851,8 @@ ul.dropdown-menu.show {
         }
     }
 
-    /* Compact the level info column on the left of each level row */
-    .level-wrapper .level-info {
+    /* Compact the level info column on the left of each level row (exclude superboards header) */
+    .level-wrapper:not(.superboards-level-wrapper) .level-info:not(.superboard-level-info) {
         min-width: 36px !important;
         width: 36px !important;
         padding: 2px !important;
@@ -1801,6 +1866,17 @@ ul.dropdown-menu.show {
             font-size: 10px !important;
             white-space: nowrap !important;
         }
+    }
+
+    .superboard-level-info {
+        width: 100% !important;
+        min-width: 0 !important;
+        flex-direction: row !important;
+        flex-wrap: wrap !important;
+        justify-content: center !important;
+        align-items: center !important;
+        padding: 0 16px 8px 16px !important;
+        box-sizing: border-box !important;
     }
 
     .board-view-container,
@@ -2230,5 +2306,110 @@ ul.dropdown-menu.show {
 
     &:hover {
         opacity: 1;
+    }
+}
+
+/* ── Monster Patrol Placement & Route Visuals ─────────────────────────────── */
+
+.patrol-placement-cursor,
+.patrol-placement-cursor * {
+    cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='11' fill='rgba(245,158,11,0.2)' stroke='%23f59e0b' stroke-width='2' stroke-dasharray='4 2'/%3E%3Ccircle cx='16' cy='16' r='3' fill='%23f59e0b'/%3E%3Cline x1='16' y1='1' x2='16' y2='8' stroke='%23f59e0b' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='16' y1='24' x2='16' y2='31' stroke='%23f59e0b' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='1' y1='16' x2='8' y2='16' stroke='%23f59e0b' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='24' y1='16' x2='31' y2='16' stroke='%23f59e0b' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") 16 16, crosshair !important;
+}
+
+@keyframes patrol-arc-dash {
+    from {
+        stroke-dashoffset: 32;
+    }
+    to {
+        stroke-dashoffset: 0;
+    }
+}
+
+@keyframes patrol-pulse-glow {
+    0% {
+        stroke-opacity: 0.7;
+        fill-opacity: 0.15;
+    }
+    50% {
+        stroke-opacity: 1;
+        fill-opacity: 0.38;
+    }
+    100% {
+        stroke-opacity: 0.7;
+        fill-opacity: 0.15;
+    }
+}
+
+@keyframes patrol-banner-slide {
+    from {
+        opacity: 0;
+        transform: translate(-50%, -12px);
+    }
+    to {
+        opacity: 1;
+        transform: translate(-50%, 0);
+    }
+}
+
+.patrol-arc-line {
+    animation: patrol-arc-dash 0.8s linear infinite;
+}
+
+.patrol-arc-line-committed {
+    animation: patrol-arc-dash 1.6s linear infinite;
+}
+
+.patrol-target-reticle {
+    animation: patrol-pulse-glow 1.2s ease-in-out infinite;
+}
+
+.patrol-placement-banner {
+    position: fixed;
+    top: 68px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10000;
+    background: rgba(18, 16, 24, 0.95);
+    border: 1.5px solid #f59e0b;
+    border-radius: 24px;
+    padding: 8px 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.75), 0 0 16px rgba(245, 158, 11, 0.45);
+    color: #f3f4f6;
+    font-size: 13px;
+    backdrop-filter: blur(8px);
+    pointer-events: auto;
+    animation: patrol-banner-slide 0.25s ease-out;
+
+    .patrol-banner-icon {
+        font-size: 16px;
+    }
+
+    .patrol-banner-text {
+        strong {
+            color: #f59e0b;
+            margin-right: 4px;
+        }
+    }
+
+    .patrol-banner-cancel-btn {
+        background: rgba(239, 68, 68, 0.2);
+        border: 1px solid rgba(239, 68, 68, 0.6);
+        color: #fca5a5;
+        border-radius: 12px;
+        padding: 3px 10px;
+        font-size: 11px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.15s ease;
+
+        &:hover {
+            background: rgba(239, 68, 68, 0.4);
+            border-color: #ef4444;
+            color: #fff;
+            transform: scale(1.05);
+        }
     }
 }

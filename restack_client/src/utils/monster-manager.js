@@ -1076,6 +1076,7 @@ export function MonsterManager() {
             tier: 3,
             subtype: 'eldritch',
             key: 'vallgorguina_djinn',
+            locked: true,
             image_names: ['vallgorguina_djinn'],
             monster_names: ["Xavier's Shadow", 'The Abductor', 'Subterranean Djinn', 'Cave Stalker'],
             lordName: 'The Vallgorguina Entity',

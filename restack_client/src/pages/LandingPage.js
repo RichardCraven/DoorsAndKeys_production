@@ -441,12 +441,17 @@ export default function LandingPage(props) {
   }, []);
 
   const [navToUserProfile, setNavUserProfile] = useState(false);
+  const setNavToUserProfile = setNavUserProfile;
   const [navToCombatSimulator, setNavToCombatSimulator] = useState(false);
   const [navToCrew, setNavCrew] = useState(false);
+  const setNavToCrew = setNavCrew;
   const [navToPortal, setNavMapmaker] = useState(false);
+  const setNavToPortal = setNavMapmaker;
 
   const [navToUsermanager, setNavUsermanager] = useState(false);
+  const setNavToUsermanager = setNavUsermanager;
   const [navToDungeon, setNavDungeon] = useState(false);
+  const setNavToDungeon = setNavDungeon;
   const [navToSandbox, setNavToSandbox] = useState(false);
   const [navToTutorials, setNavToTutorials] = useState(false);
 
@@ -743,6 +748,7 @@ export default function LandingPage(props) {
 
   const [isAdmin, setIsAdmin] = useState(false)
   const [showWarning, setShowWarning] = useState(false)
+  const [showAffiliationModal, setShowAffiliationModal] = useState(false)
   const [validDungeons, setValidDungeons] = useState([])
   const [activePresenceMap, setActivePresenceMap] = useState({})
   const [allDungeons, setAllDungeons] = useState([])
@@ -1044,6 +1050,10 @@ export default function LandingPage(props) {
       setShowWarning(true)
       return
     }
+    if (!meta.affiliation) {
+      setShowAffiliationModal(true);
+      return;
+    }
     if (meta.dungeonId) {
       meta.dungeonEntered = true;
       meta.rosterLocked = true;
@@ -1223,7 +1233,7 @@ export default function LandingPage(props) {
       <header className="landing-header">
         <div className="header-logo" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '2px' }}>
           <span className="logo-title">Dream Tower</span>
-          <span className="logo-subtitle" style={{ textAlign: 'left', alignSelf: 'flex-start' }}>v 0.9.5  BETA</span>
+          <span className="logo-subtitle" style={{ textAlign: 'left', alignSelf: 'flex-start' }}>v 0.9.6  BETA</span>
           {serverWarming && (
             <span style={{
               marginLeft: '8px',
@@ -3385,6 +3395,87 @@ export default function LandingPage(props) {
                 }}
               >
                 Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showAffiliationModal && (
+        <div
+          className="crew-showcase-overlay"
+          data-testid="affiliation-required-modal"
+          style={{ zIndex: 10010, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.75)' }}
+          onClick={() => setShowAffiliationModal(false)}
+        >
+          <div
+            className="crew-showcase-modal"
+            style={{
+              maxWidth: '460px',
+              padding: '30px',
+              backgroundColor: '#171412',
+              border: '1px solid rgba(229, 181, 79, 0.45)',
+              borderRadius: '8px',
+              boxShadow: '0 10px 30px rgba(0,0,0,0.8), 0 0 20px rgba(229, 181, 79, 0.15)',
+              textAlign: 'center',
+              position: 'relative'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              className="crew-showcase-close-btn"
+              onClick={() => setShowAffiliationModal(false)}
+              title="Close"
+              style={{ position: 'absolute', top: '12px', right: '16px', background: 'none', border: 'none', color: '#aaa', fontSize: '20px', cursor: 'pointer' }}
+            >
+              ✕
+            </button>
+            <div style={{ fontSize: '36px', marginBottom: '12px' }}>🛡️</div>
+            <h3 style={{ margin: '0 0 12px 0', color: '#ffd700', fontFamily: "'Cinzel', serif", fontSize: '1.3rem', letterSpacing: '1px', textTransform: 'uppercase' }}>
+              Affiliation Required
+            </h3>
+            <p style={{ color: 'rgba(255, 255, 255, 0.85)', fontSize: '0.95rem', lineHeight: '1.6', marginBottom: '24px' }}>
+              You cannot enter a dungeon without declaring an affiliation. Choose your affiliation (<strong>Mox</strong>, <strong>Benthic</strong>, or <strong>Pyric</strong>) on your Profile screen to proceed.
+            </p>
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+              <button
+                className="btn-choose-affiliation"
+                onClick={() => {
+                  setShowAffiliationModal(false);
+                  setNavUserProfile(true);
+                }}
+                style={{
+                  padding: '10px 28px',
+                  background: 'linear-gradient(135deg, #d4af37, #aa820a)',
+                  color: '#111',
+                  border: 'none',
+                  borderRadius: '4px',
+                  fontWeight: 'bold',
+                  fontFamily: "'Cinzel', serif",
+                  letterSpacing: '1px',
+                  fontSize: '0.95rem',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 12px rgba(212, 175, 55, 0.3)'
+                }}
+              >
+                Choose
+              </button>
+              <button
+                className="btn-cancel-affiliation"
+                onClick={() => setShowAffiliationModal(false)}
+                style={{
+                  padding: '10px 20px',
+                  background: 'rgba(255,255,255,0.1)',
+                  color: '#ccc',
+                  border: '1px solid rgba(255,255,255,0.2)',
+                  borderRadius: '4px',
+                  fontFamily: "'Cinzel', serif",
+                  letterSpacing: '1px',
+                  fontSize: '0.95rem',
+                  cursor: 'pointer'
+                }}
+              >
+                Cancel
               </button>
             </div>
           </div>

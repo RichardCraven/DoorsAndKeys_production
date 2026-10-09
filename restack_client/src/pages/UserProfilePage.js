@@ -26,8 +26,27 @@ class UserProfilePage extends React.Component{
       isEditingName: false,
       editedName: '',
       isSavingName: false,
-      nameSaveSuccess: false
+      nameSaveSuccess: false,
+      affiliationSaveSuccess: false
     }
+  }
+
+  selectAffiliation = async (affiliationKey) => {
+    let meta = getMeta() || {};
+    meta.affiliation = affiliationKey;
+    storeMeta(meta);
+    try {
+      await updateUserRequest(getUserId(), meta);
+    } catch (e) {
+      console.error('Failed to update affiliation:', e);
+    }
+    this.setState({
+      user: { ...this.state.user, affiliation: affiliationKey },
+      affiliationSaveSuccess: true
+    });
+    setTimeout(() => {
+      this.setState({ affiliationSaveSuccess: false });
+    }, 1500);
   }
 
   componentWillMount(){
@@ -38,7 +57,7 @@ class UserProfilePage extends React.Component{
   }
 
   getDungeonDetails = async () => {
-    const user = getMeta();
+    const user = getMeta() || {};
     const username = getUserName();
     console.log('Profile page - getUserName():', username);
     console.log('Profile page - getMeta():', user);
@@ -373,6 +392,108 @@ class UserProfilePage extends React.Component{
           </div>
           
           <div className="profile-column" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+            {/* Affiliations Section */}
+            <div className="profile-section" style={{ marginBottom: '16px' }}>
+              <div className="section-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <span>Affiliation</span>
+                {user?.affiliation && (
+                  <span style={{
+                    fontSize: '11px',
+                    fontWeight: 'bold',
+                    textTransform: 'uppercase',
+                    color: user.affiliation === 'mox' ? '#2ecc71' : user.affiliation === 'benthic' ? '#a855f7' : '#f97316'
+                  }}>
+                    Active: {user.affiliation.toUpperCase()} {this.state.affiliationSaveSuccess && '✓'}
+                  </span>
+                )}
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', width: '100%' }}>
+                {[
+                  {
+                    key: 'mox',
+                    name: 'Mox',
+                    color: '#2ecc71',
+                    bg: 'rgba(46, 204, 113, 0.12)',
+                    activeBorder: '#2ecc71',
+                    banner: images.moxadite_banner?.default || images.moxadite_banner
+                  },
+                  {
+                    key: 'benthic',
+                    name: 'Benthic',
+                    color: '#a855f7',
+                    bg: 'rgba(168, 85, 247, 0.12)',
+                    activeBorder: '#a855f7',
+                    banner: images.benthachite_banner?.default || images.benthachite_banner
+                  },
+                  {
+                    key: 'pyric',
+                    name: 'Pyric',
+                    color: '#f97316',
+                    bg: 'rgba(249, 115, 22, 0.12)',
+                    activeBorder: '#f97316',
+                    banner: images.pyremnite_banner?.default || images.pyremnite_banner
+                  }
+                ].map(aff => {
+                  const isSelected = (user?.affiliation || getMeta()?.affiliation) === aff.key;
+                  return (
+                    <div
+                      key={aff.key}
+                      onClick={() => this.selectAffiliation(aff.key)}
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: '10px 6px',
+                        borderRadius: '6px',
+                        background: isSelected ? aff.bg : 'rgba(255, 255, 255, 0.04)',
+                        border: `1.5px solid ${isSelected ? aff.activeBorder : 'rgba(255, 255, 255, 0.15)'}`,
+                        boxShadow: isSelected ? `0 0 12px ${aff.color}40, inset 0 0 8px ${aff.color}20` : 'none',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease',
+                        position: 'relative'
+                      }}
+                      title={`Select ${aff.name} Affiliation`}
+                    >
+                      {aff.banner ? (
+                        <img
+                          src={aff.banner}
+                          alt={aff.name}
+                          style={{
+                            width: '36px',
+                            height: '48px',
+                            objectFit: 'contain',
+                            filter: isSelected ? `drop-shadow(0 0 6px ${aff.color})` : 'grayscale(30%)',
+                            marginBottom: '6px'
+                          }}
+                        />
+                      ) : (
+                        <div style={{ width: '36px', height: '48px', backgroundColor: aff.color, borderRadius: '4px', marginBottom: '6px' }} />
+                      )}
+                      <span style={{
+                        fontSize: '12px',
+                        fontWeight: isSelected ? 'bold' : 'normal',
+                        color: isSelected ? aff.color : '#e0e0e0',
+                        letterSpacing: '0.5px'
+                      }}>
+                        {aff.name}
+                      </span>
+                      {isSelected && (
+                        <span style={{
+                          fontSize: '10px',
+                          color: aff.color,
+                          marginTop: '2px',
+                          fontWeight: 'bold'
+                        }}>
+                          ✓ ACTIVE
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
             <div className="profile-section">
               <div className="section-label">Current Dungeon</div>
             <div className="section-value">

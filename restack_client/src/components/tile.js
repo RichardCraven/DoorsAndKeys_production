@@ -24,6 +24,49 @@ export const isTerritoryLanternItem = (item) => {
     );
 };
 
+export const getTileRecoilDirection = (bumpVector, unitObj, tileProps) => {
+    if (bumpVector) {
+        const c = typeof bumpVector.dCol === 'number' ? bumpVector.dCol : (typeof bumpVector.x === 'number' ? bumpVector.x : 0);
+        const r = typeof bumpVector.dRow === 'number' ? bumpVector.dRow : (typeof bumpVector.y === 'number' ? bumpVector.y : 0);
+        if (Math.abs(c) >= Math.abs(r) && c !== 0) {
+            return c > 0 ? 'right' : 'left';
+        } else if (r !== 0) {
+            return r > 0 ? 'down' : 'up';
+        }
+    }
+
+    const explicitDir = unitObj?.recoilDirection || tileProps?.recoilDirection;
+    if (explicitDir && ['left', 'right', 'up', 'down'].includes(explicitDir)) {
+        return explicitDir;
+    }
+
+    if (tileProps) {
+        const playerIdx = tileProps.playerIdx ?? tileProps.playerIndex;
+        const currentIdx = tileProps.id ?? tileProps.index;
+        if (typeof playerIdx === 'number' && typeof currentIdx === 'number' && playerIdx >= 0) {
+            const pCol = playerIdx % 15;
+            const pRow = Math.floor(playerIdx / 15);
+            const tCol = currentIdx % 15;
+            const tRow = Math.floor(currentIdx / 15);
+            const diffCol = tCol - pCol;
+            const diffRow = tRow - pRow;
+            if (Math.abs(diffCol) >= Math.abs(diffRow) && diffCol !== 0) {
+                return diffCol > 0 ? 'right' : 'left';
+            } else if (diffRow !== 0) {
+                return diffRow > 0 ? 'down' : 'up';
+            }
+        }
+    }
+
+    const facing = unitObj?.facing || tileProps?.facing || tileProps?.playerFacing;
+    if (facing === 'left') return 'right';
+    if (facing === 'right') return 'left';
+    if (facing === 'up') return 'down';
+    if (facing === 'down') return 'up';
+
+    return 'right';
+};
+
 export const checkHasTerritoryLantern = (props) => {
     if (props && props.hasTerritoryLantern !== undefined) {
         return !!props.hasTerritoryLantern;
@@ -745,7 +788,7 @@ function Tile(props) {
     const is3x3Structure = sKey.includes('keep') || sKey.includes('fortress') || sKey.includes('fractured_monolith');
     const isLocusTile = sKey.includes('locus') || (containsObj && (containsObj.type === 'locus' || containsObj.locusType || (typeof containsObj.subtype === 'string' && containsObj.subtype.includes('locus'))));
     const isLocusActiveOrAdjacent = (isLocusTile || props.isAdjacentLocus) && (props.isAdjacentLocus || props.isLocusActive || props.activeLocus);
-    const isStructureTile = sKey.includes('war_camp') || sKey.includes('war_fort') || sKey.includes('earthen_fort') || sKey.includes('outpost') || sKey.includes('observer') || sKey.includes('observation') || sKey.includes('dream_den') || sKey.includes('monolith') || sKey.includes('vat') || sKey.includes('generator') || sKey.includes('ore_mine') || sKey.includes('slate_mine') || sKey.includes('sawmill') || sKey.includes('lumber_mill') || sKey.includes('larder') || sKey.includes('dust_collector') || sKey.includes('fungal_nursery') || sKey.includes('cultivation_vat') || sKey.includes('mine') || sKey.includes('hut') || sKey.includes('tower') || sKey.includes('windmill') || sKey.includes('farm') || sKey.includes('house') || sKey.includes('manor') || sKey.includes('estate') || sKey.includes('town') || sKey.includes('graveyard') || sKey.includes('blacksmith') || sKey.includes('under_construction') || sKey.includes('construction') || sKey.includes('rift_embers') || sKey.includes('healing_circle') || is3x3Structure || isLocusTile;
+    const isStructureTile = sKey.includes('war_camp') || sKey.includes('war_fort') || sKey.includes('earthen_fort') || sKey.includes('outpost') || sKey.includes('observer') || sKey.includes('observation') || sKey.includes('dream_den') || sKey.includes('monolith') || sKey.includes('vat') || sKey.includes('generator') || sKey.includes('ore_mine') || sKey.includes('slate_mine') || sKey.includes('sawmill') || sKey.includes('lumber_mill') || sKey.includes('larder') || sKey.includes('dust_collector') || sKey.includes('fungal_nursery') || sKey.includes('cultivation_vat') || sKey.includes('mine') || sKey.includes('hut') || sKey.includes('tower') || sKey.includes('windmill') || sKey.includes('farm') || sKey.includes('house') || sKey.includes('manor') || sKey.includes('estate') || sKey.includes('town') || sKey.includes('graveyard') || sKey.includes('blacksmith') || sKey.includes('under_construction') || sKey.includes('construction') || sKey.includes('rift_embers') || sKey.includes('healing_circle') || sKey.includes('archaic_tunnel') || sKey.includes('archaic tunnel') || is3x3Structure || isLocusTile;
 
     const containsObjForHp = (currentTileForContains && typeof currentTileForContains.contains !== 'undefined')
         ? (typeof currentTileForContains.contains === 'object' ? currentTileForContains.contains : null)
@@ -771,6 +814,64 @@ function Tile(props) {
     const hpBarTimerRef = React.useRef(null);
     const prevHpRef = React.useRef(currentContainsHp);
     const prevUnitIdRef = React.useRef(containsId);
+
+    const [damageRecoil, setDamageRecoil] = React.useState(null);
+    const damageRecoilTimerRef = React.useRef(null);
+    const prevRecoilUnitIdRef = React.useRef(containsId);
+    const prevRecoilHpRef = React.useRef(currentContainsHp);
+    const prevRecoilDmgTimeRef = React.useRef(containsObjForHp?.lastDamageTime || props.lastDamageTime || (props.data && props.data.lastDamageTime) || 0);
+
+    const tileIsBumped = !!(props.isBumpedBack || currentTileForContains?.isBumpedBack || (props.contains && props.contains.isBumpedBack) || (topCurrentContains && topCurrentContains.isBumpedBack));
+    const tileBumpVector = props.bumpedBackVector || currentTileForContains?.bumpedBackVector || (props.contains && props.contains.bumpedBackVector) || (topCurrentContains && topCurrentContains.bumpedBackVector) || null;
+    const prevTileIsBumpedRef = React.useRef(tileIsBumped);
+
+    React.useEffect(() => {
+        const currentLastDmg = containsObjForHp?.lastDamageTime || props.lastDamageTime || (props.data && props.data.lastDamageTime) || 0;
+        if (containsId !== prevRecoilUnitIdRef.current) {
+            prevRecoilUnitIdRef.current = containsId;
+            prevRecoilHpRef.current = currentContainsHp;
+            prevRecoilDmgTimeRef.current = currentLastDmg;
+            prevTileIsBumpedRef.current = tileIsBumped;
+            setDamageRecoil(null);
+            if (damageRecoilTimerRef.current) clearTimeout(damageRecoilTimerRef.current);
+            return;
+        }
+
+        let shouldRecoil = false;
+        const isDead = !!(props.isDying || containsObjForHp?.dead || (props.data && props.data.dead) || (typeof currentContainsHp === 'number' && currentContainsHp <= 0));
+
+        if (!isDead) {
+            if (typeof currentContainsHp === 'number' && prevRecoilHpRef.current !== undefined && currentContainsHp < prevRecoilHpRef.current) {
+                shouldRecoil = true;
+            } else if (currentLastDmg && currentLastDmg > (prevRecoilDmgTimeRef.current || 0)) {
+                shouldRecoil = true;
+            } else if (tileIsBumped && !prevTileIsBumpedRef.current) {
+                shouldRecoil = true;
+            }
+        }
+
+        prevRecoilHpRef.current = currentContainsHp;
+        prevRecoilDmgTimeRef.current = currentLastDmg;
+        prevTileIsBumpedRef.current = tileIsBumped;
+
+        if (shouldRecoil) {
+            const dir = getTileRecoilDirection(tileBumpVector, containsObjForHp || props.data, props);
+            setDamageRecoil({
+                key: Date.now() + Math.random(),
+                direction: dir
+            });
+            if (damageRecoilTimerRef.current) clearTimeout(damageRecoilTimerRef.current);
+            damageRecoilTimerRef.current = setTimeout(() => {
+                setDamageRecoil(null);
+            }, 300);
+        }
+    }, [currentContainsHp, containsId, containsObjForHp?.lastDamageTime, props.lastDamageTime, props.data?.lastDamageTime, tileIsBumped, tileBumpVector, props.isDying]);
+
+    React.useEffect(() => {
+        return () => {
+            if (damageRecoilTimerRef.current) clearTimeout(damageRecoilTimerRef.current);
+        };
+    }, []);
 
     React.useEffect(() => {
         if (containsId !== prevUnitIdRef.current) {
@@ -911,7 +1012,8 @@ function Tile(props) {
             'naked_mountains_2', 'terrain_naked_mountains_2',
             'fractured_monolith', 'pocket_litter_fractured_monolith',
             'rift_embers', 'pocket_litter_rift_embers',
-            'healing_circle', 'pocket_healing_circle'
+            'healing_circle', 'pocket_healing_circle',
+            'archaic_tunnel', 'pocket_litter_archaic_tunnel', 'archaic tunnel'
         ];
         if (multiKeys.includes(s)) return true;
         return multiKeys.some(k => s.includes(k));
@@ -932,11 +1034,28 @@ function Tile(props) {
         (typeof props.contains === 'string' && props.contains.toLowerCase().includes('healing_circle'))
     );
 
+    const isArchaicTunnel = (
+        sKey.includes('archaic_tunnel') ||
+        sKey.includes('archaic tunnel') ||
+        String(props.building || '').toLowerCase().includes('archaic_tunnel') ||
+        String(props.building || '').toLowerCase().includes('archaic tunnel') ||
+        String(props.image || '').toLowerCase().includes('archaic_tunnel') ||
+        String(props.image || '').toLowerCase().includes('archaic tunnel') ||
+        String(props.imageOverride || '').toLowerCase().includes('archaic_tunnel') ||
+        String(props.imageOverride || '').toLowerCase().includes('archaic tunnel') ||
+        String(props.optionType || '').toLowerCase().includes('archaic_tunnel') ||
+        String(props.optionType || '').toLowerCase().includes('archaic tunnel') ||
+        String(containsObj?.subtype || containsObj?.type || containsObj?.building || containsObj?.key || '').toLowerCase().includes('archaic_tunnel') ||
+        String(containsObj?.subtype || containsObj?.type || containsObj?.building || containsObj?.key || '').toLowerCase().includes('archaic tunnel') ||
+        (typeof props.contains === 'string' && (props.contains.toLowerCase().includes('archaic_tunnel') || props.contains.toLowerCase().includes('archaic tunnel')))
+    );
+
     const thisContainsSubtype = containsObj?.subtype || containsObj?.key || containsObj?.building || (typeof props.contains === 'string' ? props.contains : null);
     const thisKey = String(thisContainsSubtype || props.building || containsObj?.type || props.image || '').toLowerCase();
 
     const is2x2StructureSelf = !isPaletteTile && !isSingleTile && (
         thisKey.includes('healing_circle') ||
+        thisKey.includes('archaic_tunnel') || thisKey.includes('archaic tunnel') ||
         thisKey.includes('war_camp') || thisKey.includes('war_fort') || thisKey.includes('dream_den') ||
         thisKey.includes('domain_monolith') || thisKey.includes('dark_domain_monolith') || (thisKey.includes('monolith') && !thisKey.includes('shrine') && !thisKey.includes('fractured_monolith')) ||
         thisKey.includes('cultivation_vat') || thisKey.includes('dust_collector') || thisKey.includes('larder') ||
@@ -1046,7 +1165,7 @@ function Tile(props) {
         let anchorId = null;
         const currentId = props.id !== undefined && props.id !== null ? props.id : props.index;
 
-        if (props.hoveredTileFootprint && (props.hoveredTileFootprint.length === 4 || props.hoveredTileFootprint.length === 9) && currentId !== null && currentId !== undefined) {
+        if (props.hoveredTileFootprint && (props.hoveredTileFootprint.length === 2 || props.hoveredTileFootprint.length === 4 || props.hoveredTileFootprint.length === 9) && currentId !== null && currentId !== undefined) {
             if (props.hoveredTileFootprint.includes(currentId)) {
                 anchorId = props.hoveredTileFootprint[0];
             }
@@ -1068,6 +1187,7 @@ function Tile(props) {
             const dCol = tileCol - anchorCol;
             
             const isHovering3x3 = props.hoveredTileFootprint?.length === 9 || is3x3Structure;
+            const isHovering1x2 = props.hoveredTileFootprint?.length === 2 || isArchaicTunnel;
 
             if (dRow === 0 && dCol === 0) return 'anchor';
             
@@ -1080,6 +1200,8 @@ function Tile(props) {
                 if (dRow === 2 && dCol === 0) return 'bottom_left';
                 if (dRow === 2 && dCol === 1) return 'bottom_center';
                 if (dRow === 2 && dCol === 2) return 'bottom_right';
+            } else if (isHovering1x2) {
+                if (dRow === 1 && dCol === 0) return 'bottom';
             } else {
                 if (dRow === 0 && dCol === 1) return 'top_right';
                 if (dRow === 1 && dCol === 0) return 'bottom_left';
@@ -1398,8 +1520,8 @@ function Tile(props) {
 
     const isMonsterOrPygmyTile = containsType === 'monster' ||
                                  containsType === 'pygmies' ||
-                                 (typeof containsType === 'string' && knownMonsters.includes(containsType)) ||
-                                 (typeof containsSubtype === 'string' && knownMonsters.includes(containsSubtype)) ||
+                                 (typeof containsType === 'string' && (knownMonsters.includes(containsType) || containsType.includes('monster') || containsType.endsWith('_monster') || containsType.startsWith('tier_') && containsType.includes('monster'))) ||
+                                 (typeof containsSubtype === 'string' && (knownMonsters.includes(containsSubtype) || containsSubtype.includes('monster') || containsSubtype.endsWith('_monster'))) ||
                                  props.type === 'monster-tile' ||
                                  props.optionType === 'monster';
 
@@ -1562,6 +1684,7 @@ function Tile(props) {
     const isDimensionDebrisOrLitter = rawContainsType === 'pocket_litter' || rawContainsType === 'dimension_litter' || rawContainsType === 'dimension litter' || rawContainsType === 'litter' || rawContainsType === 'dungeon_litter' || rawContainsType === 'dungeon litter' ||
         !!props.isDimensionLitter || !!props.isPocketLitter || !!props.isDungeonLitter || !!containsObj?.isDimensionLitter || !!containsObj?.isPocketLitter || !!containsObj?.isDungeonLitter ||
         allKeys.includes('rift_embers') || allKeys.includes('fractured_monolith') ||
+        allKeys.includes('archaic_tunnel') || allKeys.includes('archaic tunnel') ||
         allKeys.includes('broken_wagon') || allKeys.includes('forge_remnants') ||
         allKeys.includes('mana_crystals') || allKeys.includes('ruined_arch') ||
         allKeys.includes('astral_obelisk') || allKeys.includes('ancient_reliquary') || allKeys.includes('celestial_geode') ||
@@ -1880,8 +2003,9 @@ function Tile(props) {
                 // cannot be claimed with domain or activated, and must NOT have a colored ring around them.
                 if (isDimensionDebrisOrLitter) return null;
 
-                // Healing circle does not need an affiliation colored-circle
+                // Healing circle and Archaic tunnel do not need an affiliation colored-circle
                 if (isHealingCircle || sKey.includes('healing_circle')) return null;
+                if (isArchaicTunnel || sKey.includes('archaic_tunnel') || sKey.includes('archaic tunnel')) return null;
 
                 const isGenerator = sKey.includes('ore_mine') || sKey.includes('slate_mine') || sKey.includes('sawmill') || sKey.includes('lumber_mill') || sKey.includes('larder') || sKey.includes('dust_collector') || sKey.includes('fungal_nursery') || sKey.includes('cultivation_vat') || sKey.includes('generator') || sKey.includes('mine');
                 let gData = props.generatorData || containsObj?.generatorData;
@@ -2232,9 +2356,11 @@ function Tile(props) {
                 const isDungeon = !props.inSuperboard && !props.isInPocketDimension;
                 const isBuilder = !!(props.isBuilderTile || props.isBuilder || props.isMapmaker || props.type === 'palette-tile' || props.type === 'builder-tile');
                 if (isDungeon && !isBuilder) {
+                    const cAffStr = String(currentRawTerr).toLowerCase();
+                    const isPlayerAffiliated = cAffStr.includes('mox') || cAffStr.includes('benthic') || cAffStr.includes('pyric') || cAffStr.includes('player') || cAffStr.includes('friendly');
                     if (props.showTerritoryBoundary !== undefined) {
                         if (!props.showTerritoryBoundary) return null;
-                    } else {
+                    } else if (!isPlayerAffiliated) {
                         if (!checkHasTerritoryLantern(props)) return null;
                         if (!isPlayerAdjacentOrInsideContiguousTerritory(currentIdx, currentRawTerr, boardTiles, props)) {
                             return null;
@@ -2345,7 +2471,10 @@ function Tile(props) {
                 }
 
                 const currentStr = currentRawTerr.toLowerCase();
-                const isFriendlyDomain = currentStr === 'friendly' || currentStr === 'player' || currentStr === 'crew' || currentStr.includes('player') || currentStr.includes('crew');
+                const isMox = currentStr.includes('mox');
+                const isBenthic = currentStr.includes('benthic');
+                const isPyric = currentStr.includes('pyric');
+                const isFriendlyDomain = isMox || isBenthic || isPyric || currentStr === 'friendly' || currentStr === 'player' || currentStr === 'crew' || currentStr.includes('player') || currentStr.includes('crew');
                 const isPygmyOrHostile = !isFriendlyDomain && (
                     currentStr === 'hostile' || currentStr === 'wild' || currentStr.includes('hostile') ||
                     currentStr.includes('pygmy') || currentStr.includes('pygmies') ||
@@ -2353,7 +2482,18 @@ function Tile(props) {
                     currentStr.includes('paradox') || currentStr.includes('mud')
                 );
 
-                const affColor = isFriendlyDomain ? '#3b82f6' : (isPygmyOrHostile ? '#ef4444' : '#ffffff');
+                let affColor = '#ffffff';
+                if (isMox) {
+                    affColor = '#2ecc71'; // Mox: Green
+                } else if (isBenthic) {
+                    affColor = '#a855f7'; // Benthic: Purple
+                } else if (isPyric) {
+                    affColor = '#f97316'; // Pyric: Orange
+                } else if (isFriendlyDomain) {
+                    affColor = '#3b82f6';
+                } else if (isPygmyOrHostile) {
+                    affColor = '#ef4444';
+                }
 
                 const getNeighborAff = (delta) => {
                     if (currentIdx === null || currentIdx === undefined || !boardTiles) return null;
@@ -2548,7 +2688,16 @@ function Tile(props) {
                          if (color === 'black' && !props.inSuperboard) return null;
                          let territoryBg = 'rgba(90, 60, 30, 0.22)';
                          let borderColor = 'rgba(125, 85, 45, 0.35)';
-                         if (clan.includes('cave')) {
+                         if (clan.includes('mox')) {
+                             territoryBg = 'rgba(46, 204, 113, 0.25)';
+                             borderColor = 'rgba(46, 204, 113, 0.6)';
+                         } else if (clan.includes('benthic')) {
+                             territoryBg = 'rgba(168, 85, 247, 0.25)';
+                             borderColor = 'rgba(168, 85, 247, 0.6)';
+                         } else if (clan.includes('pyric')) {
+                             territoryBg = 'rgba(249, 115, 22, 0.25)';
+                             borderColor = 'rgba(249, 115, 22, 0.6)';
+                         } else if (clan.includes('cave')) {
                              territoryBg = 'rgba(60, 70, 90, 0.20)';
                              borderColor = 'rgba(85, 95, 120, 0.35)';
                          } else if (clan.includes('woodland')) {
@@ -2570,7 +2719,7 @@ function Tile(props) {
                              territoryBg = 'rgba(14, 116, 144, 0.28)';
                              borderColor = 'rgba(56, 189, 248, 0.5)';
                          }
-                          const isFriendly = clan.includes('player') || clan.includes('crew') || clan.includes('friendly');
+                          const isFriendly = clan.includes('player') || clan.includes('crew') || clan.includes('friendly') || clan.includes('mox') || clan.includes('benthic') || clan.includes('pyric');
                           const isNewlyClaimed = props.newlyClaimed || (props.contains && props.contains.newlyClaimed);
                           const claimDelayMs = (props.claimDelayMs ?? (props.contains && props.contains.claimDelayMs)) || 0;
                           const isPygmyClan = clan.includes('cave') || clan.includes('woodland') || clan.includes('shadow') || clan.includes('paradox') || clan.includes('mud');
@@ -2685,13 +2834,17 @@ function Tile(props) {
                                   title={`Behavior: ${cfg.label}`}
                                   style={{
                                       position: 'absolute',
-                                      top: '2px',
-                                      right: '2px',
-                                      width: '18px',
-                                      height: '18px',
+                                      top: '1%',
+                                      right: '1%',
+                                      width: '24%',
+                                      height: '24%',
+                                      maxWidth: '14px',
+                                      maxHeight: '14px',
+                                      minWidth: '10px',
+                                      minHeight: '10px',
                                       borderRadius: '50%',
                                       background: cfg.bg,
-                                      border: `1.5px solid ${cfg.border}`,
+                                      border: `1px solid ${cfg.border}`,
                                       boxShadow: cfg.glow,
                                       display: 'flex',
                                       alignItems: 'center',
@@ -2703,7 +2856,7 @@ function Tile(props) {
                                       userSelect: 'none'
                                   }}
                               >
-                                  <span>{cfg.icon}</span>
+                                  <span style={{ transform: 'scale(1.15)', display: 'inline-block', lineHeight: 1 }}>{cfg.icon}</span>
                               </div>
                           );
                       })()}
@@ -2769,7 +2922,7 @@ function Tile(props) {
            })()}
 
            {/* Portrait sits above the hp-fill and terrain so the image remains visible */}
-           {!isLayeredForestTile && !isLayeredMountainTile && resolvedPortraitUrl && props.optionType !== 'delete' && props.optionType !== 'voidfill' && !(props.contains && (props.contains === 'shrine' || props.contains.type === 'shrine')) && !(props.data && props.data.type === 'soul_shard') && !(isHealingCircle && !isPaletteTile) && (() => {
+           {!isLayeredForestTile && !isLayeredMountainTile && resolvedPortraitUrl && props.optionType !== 'delete' && props.optionType !== 'voidfill' && !(props.contains && (props.contains === 'shrine' || props.contains.type === 'shrine')) && !(props.data && props.data.type === 'soul_shard') && !(isHealingCircle && !isPaletteTile) && !(isArchaicTunnel && !isPaletteTile) && (() => {
                 const isAvatarPortrait = !!(props.contains && (props.contains.type === 'avatar' || props.contains.type === 'camp'));
                 const isFlippedLeft = isAvatarPortrait && (props.playerFacing === 'left' || props.playerFacingDirection === 'left');
                 const flipTransform = isFlippedLeft ? 'scaleX(-1)' : '';
@@ -2822,37 +2975,58 @@ function Tile(props) {
                     return null;
                 }
 
+                const isUnitDead = !!(isUnitDying || (containsObjForHp && (containsObjForHp.dead || (typeof containsObjForHp.hp === 'number' && containsObjForHp.hp <= 0))) || (props.data && (props.data.dead || (typeof props.data.hp === 'number' && props.data.hp <= 0))));
+                const activeRecoil = !isUnitDead ? (damageRecoil || (isBumpedBack ? {
+                    key: `bump-${containsId || props.index || props.id || 'tile'}`,
+                    direction: getTileRecoilDirection(bumpedBackVector || tileBumpVector, containsObjForHp || containsObj || props.data, props)
+                } : null)) : null;
+
                 return (
                     <>
-                        <div className={`portrait ${isUnitDying ? 'automaton-death-anim' : ''} ${isRiftEmbers ? 'spin-slow' : ''} ${(isSpawnPoint && isOccupied) ? 'spawn-point-spinning' : ''}`.trim()} style={{
-                             position: 'absolute',
-                             top: 0, left: 0,
-                             right: (isRiftEmbers && !isPaletteTile) ? '-100%' : 0,
-                             bottom: (isRiftEmbers && !isPaletteTile) ? '-100%' : 0,
-                             backgroundImage: toCssUrl(resolvedPortraitUrl),
-                             backgroundSize: isRiftEmbers ? (isPaletteTile ? 'contain' : '100% 100%') : ((isVendorCell || is2x2StructureSelf) ? (is3x3Structure ? '300% 300%' : '200% 200%') : ((isItemCell || isPaletteTile) ? 'contain' : '100% 100%')),
-                             backgroundPosition: isRiftEmbers ? 'center' : ((isVendorCell || is2x2StructureSelf) ? vendorBackgroundPosition : ((isItemCell || isPaletteTile) ? 'center' : 'inherit')),
-                             backgroundRepeat: 'no-repeat',
-                             zIndex: isArchEnlarged ? 300 : (isDimensionDebrisOrLitter ? 120 : ((isVendorCell || is2x2StructureSelf) ? 40 : (isEnlargedStructureActive ? 35 : (isLocusActiveOrAdjacent ? 35 : (isObsPlatform || isStructureTile || isUnderConstruction || isEncompassedByFriendlyDomain ? 30 : portraitZIndex))))),
-                             opacity: ((color === 'black' || isDarkColor) || props.isFadingOut) ? 0 : 1,
-                             transform: portraitTransform,
-                             transformOrigin: isSpawnPoint ? 'center center' : (isRiftEmbers ? 'center center' : ((isBumpedBack && (isVendorCell || is2x2StructureSelf)) ? (() => {
-                                 switch (vendorCellRole) {
-                                     case 'anchor': return isPaletteTile ? 'center center' : '100% 100%';
-                                     case 'top_right': return '0% 100%';
-                                     case 'bottom_left': return '100% 0%';
-                                     case 'bottom_right': return '0% 0%';
-                                     case 'top_center': return '50% 100%';
-                                     case 'middle_left': return '100% 50%';
-                                     case 'center': return '50% 50%';
-                                     case 'middle_right': return '0% 50%';
-                                     case 'bottom_center': return '50% 0%';
-                                     default: return 'center center';
-                                 }
-                             })() : ((isEnlargedStructureActive || isUnderConstruction || isObsPlatform || isLocusActiveOrAdjacent) ? 'bottom center' : 'center center'))),
-                             transition: 'opacity 0.35s ease-in-out, transform 0.3s ease-in-out',
-                             pointerEvents: 'none'
-                        }} />
+                        <div
+                            key={activeRecoil ? activeRecoil.key : 'recoil-rest'}
+                            className={`unit-damaged-recoil-wrapper${activeRecoil ? ` damaged-jerk-${activeRecoil.direction}` : ''}`}
+                            style={{
+                                position: 'absolute',
+                                top: 0,
+                                left: 0,
+                                right: 0,
+                                bottom: 0,
+                                overflow: 'visible',
+                                pointerEvents: 'none',
+                                zIndex: isArchEnlarged ? 300 : (isDimensionDebrisOrLitter ? 120 : ((isVendorCell || is2x2StructureSelf) ? 40 : (isEnlargedStructureActive ? 35 : (isLocusActiveOrAdjacent ? 35 : (isObsPlatform || isStructureTile || isUnderConstruction || isEncompassedByFriendlyDomain ? 30 : portraitZIndex)))))
+                            }}
+                        >
+                            <div className={`portrait ${isUnitDying ? 'automaton-death-anim' : ''} ${isRiftEmbers ? 'spin-slow' : ''} ${(isSpawnPoint && isOccupied) ? 'spawn-point-spinning' : ''}`.trim()} style={{
+                                 position: 'absolute',
+                                 top: 0, left: 0,
+                                 right: (isRiftEmbers && !isPaletteTile) ? '-100%' : 0,
+                                 bottom: (isRiftEmbers && !isPaletteTile) ? '-100%' : 0,
+                                 backgroundImage: toCssUrl(resolvedPortraitUrl),
+                                 backgroundSize: isRiftEmbers ? (isPaletteTile ? 'contain' : '100% 100%') : ((isVendorCell || is2x2StructureSelf) ? (is3x3Structure ? '300% 300%' : '200% 200%') : ((isItemCell || isPaletteTile) ? 'contain' : '100% 100%')),
+                                 backgroundPosition: isRiftEmbers ? 'center' : ((isVendorCell || is2x2StructureSelf) ? vendorBackgroundPosition : ((isItemCell || isPaletteTile) ? 'center' : 'inherit')),
+                                 backgroundRepeat: 'no-repeat',
+                                 zIndex: isArchEnlarged ? 300 : (isDimensionDebrisOrLitter ? 120 : ((isVendorCell || is2x2StructureSelf) ? 40 : (isEnlargedStructureActive ? 35 : (isLocusActiveOrAdjacent ? 35 : (isObsPlatform || isStructureTile || isUnderConstruction || isEncompassedByFriendlyDomain ? 30 : portraitZIndex))))),
+                                 opacity: ((color === 'black' || isDarkColor) || props.isFadingOut) ? 0 : 1,
+                                 transform: portraitTransform,
+                                 transformOrigin: isSpawnPoint ? 'center center' : (isRiftEmbers ? 'center center' : ((isBumpedBack && (isVendorCell || is2x2StructureSelf)) ? (() => {
+                                     switch (vendorCellRole) {
+                                         case 'anchor': return isPaletteTile ? 'center center' : '100% 100%';
+                                         case 'top_right': return '0% 100%';
+                                         case 'bottom_left': return '100% 0%';
+                                         case 'bottom_right': return '0% 0%';
+                                         case 'top_center': return '50% 100%';
+                                         case 'middle_left': return '100% 50%';
+                                         case 'center': return '50% 50%';
+                                         case 'middle_right': return '0% 50%';
+                                         case 'bottom_center': return '50% 0%';
+                                         default: return 'center center';
+                                     }
+                                 })() : ((isEnlargedStructureActive || isUnderConstruction || isObsPlatform || isLocusActiveOrAdjacent) ? 'bottom center' : 'center center'))),
+                                 transition: 'opacity 0.35s ease-in-out, transform 0.3s ease-in-out',
+                                 pointerEvents: 'none'
+                            }} />
+                        </div>
 
                         {/* Locus Adjacency Elemental Glow Ring Overlay */}
                         { isLocusActiveOrAdjacent && (
@@ -2984,6 +3158,209 @@ function Tile(props) {
                                 />
                             );
                         })}
+                    </div>
+                );
+            })()}
+
+            {/* Archaic Tunnel Complex: 1x2 circular Stargate portal seen from side angle with 4 directional variations */}
+            {isArchaicTunnel && !isPaletteTile && (() => {
+                const vRole = vendorCellRole || getVendorCellRole();
+                if (vRole && vRole !== 'anchor') return null;
+
+                const cId = props.id !== undefined && props.id !== null ? props.id : props.index;
+                const isPlayerIn1x2 = (cId !== null && cId !== undefined && props.playerIdx !== undefined && props.playerIdx !== null) && (
+                    props.playerIdx === cId ||
+                    props.playerIdx === cId + 15
+                );
+
+                const isTunnelActive = !!(
+                    props.active ||
+                    containsObj?.active ||
+                    containsObj?.state === 'active' ||
+                    props.state === 'active' ||
+                    props.isPlayerOnTile ||
+                    props.isPlayerTile ||
+                    isPlayerIn1x2
+                );
+
+                const tunnelVariation = containsObj?.variation || props.variation || props.tile?.variation || containsObj?.direction || 'facing_left';
+                let directionTransform = 'none';
+                if (tunnelVariation === 'facing_right' || tunnelVariation === 'right') {
+                    directionTransform = 'scaleX(-1)';
+                } else if (tunnelVariation === 'facing_up' || tunnelVariation === 'up') {
+                    directionTransform = 'perspective(400px) rotateX(24deg) translateY(-4%)';
+                } else if (tunnelVariation === 'facing_down' || tunnelVariation === 'down') {
+                    directionTransform = 'perspective(400px) rotateX(-20deg) translateY(4%)';
+                } else {
+                    directionTransform = 'none';
+                }
+
+                const rawRing = isTunnelActive
+                    ? (images.archaic_tunnel_active || images.archaic_tunnel_side_active || images.archaic_tunnel || images[props.image] || images['archaic_tunnel_active'] || images['archaic_tunnel'])
+                    : (images.archaic_tunnel_dormant || images.archaic_tunnel_side_dormant || images.archaic_tunnel || images[props.image] || images['archaic_tunnel_dormant'] || images['archaic_tunnel']);
+                const ringImg = rawRing || (isTunnelActive ? 'archaic_tunnel_active' : 'archaic_tunnel_dormant');
+                const ringSrc = (() => {
+                    if (!ringImg) return null;
+                    if (typeof ringImg === 'object') return ringImg.default || null;
+                    if (typeof ringImg === 'string') {
+                        if (ringImg.startsWith('/') || ringImg.startsWith('http') || ringImg.startsWith('data:') || ringImg.includes('/static/media/')) {
+                            return ringImg;
+                        }
+                        if (images && images[ringImg]) {
+                            const found = images[ringImg];
+                            return typeof found === 'object' ? found.default : found;
+                        }
+                        return ringImg;
+                    }
+                    return null;
+                })();
+
+                const rawVortex = images.archaic_tunnel_vortex || images['archaic_tunnel_vortex'];
+                const vortexImg = rawVortex || 'archaic_tunnel_vortex';
+
+                return (
+                    <div
+                        className={`archaic-tunnel-complex ${isTunnelActive ? 'active' : 'dormant'} ${tunnelVariation}`}
+                        data-testid="archaic-tunnel-complex"
+                        data-direction={tunnelVariation}
+                        style={{
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            bottom: '-100%',
+                            width: '100%',
+                            height: '200%',
+                            zIndex: 25,
+                            pointerEvents: 'none',
+                            opacity: (color === 'black' || isDarkColor || props.isFadingOut) ? 0 : 1,
+                            transition: 'opacity 0.35s ease-in-out'
+                        }}
+                    >
+                        {/* Orientation transform wrapper: flips/tilts the ring portal without mirroring the direction badge */}
+                        <div
+                            className="archaic-tunnel-portal-body"
+                            style={{
+                                position: 'absolute',
+                                top: 0,
+                                left: 0,
+                                right: 0,
+                                bottom: 0,
+                                width: '100%',
+                                height: '100%',
+                                transform: directionTransform,
+                                transformOrigin: 'center center',
+                                transition: 'transform 0.25s ease-in-out'
+                            }}
+                        >
+                            {/* Rotating magical vortex overlay inside the ring when active */}
+                            {isTunnelActive && vortexImg && (
+                                <div
+                                    className="archaic-tunnel-vortex spin-slow"
+                                    data-testid="archaic-tunnel-vortex"
+                                    style={{
+                                        position: 'absolute',
+                                        top: '16%',
+                                        left: '17%',
+                                        width: '62%',
+                                        height: '68%',
+                                        borderRadius: '50%',
+                                        backgroundImage: toCssUrl(vortexImg),
+                                        backgroundSize: '120% 120%',
+                                        backgroundPosition: 'center',
+                                        backgroundRepeat: 'no-repeat',
+                                        transformOrigin: 'center center',
+                                        animation: 'spin-slow 20s linear infinite',
+                                        filter: 'drop-shadow(0 0 10px rgba(56, 189, 248, 0.75))',
+                                        pointerEvents: 'none',
+                                        zIndex: 1
+                                    }}
+                                />
+                            )}
+                            {/* Magical glow behind/around the ring when active */}
+                            {isTunnelActive && (
+                                <div
+                                    className="archaic-tunnel-glow"
+                                    style={{
+                                        position: 'absolute',
+                                        top: '18%',
+                                        left: '18%',
+                                        width: '60%',
+                                        height: '64%',
+                                        borderRadius: '50%',
+                                        boxShadow: '0 0 25px rgba(56, 189, 248, 0.6), inset 0 0 20px rgba(56, 189, 248, 0.4)',
+                                        pointerEvents: 'none',
+                                        zIndex: 2,
+                                        animation: 'structureRingPulse 2s infinite ease-in-out'
+                                    }}
+                                />
+                            )}
+                            {/* Stargate Portal Stone Ring (Dormant or Active with lit chevrons) */}
+                            <div
+                                className="archaic-tunnel-ring"
+                                data-testid="archaic-tunnel-ring"
+                                style={{
+                                    position: 'absolute',
+                                    top: 0,
+                                    left: 0,
+                                    right: 0,
+                                    bottom: 0,
+                                    width: '100%',
+                                    height: '100%',
+                                    backgroundImage: toCssUrl(ringImg),
+                                    backgroundSize: 'contain',
+                                    backgroundPosition: 'center',
+                                    backgroundRepeat: 'no-repeat',
+                                    pointerEvents: 'none',
+                                    zIndex: 3,
+                                    filter: isTunnelActive ? 'drop-shadow(0 0 12px rgba(249, 115, 22, 0.5))' : 'drop-shadow(0 3px 6px rgba(0, 0, 0, 0.5))',
+                                    transition: 'filter 0.5s ease',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                }}
+                            >
+                                {ringSrc && (
+                                    <img
+                                        src={ringSrc}
+                                        alt="Archaic Tunnel"
+                                        className="archaic-tunnel-ring-img"
+                                        data-testid="archaic-tunnel-ring-img"
+                                        style={{
+                                            width: '100%',
+                                            height: '100%',
+                                            objectFit: 'contain',
+                                            pointerEvents: 'none',
+                                            display: 'block'
+                                        }}
+                                    />
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Directional glyph indicator badge at base — stays upright and un-mirrored */}
+                        <div
+                            className="archaic-tunnel-direction-badge"
+                            data-testid="archaic-tunnel-direction"
+                            style={{
+                                position: 'absolute',
+                                bottom: '4px',
+                                left: '50%',
+                                transform: 'translateX(-50%)',
+                                fontSize: '11px',
+                                fontWeight: 'bold',
+                                color: isTunnelActive ? '#38bdf8' : '#cbd5e1',
+                                textShadow: isTunnelActive ? '0 0 8px #0284c7, 0 1px 3px #000' : '0 1px 3px #000',
+                                pointerEvents: 'none',
+                                zIndex: 4,
+                                userSelect: 'none'
+                            }}
+                            title={`Direction: ${tunnelVariation}`}
+                        >
+                            {tunnelVariation.includes('right') ? '▶' :
+                             tunnelVariation.includes('up') ? '▲' :
+                             tunnelVariation.includes('down') ? '▼' : '◀'}
+                        </div>
                     </div>
                 );
             })()}

@@ -2674,8 +2674,116 @@
     transition: none;
     pointer-events: none;
 }
+// ── Damaged jerk recoil animations for dungeon units (matching combat grid) ───
+.unit-damaged-recoil-wrapper {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    transform-origin: center center;
+    will-change: transform;
+
+    &.damaged-jerk-left {
+        animation: damagedJerkLeft 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    }
+
+    &.damaged-jerk-right {
+        animation: damagedJerkRight 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    }
+
+    &.damaged-jerk-down {
+        animation: damagedJerkDown 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    }
+
+    &.damaged-jerk-up {
+        animation: damagedJerkUp 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    }
+}
+
+.portrait-wrapper > .unit-damaged-recoil-wrapper {
+    width: 100px;
+    height: 100px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+@keyframes damagedJerkLeft {
+    0% {
+        transform: translate3d(0, 0, 0) rotate(0deg);
+    }
+    22% {
+        transform: translate3d(-9px, 0, 0) rotate(-2.5deg);
+    }
+    48% {
+        transform: translate3d(-4px, 0, 0) rotate(-1deg);
+    }
+    72% {
+        transform: translate3d(1px, 0, 0) rotate(0.4deg);
+    }
+    100% {
+        transform: translate3d(0, 0, 0) rotate(0deg);
+    }
+}
+
+@keyframes damagedJerkRight {
+    0% {
+        transform: translate3d(0, 0, 0) rotate(0deg);
+    }
+    22% {
+        transform: translate3d(9px, 0, 0) rotate(2.5deg);
+    }
+    48% {
+        transform: translate3d(4px, 0, 0) rotate(1deg);
+    }
+    72% {
+        transform: translate3d(-1px, 0, 0) rotate(-0.4deg);
+    }
+    100% {
+        transform: translate3d(0, 0, 0) rotate(0deg);
+    }
+}
+
+@keyframes damagedJerkDown {
+    0% {
+        transform: translate3d(0, 0, 0);
+    }
+    22% {
+        transform: translate3d(0, 9px, 0);
+    }
+    48% {
+        transform: translate3d(0, 4px, 0);
+    }
+    72% {
+        transform: translate3d(0, -1px, 0);
+    }
+    100% {
+        transform: translate3d(0, 0, 0);
+    }
+}
+
+@keyframes damagedJerkUp {
+    0% {
+        transform: translate3d(0, 0, 0);
+    }
+    22% {
+        transform: translate3d(0, -9px, 0);
+    }
+    48% {
+        transform: translate3d(0, -4px, 0);
+    }
+    72% {
+        transform: translate3d(0, 1px, 0);
+    }
+    100% {
+        transform: translate3d(0, 0, 0);
+    }
+}
+
 .floating-player.damaged .avatar-damage-shake-wrapper {
-    animation: avatarShake 0.5s ease-in-out;
+    &:not([class*="damaged-jerk-"]) {
+        animation: damagedJerkLeft 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    }
 }
 .floating-player.damaged .avatar-image-inner {
     filter: drop-shadow(0 0 12px rgba(255, 0, 0, 1)) brightness(1.1) sepia(0.2) saturate(2.5);
@@ -5887,7 +5995,12 @@
         border: 1px solid rgba(255, 255, 255, 0.1);
         background: rgba(0, 0, 0, 0.28);
         position: relative;
+        overflow: visible !important;
         transition: border-color 0.3s ease, box-shadow 0.3s ease, background-color 0.3s ease;
+
+        &:hover {
+            z-index: 1000 !important;
+        }
 
         &.has-selected-member {
             border-color: rgba(255, 215, 0, 0.55);
@@ -5916,6 +6029,8 @@
             justify-content: center;
             align-items: center;
             gap: 8px;
+            overflow: visible !important;
+            position: relative;
 
             .expedition-skill-slot {
                 box-sizing: border-box;
@@ -5952,6 +6067,141 @@
 
                 &:hover {
                     border-color: rgba(255, 255, 255, 0.35);
+                    z-index: 10000 !important;
+
+                    .expedition-skill-tooltip {
+                        opacity: 1;
+                        visibility: visible;
+                        pointer-events: auto;
+                    }
+                }
+
+                .expedition-skill-tooltip {
+                    position: absolute;
+                    bottom: calc(100% + 8px);
+                    left: 50%;
+                    transform: translateX(-50%);
+                    background: rgba(11, 17, 32, 0.96);
+                    border: 1px solid rgba(255, 215, 0, 0.5);
+                    border-radius: 6px;
+                    padding: 8px 10px;
+                    width: 220px;
+                    max-width: 220px;
+                    box-sizing: border-box;
+                    color: #e2e8f0;
+                    font-size: 11px;
+                    line-height: 1.35;
+                    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.9), 0 0 12px rgba(255, 215, 0, 0.2);
+                    backdrop-filter: blur(8px);
+                    z-index: 100000 !important;
+                    opacity: 0;
+                    visibility: hidden;
+                    pointer-events: none;
+                    transition: opacity 0.2s ease, visibility 0.2s ease, transform 0.2s ease;
+                    text-align: left;
+
+                    &::after {
+                        content: '';
+                        position: absolute;
+                        top: 100%;
+                        left: 50%;
+                        transform: translateX(-50%);
+                        border-width: 5px;
+                        border-style: solid;
+                        border-color: rgba(11, 17, 32, 0.96) transparent transparent transparent;
+                    }
+                }
+
+                &.slot-pos-0 .expedition-skill-tooltip {
+                    left: 0;
+                    transform: none;
+                    &::after {
+                        left: 20px;
+                        transform: none;
+                    }
+                }
+
+                &.slot-pos-2 .expedition-skill-tooltip {
+                    left: auto;
+                    right: 0;
+                    transform: none;
+                    &::after {
+                        left: auto;
+                        right: 20px;
+                        transform: none;
+                    }
+                }
+
+                    .expedition-skill-tooltip-header {
+                        display: flex;
+                        align-items: center;
+                        gap: 6px;
+                        margin-bottom: 4px;
+                    }
+
+                    .expedition-skill-tooltip-title {
+                        font-weight: 700;
+                        color: #ffd700;
+                        font-size: 12px;
+                        letter-spacing: 0.3px;
+                    }
+
+                    .expedition-skill-tooltip-tag {
+                        font-size: 9px;
+                        font-weight: 700;
+                        text-transform: uppercase;
+                        background: rgba(255, 215, 0, 0.2);
+                        color: #ffd700;
+                        border: 1px solid rgba(255, 215, 0, 0.5);
+                        padding: 1px 4px;
+                        border-radius: 3px;
+                    }
+
+                    .expedition-skill-codex-btn {
+                        display: inline-flex;
+                        align-items: center;
+                        justify-content: center;
+                        width: 18px;
+                        height: 18px;
+                        border-radius: 50%;
+                        background: rgba(255, 215, 0, 0.15);
+                        border: 1px solid #ffd700;
+                        color: #ffd700;
+                        font-size: 11px;
+                        font-weight: bold;
+                        cursor: pointer;
+                        margin-left: auto;
+                        padding: 0;
+                        line-height: 1;
+                        flex-shrink: 0;
+                        transition: all 0.2s ease;
+                        box-shadow: 0 0 4px rgba(255, 215, 0, 0.2);
+
+                        &:hover {
+                            background: #ffd700;
+                            color: #0b1120;
+                            box-shadow: 0 0 8px rgba(255, 215, 0, 0.8);
+                            transform: scale(1.12);
+                        }
+
+                        &:active {
+                            transform: scale(0.95);
+                        }
+                    }
+
+                    .expedition-skill-tooltip-desc {
+                        color: #cbd5e1;
+                        font-size: 10.5px;
+                        margin-bottom: 4px;
+                        white-space: normal;
+                        word-break: break-word;
+                    }
+
+                    .expedition-skill-tooltip-hint {
+                        color: #94a3b8;
+                        font-size: 9.5px;
+                        font-style: italic;
+                    }
                 }
 
                 .slot-plus {
@@ -5979,7 +6229,6 @@
     .poi-panel {
         width: 100%;
     }
-}
 
 /* Ensure the dropzones have a visual cue when dragging, or are clean empty areas */
 [class^="panel-dropzone-"] {
@@ -6723,8 +6972,7 @@
 }
 
 .tile.pygmy-bump-absorb .portrait,
-.tile.pygmy-bump-absorb .monster-portrait-glow,
-.tile.pygmy-bump-absorb .pygmy-hp-bar {
+.tile.pygmy-bump-absorb .monster-portrait-glow {
     animation: pygmyBumpAbsorb 0.65s cubic-bezier(0.25, 1, 0.5, 1) forwards !important;
 }
 
@@ -7347,6 +7595,107 @@
         .healing-circle-base {
             filter: none;
         }
+    }
+}
+
+/* ── Archaic Tunnel (1x2 Circular Stargate Portal) ── */
+.archaic-tunnel-complex {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: -100%;
+    width: 100%;
+    height: 200%;
+    pointer-events: none;
+    user-select: none;
+    z-index: 25;
+
+    .archaic-tunnel-ring {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        width: 100%;
+        height: 100%;
+        background-size: contain;
+        background-position: center;
+        background-repeat: no-repeat;
+        pointer-events: none;
+        z-index: 3;
+        transition: filter 0.5s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+
+        img, .archaic-tunnel-ring-img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            pointer-events: none;
+            display: block;
+        }
+    }
+
+    .archaic-tunnel-vortex {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-size: 100% 100%;
+        background-position: center;
+        background-repeat: no-repeat;
+        transform-origin: center center;
+        pointer-events: none;
+        z-index: 1;
+        animation: spin-slow 20s linear infinite;
+        will-change: transform;
+    }
+
+    .archaic-tunnel-glow {
+        position: absolute;
+        top: 8%;
+        left: 8%;
+        right: 8%;
+        bottom: 8%;
+        border-radius: 50%;
+        pointer-events: none;
+        z-index: 2;
+        animation: archaicTunnelPulse 2.8s ease-in-out infinite;
+    }
+
+    &.active {
+        .archaic-tunnel-ring {
+            filter: drop-shadow(0 0 14px rgba(249, 115, 22, 0.6)) brightness(1.08);
+        }
+        .archaic-tunnel-vortex {
+            filter: drop-shadow(0 0 16px rgba(56, 189, 248, 0.85)) brightness(1.1);
+        }
+    }
+
+    &.dormant {
+        .archaic-tunnel-ring {
+            filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.65));
+        }
+        .archaic-tunnel-vortex,
+        .archaic-tunnel-glow {
+            display: none;
+        }
+    }
+}
+
+@keyframes archaicTunnelPulse {
+    0%, 100% {
+        opacity: 0.6;
+        transform: scale(0.98);
+        box-shadow: 0 0 25px rgba(56, 189, 248, 0.55), inset 0 0 20px rgba(56, 189, 248, 0.4);
+    }
+    50% {
+        opacity: 0.95;
+        transform: scale(1.02);
+        box-shadow: 0 0 35px rgba(56, 189, 248, 0.8), inset 0 0 28px rgba(147, 197, 253, 0.6);
     }
 }
 

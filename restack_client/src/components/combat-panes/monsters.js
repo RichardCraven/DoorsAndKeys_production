@@ -620,6 +620,14 @@ const MonstersCombatGrid = ({
                                 onClick={() => monsterCombatPortraitClicked(monster.id)}
                                 style={{ position: 'relative' }}
                             >
+                                {selectedMonster?.id === monster.id && !battleData[monster.id]?.dead && (
+                                    <div className="selected-unit-reticle" data-testid="selected-unit-reticle">
+                                        <div className="reticle-corner top-left" />
+                                        <div className="reticle-corner top-right" />
+                                        <div className="reticle-corner bottom-left" />
+                                        <div className="reticle-corner bottom-right" />
+                                    </div>
+                                )}
                                 {/* Portrait at the bottom (lowest z-index) */}
                                 <div
                                     className={`portrait monster-portrait
@@ -918,6 +926,14 @@ const MonstersCombatGrid = ({
                                         </div>
                                     ))}
                                 </div>
+                                {selectedMonster?.id === minion.id && !minion.dead && (
+                                    <div className="selected-unit-reticle" data-testid="selected-unit-reticle">
+                                        <div className="reticle-corner top-left" />
+                                        <div className="reticle-corner top-right" />
+                                        <div className="reticle-corner bottom-left" />
+                                        <div className="reticle-corner bottom-right" />
+                                    </div>
+                                )}
                                 <div
                                     className={`portrait minion-portrait
                                             ${minion.active ? 'active' : ''}

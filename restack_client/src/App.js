@@ -679,6 +679,7 @@ function App(props) {
             const meta = getMeta();
             const hasCrew = Array.isArray(meta && meta.crew) && meta.crew.length > 0;
             if (!hasCrew && !isTutorialRoute) return <Redirect to="/crewManager" />;
+            if (!meta?.affiliation && !isTutorialRoute) return <Redirect to="/userProfilePage" />;
             return <DungeonPage {...props} {...routeProps} saveUserData={saveUserData} setNarrativeSequence={setNarrativeSequence} showCoordinates={showCoordinates} registerMessaging={(fn) => { dungeonMessagingRef.current = fn }} />;
           }} />
 

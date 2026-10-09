@@ -270,9 +270,16 @@ describe('Aggro Monster Dungeon System', () => {
             contains: { type: 'monster', subtype: 'goblin' }
         };
 
-        // When aggroOn is false, standard goblin is not aggro
-        instance.state = { aggroOn: false };
-        expect(instance.isAggroMonsterObj(regularGoblinTile.contains, regularGoblinTile)).toBe(false);
+        // Standard non-asleep monster returns true for 1-tile proximity attacks
+        expect(instance.isAggroMonsterObj(regularGoblinTile.contains, regularGoblinTile)).toBe(true);
+
+        // Asleep monster returns false
+        const asleepGoblinTile = {
+            id: 15,
+            color: '#6b6057',
+            contains: { type: 'monster', subtype: 'goblin', behavior: 'asleep' }
+        };
+        expect(instance.isAggroMonsterObj(asleepGoblinTile.contains, asleepGoblinTile)).toBe(false);
 
         // When aggroOn is true, ALL in-dungeon monsters default to aggro: true
         instance.state = { aggroOn: true };

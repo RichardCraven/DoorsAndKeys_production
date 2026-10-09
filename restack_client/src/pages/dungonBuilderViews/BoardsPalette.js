@@ -36,6 +36,9 @@ class BoardsPalette extends React.Component {
         if (optionType === 'generators') return 'Generators';
         if (optionType === 'dungeon litter') return 'Dungeon Litter';
         if (optionType === 'dimension litter' || optionType === 'pocket litter') return 'Dimension Litter';
+        if (optionType === 'archaic tunnel' || optionType === 'archaic_tunnel') return 'Archaic Tunnel';
+        if (optionType === 'dream den' || optionType === 'dream_den') return 'Dream Den';
+        if (optionType === 'dungeon portal' || optionType === 'dungeon_portal') return 'Dungeon Portal';
         if (optionType === 'terrain') return 'Terrain';
         return optionType;
     }

@@ -627,6 +627,14 @@ export default function CodexModal({ visible, onClose, monsterManager, initialTa
         setSearch('');
         if (initialEntryId) {
             const rawId = String(initialEntryId).toLowerCase().replace(/\s+/g, '_');
+            const foundSkill = Object.values(skillsMatrix).find(s =>
+                s && s.id && (s.id.toLowerCase() === rawId || (s.name && s.name.toLowerCase() === String(initialEntryId).toLowerCase()))
+            );
+            if (foundSkill) {
+                setSelectedEntry(foundSkill);
+                setSkillClassFilter('all');
+                return;
+            }
             const foundAction = SPECIAL_ACTIONS.find(a =>
                 a.id === rawId ||
                 a.name.toLowerCase().replace(/\s+/g, '_') === rawId ||
@@ -636,6 +644,17 @@ export default function CodexModal({ visible, onClose, monsterManager, initialTa
             if (foundAction) { setSelectedEntry(foundAction); return; }
             const found = INTERACTABLES.find(i => i.id === initialEntryId);
             if (found) { setSelectedEntry(found); return; }
+        }
+        if (initialTab === 'skills' && initialSearch) {
+            const qRaw = initialSearch.trim().toLowerCase();
+            const match = Object.values(skillsMatrix).find(s =>
+                s && s.id && (s.id.toLowerCase() === qRaw.replace(/\s+/g, '_') || (s.name && s.name.toLowerCase().includes(qRaw)))
+            );
+            if (match) {
+                setSelectedEntry(match);
+                setSkillClassFilter('all');
+                return;
+            }
         }
         if (initialTab === 'actions' && initialSearch) {
             const qRaw = initialSearch.trim().toLowerCase().replace(/\s+/g, '_');
@@ -689,8 +708,7 @@ export default function CodexModal({ visible, onClose, monsterManager, initialTa
     // ── Skills data
     const allSkills = Object.values(skillsMatrix).filter(s =>
         s && s.name && s.id &&
-        !s.id.includes('_global_') &&
-        s.treePath !== 'global'
+        !s.id.includes('_global_')
     );
     const filteredSkills = allSkills.filter(s => {
         const matchQ = !q || s.name.toLowerCase().includes(q) || (s.desc || '').toLowerCase().includes(q) || (s.class || '').toLowerCase().includes(q);

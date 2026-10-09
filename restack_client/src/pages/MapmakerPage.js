@@ -44,6 +44,9 @@ import { getRandomInscription } from '../utils/inscriptions-manager'
 import { updateTerrainAutotiles, applyForestStamp, applyMountainStamp } from '../utils/autotile-utils'
 import { superboardCleanup } from '../utils/cache-cleanup'
 import PerformanceOverlay from '../components/PerformanceOverlay'
+import { MonsterManager } from '../utils/monster-manager'
+
+const defaultMonsterManager = new MonsterManager();
 
 const CLEAR_UNIQUE_DUNGEON_INSTANCES_VALUE = '__clear_unique_dungeon_instances__';
 const GENERATE_DUNGEON_VALUE = '__generate_dungeon__';
@@ -235,6 +238,7 @@ class MapMakerPage extends React.Component {
       inscriptionSecretConfirmation: '',
       inscriptionSecretReward: '',
       toastMessage: '',
+      patrolPlacement: null,
       // Portal configuration state
       showPortalModal: false,
       portalModalTile: null,
@@ -272,6 +276,7 @@ class MapMakerPage extends React.Component {
       boardFolderPathInput: React.createRef(),
       showClearUniqueDungeonInstancesModal: false,
       contextMenu: { visible: false, x: 0, y: 0, tileId: null },
+      contextMenuSubmenu: null,
       planeBoardContextMenu: { visible: false, x: 0, y: 0, levelId: null, miniboardIndex: null, frontOrBack: null },
       zoomLevelId: null,
       zoomMiniboardIndex: null,
@@ -420,7 +425,13 @@ class MapMakerPage extends React.Component {
     } else if (pinnedOption.type === 'generator-tile') {
       const generatorOption = this.props.mapMaker?.generatorOptions?.[pinnedOption.id];
       if (generatorOption) {
-        containsObj = { type: 'building', subtype: generatorOption.key };
+        const isDomainNode = generatorOption.key && (generatorOption.key === 'domain_node' || generatorOption.key === 'dark_domain_node');
+        const defaultTerritory = (isDomainNode && tile?.territory) ? tile.territory : null;
+        containsObj = {
+          type: 'building',
+          subtype: generatorOption.key,
+          ...(defaultTerritory ? { territory: defaultTerritory, affiliation: defaultTerritory } : {})
+        };
         tileImage = generatorOption.image;
       }
     } else if (pinnedOption.type === 'dungeon-litter-tile') {
@@ -450,12 +461,26 @@ class MapMakerPage extends React.Component {
     } else if (pinnedOption.type === 'territory-tile') {
       const territoryOption = this.props.mapMaker?.territoryOptions?.[pinnedOption.id];
       if (territoryOption) {
-        containsObj = { type: 'empty_space', subtype: null };
-        tileImage = null;
-        tileColor = null;
+        const containsType = this.getContainsType(tile?.contains);
+        let containsObj = tile.contains;
+        let tileImage = tile.image;
+        let tileColor = tile.color;
+        if (containsType === 'void' || tile?.color === 'black') {
+          containsObj = { type: 'empty_space', subtype: null };
+          tileImage = null;
+          tileColor = null;
+        }
         const copy = { ...tile };
         copy.territory = territoryOption.clan;
         copy.affiliation = territoryOption.clan;
+        const cSub = typeof containsObj === 'object' ? (containsObj?.subtype || containsObj?.key || containsObj?.building) : containsObj;
+        if (typeof containsObj === 'object' && containsObj && String(cSub).includes('domain_node')) {
+          containsObj = {
+            ...containsObj,
+            territory: territoryOption.clan,
+            affiliation: territoryOption.clan
+          };
+        }
         return {
           ...copy,
           contains: containsObj,
@@ -596,6 +621,10 @@ class MapMakerPage extends React.Component {
                     const pinnedPaletteTile = this.props.mapMaker?.paletteTiles?.[this.state.pinnedOption.id];
                     if (pinnedPaletteTile && (pinnedPaletteTile.optionType === 'dream den' || pinnedPaletteTile.optionType === 'dream_den')) {
                          vendorKey = 'dream_den';
+                    } else if (pinnedPaletteTile && (pinnedPaletteTile.optionType === 'archaic tunnel' || pinnedPaletteTile.optionType === 'archaic_tunnel')) {
+                         baseType = 'archaic_tunnel';
+                         vendorKey = 'archaic_tunnel';
+                         image = 'archaic_tunnel';
                     }
                 } else if (this.state.pinnedOption.type === 'terrain-tile') {
                     baseType = 'terrain';
@@ -871,8 +900,18 @@ class MapMakerPage extends React.Component {
       const isEditable = targetTag === 'input' || targetTag === 'textarea' || targetTag === 'select' || (e.target && e.target.isContentEditable);
 
       if (e.key === 'Escape' || e.key === 'Esc') {
+        if (this.state.patrolPlacement) {
+          this.cancelPatrolPlacement();
+          e.preventDefault();
+          return;
+        }
         if (this.state.showInscriptionModal || this.state.inscriptionWallPicker || this.state.inscriptionPendingTileId) {
           this.cancelInscription();
+          e.preventDefault();
+          return;
+        }
+        if (this.state.monsterBehaviorRadialMenu?.visible) {
+          this.setState({ monsterBehaviorRadialMenu: { visible: false } });
           e.preventDefault();
           return;
         }
@@ -1032,9 +1071,18 @@ class MapMakerPage extends React.Component {
     this.setState({
       generatingDungeon: true,
       loadedDungeon: null,
+      loadedBoard: null,
+      loadedPlane: null,
+      tiles: this.createBlankBoardTiles(),
+      zoomLevelId: null,
+      zoomMiniboardIndex: null,
+      zoomOrientation: null,
+      selectedThingTitle: this.state.selectedView === 'dungeon' ? '' : (this.state.selectedView === 'board' || this.state.selectedView === 'plane' ? '' : this.state.selectedThingTitle),
       dungeonOverlayOn: false,
       overlayData: null,
     });
+    setEditorPreference('loadedPlaneId', null);
+    setEditorPreference('loadedBoardId', null);
 
     // Defer generation to allow the spinner to render
     setTimeout(() => {
@@ -1049,7 +1097,7 @@ class MapMakerPage extends React.Component {
           dungeonHasUnsavedChanges: true,
           selectedThingTitle: this.state.selectedView === 'dungeon'
             ? `Dungeon: ${formatted.name}`
-            : this.state.selectedThingTitle,
+            : (this.state.selectedView === 'board' || this.state.selectedView === 'plane' ? '' : this.state.selectedThingTitle),
         });
         this.setLoadedDungeonDropdownValue(formatted.name);
         this.flashLeftReadout('Dungeon Generated');
@@ -1066,11 +1114,11 @@ class MapMakerPage extends React.Component {
     if (!dungeon) return;
 
     if (!skipConfirm) {
-      const confirmMsg = "Are you sure you want to delete this? This can be restored from the backup for 24 hours, after which this will be permanent";
-      const confirmed = typeof window !== 'undefined' && typeof window.confirm === 'function'
-        ? window.confirm(confirmMsg)
-        : true;
-      if (!confirmed) return;
+      this.setState({
+        showModal: true,
+        modalType: 'confirm delete dungeon'
+      });
+      return;
     }
 
     const dungeonId = dungeon.id || dungeon._id || (dungeon.name && (this.state.dungeons || []).find(d => d.name === dungeon.name)?.id);
@@ -1098,7 +1146,11 @@ class MapMakerPage extends React.Component {
       dungeons: updatedDungeons,
       loadedPlane: null,
       loadedBoard: null,
-      selectedThingTitle: this.state.selectedView === 'dungeon' ? '' : this.state.selectedThingTitle,
+      tiles: this.createBlankBoardTiles(),
+      zoomLevelId: null,
+      zoomMiniboardIndex: null,
+      zoomOrientation: null,
+      selectedThingTitle: (this.state.selectedView === 'dungeon' || this.state.selectedView === 'board' || this.state.selectedView === 'plane') ? '' : this.state.selectedThingTitle,
       dungeonOverlayOn: false,
       overlayData: null,
       hasDungeonBackup: false,
@@ -1111,6 +1163,8 @@ class MapMakerPage extends React.Component {
     // update user
     const userId = localStorage.getItem('userId');
     setEditorPreference('loadedDungeon', null);
+    setEditorPreference('loadedPlaneId', null);
+    setEditorPreference('loadedBoardId', null);
     const meta = getMeta();
 
     if (userId) updateUserRequest(userId, meta);
@@ -1121,6 +1175,10 @@ class MapMakerPage extends React.Component {
     if (this._isMounted !== false) {
       this.flashLeftReadout('Dungeon Deleted');
     }
+  }
+  executeDeleteDungeon = async () => {
+    this.closeModal();
+    await this.deleteDungeon(true);
   }
   getUniqueDungeonInstances = (dungeons = []) => {
     return (Array.isArray(dungeons) ? dungeons : [])
@@ -1260,11 +1318,40 @@ class MapMakerPage extends React.Component {
           dungeons[idx] = formatted;
         }
 
-        this.setState({
+        const boardBelongs = this.boardBelongsToDungeon(this.state.loadedBoard, formatted);
+        const planeBelongs = this.planeBelongsToDungeon(this.state.loadedPlane, formatted);
+
+        let nextTitle = this.state.selectedThingTitle;
+        if (this.state.selectedView === 'dungeon') {
+          nextTitle = `Dungeon: ${formatted.name}`;
+        } else if (this.state.selectedView === 'board') {
+          nextTitle = (boardBelongs && this.state.loadedBoard) ? `Board: ${this.state.loadedBoard.name}` : '';
+        } else if (this.state.selectedView === 'plane') {
+          nextTitle = (planeBelongs && this.state.loadedPlane) ? `Plane: ${this.state.loadedPlane.name}` : '';
+        }
+
+        const nextState = {
           dungeons,
           loadedDungeon: formatted,
           dungeonHasUnsavedChanges: true,
-        }, () => {
+          selectedThingTitle: nextTitle,
+        };
+
+        if (!boardBelongs && this.state.loadedBoard) {
+          nextState.loadedBoard = null;
+          nextState.tiles = this.createBlankBoardTiles();
+          nextState.zoomLevelId = null;
+          nextState.zoomMiniboardIndex = null;
+          nextState.zoomOrientation = null;
+          setEditorPreference('loadedBoardId', null);
+        }
+
+        if (!planeBelongs && this.state.loadedPlane) {
+          nextState.loadedPlane = null;
+          setEditorPreference('loadedPlaneId', null);
+        }
+
+        this.setState(nextState, () => {
           this.setLoadedDungeonDropdownValue(formatted.name);
           this.addDungeonPlanesAndBoardsToState(formatted);
         });
@@ -1466,6 +1553,10 @@ class MapMakerPage extends React.Component {
         anchorTileId + 30, anchorTileId + 31, anchorTileId + 32
       ];
     }
+    if (footprintType === '1x2') {
+      if (row > 13) return null;
+      return [anchorTileId, anchorTileId + 15];
+    }
     if (row > 13 || col > 13) return null;
     return [anchorTileId, anchorTileId + 1, anchorTileId + 15, anchorTileId + 16];
   }
@@ -1522,13 +1613,23 @@ class MapMakerPage extends React.Component {
 
     if (keyToCheck) {
       if (['keep', 'fortress', 'summoning_temple', 'rift', 'rift_2', 'pocket_litter_fractured_monolith', 'fractured_monolith'].includes(keyToCheck)) return '3x3';
+      if (['archaic_tunnel', 'pocket_litter_archaic_tunnel'].includes(keyToCheck)) return '1x2';
       if (['war_camp', 'war_fort', 'dream_den', 'pocket_litter_rift_embers', 'rift_embers', 'healing_circle', 'pocket_healing_circle'].includes(keyToCheck)) return '2x2';
     }
 
     if (pinnedOption.type === 'vendor-tile') return '2x2';
     if (pinnedOption.type === 'palette-tile') {
       const pinnedPaletteTile = this.props.mapMaker?.paletteTiles?.[pinnedOption.id];
-      if (pinnedPaletteTile && (pinnedPaletteTile.optionType === 'dream den' || pinnedPaletteTile.optionType === 'dream_den')) {
+      if (pinnedPaletteTile && (
+        pinnedPaletteTile.optionType === 'archaic tunnel' ||
+        pinnedPaletteTile.optionType === 'archaic_tunnel'
+      )) {
+        return '1x2';
+      }
+      if (pinnedPaletteTile && (
+        pinnedPaletteTile.optionType === 'dream den' ||
+        pinnedPaletteTile.optionType === 'dream_den'
+      )) {
         return '2x2';
       }
     }
@@ -1562,6 +1663,86 @@ class MapMakerPage extends React.Component {
     return null;
   }
 
+  isMonsterTile = (tile) => {
+    if (!tile) return false;
+    if (tile.type === 'monster-tile') return true;
+    const actualContains = tile.contains;
+    if (!actualContains) return false;
+    const containsType = this.getContainsType(actualContains);
+    if (typeof containsType === 'string') {
+      if (
+        containsType === 'monster' ||
+        containsType === 'pygmies' ||
+        containsType.includes('monster') ||
+        containsType.endsWith('_monster') ||
+        (containsType.startsWith('tier_') && containsType.includes('monster'))
+      ) {
+        return true;
+      }
+    }
+    const mm = this.props?.monsterManager || defaultMonsterManager;
+    if (typeof actualContains === 'object') {
+      if (actualContains.type === 'monster' || actualContains.type === 'pygmies' || (actualContains.type && String(actualContains.type).includes('monster'))) return true;
+      if (actualContains.subtype && (mm?.monsters?.[actualContains.subtype] || String(actualContains.subtype).includes('monster'))) return true;
+      if (actualContains.key && (mm?.monsters?.[actualContains.key] || String(actualContains.key).includes('monster'))) return true;
+      if (actualContains.behavior !== undefined) return true;
+      const tierMatch = (this.props.mapMaker?.tierOptions || []).find(opt => opt.key === actualContains.type || opt.key === actualContains.subtype || opt.key === actualContains.key);
+      if (tierMatch && tierMatch.key.endsWith('_monster')) return true;
+    }
+    if (typeof actualContains === 'string') {
+      if (actualContains === 'monster' || actualContains === 'pygmies' || actualContains.includes('monster')) return true;
+      if (mm?.monsters?.[actualContains]) return true;
+      const tierMatch = (this.props.mapMaker?.tierOptions || []).find(opt => opt.key === actualContains);
+      if (tierMatch && tierMatch.key.endsWith('_monster')) return true;
+    }
+    return false;
+  }
+
+  getMonsterInfo = (tile) => {
+    if (!tile) return { name: 'Monster', portrait: '' };
+    const actualContains = tile.contains;
+    const cObj = typeof actualContains === 'object' && actualContains ? actualContains : { type: 'monster', subtype: actualContains };
+    const mm = this.props?.monsterManager || defaultMonsterManager;
+    const monsterKey = cObj.subtype || cObj.key || (typeof actualContains === 'string' ? actualContains : null);
+    const monsterMatch = monsterKey ? Object.values(mm?.monsters || {}).find(m => m.key === monsterKey) : null;
+
+    if (monsterMatch) {
+      return {
+        name: monsterMatch.name || monsterMatch.lordName || String(monsterKey).replace(/_/g, ' '),
+        portrait: tile.image || monsterMatch.portrait || monsterKey
+      };
+    }
+
+    // Check tier monster options (e.g. tier_1_monster)
+    const typeKey = cObj.type || monsterKey;
+    const tierMatch = (this.props.mapMaker?.tierOptions || []).find(opt => opt.key === typeKey || opt.key === cObj.subtype);
+    if (tierMatch && tierMatch.key.endsWith('_monster')) {
+      const formattedName = tierMatch.name.toLowerCase().includes('monster')
+        ? tierMatch.name
+        : `${tierMatch.name} Monster`;
+      return {
+        name: formattedName,
+        portrait: tile.image || images[tierMatch.image] || tierMatch.image
+      };
+    }
+
+    if (typeKey && typeKey.includes('tier') && typeKey.includes('monster')) {
+      const parts = typeKey.split('_');
+      const tierNum = parts.find(p => !isNaN(p));
+      const formattedName = tierNum ? `Tier ${tierNum} Monster` : 'Tier Monster';
+      return {
+        name: formattedName,
+        portrait: tile.image || ''
+      };
+    }
+
+    const fallbackName = cObj.subtype ? String(cObj.subtype).replace(/_/g, ' ') : (cObj.type ? String(cObj.type).replace(/_/g, ' ') : 'Monster');
+    return {
+      name: fallbackName,
+      portrait: tile.image || cObj.subtype || ''
+    };
+  }
+
   canPlaceVendorFootprint = (tiles, anchorTileId, footprintType = '2x2') => {
     const footprint = this.getVendorFootprintTileIds(anchorTileId, footprintType);
     if (!footprint) return false;
@@ -1569,7 +1750,7 @@ class MapMakerPage extends React.Component {
       const tile = tiles[tileId];
       if (!tile) return false;
       const type = this.getContainsType(tile.contains);
-      return !type || type === 'empty_space' || type === 'obscured_space' || type === 'passage' || type === 'vendor' || type === 'building' || type === 'terrain';
+      return !type || type === 'empty_space' || type === 'obscured_space' || type === 'passage' || type === 'vendor' || type === 'building' || type === 'terrain' || type === 'archaic_tunnel' || type === 'pocket_litter';
     });
   }
 
@@ -1584,6 +1765,8 @@ class MapMakerPage extends React.Component {
         'middle_left', 'center', 'middle_right',
         'bottom_left', 'bottom_center', 'bottom_right'
       ];
+    } else if (footprintType === '1x2') {
+      vendorCells = ['anchor', 'bottom'];
     }
 
     // Copy the original borders for all tiles in the footprint to preserve the outer boundaries
@@ -1595,7 +1778,17 @@ class MapMakerPage extends React.Component {
 
       if (orig) {
         newBorders = {};
-        if (idx === 0) { // anchor (top left)
+        if (footprintType === '1x2') {
+          if (idx === 0) { // anchor (top)
+            if (orig.top) newBorders.top = orig.top;
+            if (orig.left) newBorders.left = orig.left;
+            if (orig.right) newBorders.right = orig.right;
+          } else if (idx === 1) { // bottom
+            if (orig.bottom) newBorders.bottom = orig.bottom;
+            if (orig.left) newBorders.left = orig.left;
+            if (orig.right) newBorders.right = orig.right;
+          }
+        } else if (idx === 0) { // anchor (top left)
           if (orig.top) newBorders.top = orig.top;
           if (orig.left) newBorders.left = orig.left;
         } else if (idx === 1) { // top center or top right
@@ -1636,13 +1829,22 @@ class MapMakerPage extends React.Component {
         }
       }
 
+      const isArchaic = String(vendorKey).includes('archaic_tunnel') || String(baseType).includes('archaic_tunnel');
+
       tiles[tileId].contains = {
         type: baseType,
         subtype: vendorKey,
         vendorGroupId,
         vendorAnchorId: anchorTileId,
-        vendorCell: vendorCells[idx] || 'anchor'
+        vendorCell: vendorCells[idx] || 'anchor',
+        ...(isArchaic ? { state: 'dormant', active: false, variation: 'facing_left', direction: 'left' } : {})
       };
+      if (isArchaic) {
+        tiles[tileId].state = 'dormant';
+        tiles[tileId].active = false;
+        tiles[tileId].variation = 'facing_left';
+        tiles[tileId].direction = 'left';
+      }
       tiles[tileId].image = imageOverride || vendorKey;
       tiles[tileId].color = null;
       tiles[tileId].borders = newBorders;
@@ -1926,6 +2128,13 @@ class MapMakerPage extends React.Component {
           arr[tileId].image = null;
         }
         arr[tileId].territory = territoryOption.clan;
+        arr[tileId].affiliation = territoryOption.clan;
+        const currentContains = arr[tileId]?.contains;
+        const cSub = typeof currentContains === 'object' ? (currentContains?.subtype || currentContains?.key || currentContains?.building) : currentContains;
+        if (typeof currentContains === 'object' && currentContains && String(cSub).includes('domain_node')) {
+          arr[tileId].contains.territory = territoryOption.clan;
+          arr[tileId].contains.affiliation = territoryOption.clan;
+        }
       } else if (buildingOption) {
         if (buildingOption.key === 'war_camp' || buildingOption.key === 'war_fort') {
           if (!this.canPlaceVendorFootprint(arr, tileId)) {
@@ -1977,7 +2186,13 @@ class MapMakerPage extends React.Component {
           delete arr[tileId].vendorGroupId;
           delete arr[tileId].vendorAnchorId;
           delete arr[tileId].building;
-          arr[tileId].contains = { type: 'building', subtype: generatorOption.key };
+          const isDomainNode = generatorOption.key && (generatorOption.key === 'domain_node' || generatorOption.key === 'dark_domain_node');
+          const defaultTerritory = (isDomainNode && arr[tileId]?.territory) ? arr[tileId].territory : null;
+          arr[tileId].contains = {
+            type: 'building',
+            subtype: generatorOption.key,
+            ...(defaultTerritory ? { territory: defaultTerritory, affiliation: defaultTerritory } : {})
+          };
           arr[tileId].image = images[generatorOption.image] || generatorOption.image;
           arr[tileId].color = null;
         }
@@ -2100,6 +2315,12 @@ class MapMakerPage extends React.Component {
         return null;
       }
       arr = this.placeVendorFootprint(arr, tileId, 'dream_den', 'dream_den', 'moon_castle');
+    } else if (pinned.optionType === 'archaic tunnel' || pinned.optionType === 'archaic_tunnel') {
+      if (!this.canPlaceVendorFootprint(arr, tileId, '1x2')) {
+        this.toast('Archaic Tunnel requires a 1x2 empty space.');
+        return null;
+      }
+      arr = this.placeVendorFootprint(arr, tileId, 'archaic_tunnel', 'archaic_tunnel', 'archaic_tunnel', '1x2');
     } else {
       const rawType = pinned.optionType || pinned.image || pinned.type || 'misc';
       const normalizedType = String(rawType).replace(/\s+/g, '_');
@@ -2995,6 +3216,98 @@ class MapMakerPage extends React.Component {
         return;
       }
 
+      const isArchaicTunnel = sKey.includes('archaic_tunnel') || sKey.includes('archaic tunnel');
+      if (isArchaicTunnel) {
+        const groupTileIds = this.getVendorGroupTileIds(this.state.tiles, tileId);
+        const idsToUpdate = (groupTileIds && groupTileIds.length > 0) ? groupTileIds : [tileId];
+        const anchorId = (currentTile.contains && currentTile.contains.vendorAnchorId !== undefined && currentTile.contains.vendorAnchorId !== null)
+          ? currentTile.contains.vendorAnchorId
+          : idsToUpdate[0];
+        const anchorTile = this.state.tiles[anchorId] || currentTile;
+
+        const currentVar = anchorTile.contains?.variation || anchorTile.variation || 'facing_left';
+        const VAR_ORDER = ['facing_left', 'facing_right', 'facing_up', 'facing_down'];
+        const VAR_NAMES = {
+          facing_left: 'Facing Left',
+          facing_right: 'Facing Right',
+          facing_up: 'Facing Up',
+          facing_down: 'Facing Down'
+        };
+        const VAR_DIRECTIONS = {
+          facing_left: 'left',
+          facing_right: 'right',
+          facing_up: 'up',
+          facing_down: 'down'
+        };
+        const nextIdx = (VAR_ORDER.indexOf(currentVar) + 1) % VAR_ORDER.length;
+        const nextVar = VAR_ORDER[nextIdx];
+        const nextDirection = VAR_DIRECTIONS[nextVar] || 'left';
+
+        const nextTiles = this.state.tiles.map((t, idx) => {
+          if (idsToUpdate.includes(idx)) {
+            const oldContains = typeof t.contains === 'object' && t.contains ? t.contains : { type: 'archaic_tunnel', subtype: 'archaic_tunnel' };
+            return {
+              ...t,
+              variation: nextVar,
+              direction: nextDirection,
+              contains: {
+                ...oldContains,
+                variation: nextVar,
+                direction: nextDirection
+              }
+            };
+          }
+          return t;
+        });
+
+        const updatedLoadedBoard = this.state.loadedBoard ? {
+          ...this.state.loadedBoard,
+          tiles: nextTiles
+        } : null;
+
+        let dungeon = this.state.loadedDungeon ? clone(this.state.loadedDungeon) : null;
+        if (dungeon && Array.isArray(dungeon.levels)) {
+          dungeon.levels.forEach(level => {
+            ['front', 'back'].forEach(orientation => {
+              const plane = level[orientation];
+              if (plane && Array.isArray(plane.miniboards)) {
+                plane.miniboards.forEach(mb => {
+                  if (mb && (mb.id === this.state.loadedBoard?.id || mb.name === this.state.loadedBoard?.name)) {
+                    if (mb.tiles) {
+                      idsToUpdate.forEach(gId => {
+                        if (mb.tiles[gId]) {
+                          const oldContains = typeof mb.tiles[gId].contains === 'object' && mb.tiles[gId].contains ? mb.tiles[gId].contains : { type: 'archaic_tunnel', subtype: 'archaic_tunnel' };
+                          mb.tiles[gId].variation = nextVar;
+                          mb.tiles[gId].direction = nextDirection;
+                          mb.tiles[gId].contains = {
+                            ...oldContains,
+                            variation: nextVar,
+                            direction: nextDirection
+                          };
+                        }
+                      });
+                    }
+                  }
+                });
+              }
+            });
+          });
+        }
+
+        this.setState({
+          tiles: nextTiles,
+          loadedBoard: updatedLoadedBoard,
+          loadedDungeon: dungeon || this.state.loadedDungeon,
+          dungeonHasUnsavedChanges: true,
+          boardHasUnsavedChanges: true
+        });
+
+        const label = VAR_NAMES[nextVar] || nextVar;
+        this.flashLeftReadout(`Archaic Tunnel: ${label}`);
+        this.toast(`Archaic Tunnel set to ${label}`);
+        return;
+      }
+
       const isLitter = containsType === 'dungeon_litter' ||
                        containsType === 'dungeon litter' ||
                        containsType === 'pocket_litter' ||
@@ -3064,23 +3377,43 @@ class MapMakerPage extends React.Component {
     }
   }
 
-  handleSelectMonsterBehavior = (behavior) => {
+  handleSelectMonsterBehavior = (behavior, overrideTileId = null, overrideSuperboardKey = null) => {
     const menu = this.state.monsterBehaviorRadialMenu;
-    if (!menu || menu.tileId === null || menu.tileId === undefined) return;
+    const tileId = overrideTileId !== null && overrideTileId !== undefined ? overrideTileId : menu?.tileId;
+    if (tileId === null || tileId === undefined) return;
 
-    const tileId = menu.tileId;
-    const superboardKey = menu.superboardKey;
+    const superboardKey = overrideSuperboardKey !== null && overrideSuperboardKey !== undefined
+      ? overrideSuperboardKey
+      : (menu?.superboardKey || this.state.superboardZoom || null);
+
+    const isPatrol = behavior === 'patrol';
 
     const updateTileContains = (tile) => {
       if (!tile) return tile;
       const cObj = typeof tile.contains === 'object' && tile.contains ? tile.contains : { type: 'monster', subtype: tile.contains };
-      return {
-        ...tile,
-        contains: {
-          ...cObj,
-          behavior: behavior
-        }
+      const updatedContains = {
+        ...cObj,
+        behavior: behavior
       };
+      if (behavior === 'aggressive') {
+        updatedContains.aggro = true;
+      } else if (behavior === 'asleep') {
+        updatedContains.aggro = false;
+      }
+      if (!isPatrol) {
+        delete updatedContains.patrolTarget;
+        delete updatedContains.patrolDestination;
+      }
+      const updatedTile = {
+        ...tile,
+        behavior: behavior,
+        contains: updatedContains
+      };
+      if (!isPatrol) {
+        delete updatedTile.patrolTarget;
+        delete updatedTile.patrolDestination;
+      }
+      return updatedTile;
     };
 
     let nextTiles = [...this.state.tiles];
@@ -3130,13 +3463,131 @@ class MapMakerPage extends React.Component {
       loadedDungeon: dungeon || this.state.loadedDungeon,
       dungeonHasUnsavedChanges: true,
       boardHasUnsavedChanges: true,
-      monsterBehaviorRadialMenu: { visible: false }
+      monsterBehaviorRadialMenu: { visible: false },
+      contextMenu: { ...(this.state.contextMenu || {}), visible: false },
+      contextMenuSubmenu: null,
+      patrolPlacement: isPatrol ? { originTileId: tileId, superboardKey } : null
     });
 
     this.toast(`Monster behavior set to: ${behavior.toUpperCase()}`);
   };
 
+  handleSetPatrolDestination = (originTileId, targetTile, superboardKey = null) => {
+    if (originTileId === null || originTileId === undefined || !targetTile) {
+      this.setState({ patrolPlacement: null });
+      return;
+    }
+
+    const col = targetTile.coordinates && Array.isArray(targetTile.coordinates)
+      ? targetTile.coordinates[0]
+      : (targetTile.id % 15);
+    const row = targetTile.coordinates && Array.isArray(targetTile.coordinates)
+      ? targetTile.coordinates[1]
+      : Math.floor(targetTile.id / 15);
+
+    const patrolTarget = {
+      tileId: targetTile.id,
+      col: col,
+      row: row,
+      coordinates: [col, row]
+    };
+
+    const updateTilePatrol = (t) => {
+      if (!t) return t;
+      const cObj = typeof t.contains === 'object' && t.contains ? t.contains : { type: 'monster', subtype: t.contains };
+      const updatedContains = {
+        ...cObj,
+        behavior: 'patrol',
+        patrolTarget: patrolTarget,
+        patrolDestination: patrolTarget
+      };
+      return {
+        ...t,
+        behavior: 'patrol',
+        patrolTarget: patrolTarget,
+        patrolDestination: patrolTarget,
+        contains: updatedContains
+      };
+    };
+
+    let nextTiles = [...this.state.tiles];
+    if (nextTiles[originTileId]) {
+      nextTiles[originTileId] = updateTilePatrol(nextTiles[originTileId]);
+    }
+
+    const updatedLoadedBoard = this.state.loadedBoard ? {
+      ...this.state.loadedBoard,
+      tiles: nextTiles
+    } : null;
+
+    let dungeon = this.state.loadedDungeon ? clone(this.state.loadedDungeon) : null;
+    if (dungeon) {
+      if (superboardKey && dungeon.superboards?.[superboardKey]) {
+        const sb = dungeon.superboards[superboardKey];
+        if (Array.isArray(sb.miniboards)) {
+          sb.miniboards.forEach(mb => {
+            if (mb && Array.isArray(mb.tiles) && mb.tiles[originTileId]) {
+              mb.tiles[originTileId] = updateTilePatrol(mb.tiles[originTileId]);
+            }
+          });
+        }
+      }
+
+      if (Array.isArray(dungeon.levels)) {
+        dungeon.levels.forEach(level => {
+          ['front', 'back'].forEach(orientation => {
+            const plane = level[orientation];
+            if (plane && Array.isArray(plane.miniboards)) {
+              plane.miniboards.forEach(mb => {
+                if (mb && (mb.id === this.state.loadedBoard?.id || mb.name === this.state.loadedBoard?.name)) {
+                  if (mb.tiles && mb.tiles[originTileId]) {
+                    mb.tiles[originTileId] = updateTilePatrol(mb.tiles[originTileId]);
+                  }
+                }
+              });
+            }
+          });
+        });
+      }
+    }
+
+    this.setState({
+      tiles: nextTiles,
+      loadedBoard: updatedLoadedBoard,
+      loadedDungeon: dungeon || this.state.loadedDungeon,
+      dungeonHasUnsavedChanges: true,
+      boardHasUnsavedChanges: true,
+      patrolPlacement: null
+    });
+
+    this.toast(`Patrol route set to tile (${col}, ${row})!`);
+  };
+
+  cancelPatrolPlacement = () => {
+    if (this.state.patrolPlacement) {
+      this.setState({ patrolPlacement: null });
+      this.toast('Patrol placement cancelled');
+    }
+  };
+
   handleClick = (tile, e) => {
+    if (this.state.patrolPlacement) {
+      const isToolTile = tile.type === 'palette-tile' || tile.type === 'passage-tool-tile' ||
+        ['monster-tile', 'gate-tile', 'key-tile', 'tier-tile', 'jewel-tile', 'rune-tile', 'treasure-tile',
+         'vendor-tile', 'shrine-tile', 'territory-tile', 'building-tile', 'pocket-building-tile',
+         'generator-tile', 'dungeon-litter-tile', 'pocket-litter-tile', 'terrain-tile', 'locus-tile',
+         'forest-stamp-tile', 'mountain-stamp-tile'].includes(tile.type);
+
+      if (isToolTile) {
+        this.setState({ patrolPlacement: null });
+        // Proceed with regular tool selection below
+      } else {
+        const { originTileId, superboardKey } = this.state.patrolPlacement;
+        this.handleSetPatrolDestination(originTileId, tile, superboardKey);
+        return;
+      }
+    }
+
     if (tile.type === 'palette-tile') {
       if (tile.optionType === 'voidfill') {
         const arr = this.state.tiles.map(e => {
@@ -3191,7 +3642,7 @@ class MapMakerPage extends React.Component {
       const sKey = (actualTile.building || containsSubtype || containsType || (typeof actualContains === 'object' ? actualContains?.building || actualContains?.key || actualContains?.name : actualContains) || '').toString().toLowerCase();
 
       // Check if tile contains a placed monster
-      const isMonsterTile = containsType === 'monster' || containsType === 'pygmies' || actualTile.type === 'monster-tile' || (typeof actualContains === 'object' && actualContains?.type === 'monster');
+      const isMonsterTile = this.isMonsterTile(actualTile);
 
       if (isMonsterTile) {
         const pinnedOption = this.state.pinnedOption;
@@ -3209,9 +3660,7 @@ class MapMakerPage extends React.Component {
           const screenY = (evt && typeof evt.clientY === 'number') ? evt.clientY : (window.innerHeight / 2);
           const cObj = typeof actualContains === 'object' && actualContains ? actualContains : { type: 'monster', subtype: actualContains };
 
-          const monsterMatch = Object.values(this.props.monsterManager?.monsters || {}).find(m => m.key === cObj.subtype);
-          const mName = monsterMatch?.name || (cObj.subtype ? String(cObj.subtype).replace(/_/g, ' ') : 'Monster');
-          const mPortrait = actualTile.image || monsterMatch?.portrait || cObj.subtype;
+          const { name: mName, portrait: mPortrait } = this.getMonsterInfo(actualTile);
 
           this.setState({
             monsterBehaviorRadialMenu: {
@@ -3436,16 +3885,34 @@ class MapMakerPage extends React.Component {
   setViewState = (state) => {
     let title = '';
     const currentOverlayOn = !!this.state.dungeonOverlayOn;
+    let loadedBoard = this.state.loadedBoard;
+    let loadedPlane = this.state.loadedPlane;
+    let tiles = this.state.tiles;
+    let zoomLevelId = this.state.zoomLevelId;
+    let zoomMiniboardIndex = this.state.zoomMiniboardIndex;
+    let zoomOrientation = this.state.zoomOrientation;
+
     switch (state) {
       case 'plane':
-
-        if (this.state.loadedPlane) title = `Plane: ${this.state.loadedPlane.name}`
+        if (this.state.loadedDungeon && loadedPlane && !this.planeBelongsToDungeon(loadedPlane, this.state.loadedDungeon)) {
+          loadedPlane = null;
+          setEditorPreference('loadedPlaneId', null);
+        }
+        if (loadedPlane) title = `Plane: ${loadedPlane.name}`;
         break;
       case 'board':
-        if (this.state.loadedBoard) title = `Board: ${this.state.loadedBoard.name}`
+        if (this.state.loadedDungeon && loadedBoard && !this.boardBelongsToDungeon(loadedBoard, this.state.loadedDungeon)) {
+          loadedBoard = null;
+          tiles = this.createBlankBoardTiles();
+          zoomLevelId = null;
+          zoomMiniboardIndex = null;
+          zoomOrientation = null;
+          setEditorPreference('loadedBoardId', null);
+        }
+        if (loadedBoard) title = `Board: ${loadedBoard.name}`;
         break;
       case 'dungeon':
-        if (this.state.loadedDungeon) title = `Dungeon: ${this.state.loadedDungeon.name}`
+        if (this.state.loadedDungeon) title = `Dungeon: ${this.state.loadedDungeon.name}`;
         break;
       default:
         break;
@@ -3459,6 +3926,12 @@ class MapMakerPage extends React.Component {
       dungeonOverlayOn: currentOverlayOn,
       overlayData,
       selectedThingTitle: title,
+      loadedBoard,
+      loadedPlane,
+      tiles,
+      zoomLevelId,
+      zoomMiniboardIndex,
+      zoomOrientation,
       superboardZoom: null
     })
 
@@ -3954,13 +4427,18 @@ class MapMakerPage extends React.Component {
 
   handleContextMenu = (e, tileId) => {
     e.preventDefault();
+    if (this.state.patrolPlacement) {
+      this.cancelPatrolPlacement();
+      return;
+    }
     this.setState({
       contextMenu: {
         visible: true,
         x: e.clientX,
         y: e.clientY,
         tileId: tileId
-      }
+      },
+      contextMenuSubmenu: null
     });
   }
 
@@ -4006,7 +4484,7 @@ class MapMakerPage extends React.Component {
 
     if (!context) {
       this.toast('Cannot get dungeon coordinates - please open the board from within a dungeon first.');
-      this.setState({ contextMenu: { ...this.state.contextMenu, visible: false } });
+      this.setState({ contextMenu: { ...this.state.contextMenu, visible: false }, contextMenuSubmenu: null });
       return;
     }
 
@@ -4021,7 +4499,7 @@ class MapMakerPage extends React.Component {
       });
 
     console.log(`[Dungeon Coordinates] ${coordStr}`);
-    this.setState({ contextMenu: { ...this.state.contextMenu, visible: false } });
+    this.setState({ contextMenu: { ...this.state.contextMenu, visible: false }, contextMenuSubmenu: null });
   }
 
   handleStoreCoordinates = () => {
@@ -4035,7 +4513,7 @@ class MapMakerPage extends React.Component {
 
     if (!context) {
       this.toast('Cannot store dungeon coordinates - please open the board from within a dungeon first.');
-      this.setState({ contextMenu: { ...this.state.contextMenu, visible: false } });
+      this.setState({ contextMenu: { ...this.state.contextMenu, visible: false }, contextMenuSubmenu: null });
       return;
     }
 
@@ -4082,12 +4560,61 @@ class MapMakerPage extends React.Component {
     }
 
     this.toast(`Stored coordinates under storedCoordinates`);
-    this.setState({ contextMenu: { ...this.state.contextMenu, visible: false } });
+    this.setState({ contextMenu: { ...this.state.contextMenu, visible: false }, contextMenuSubmenu: null });
   }
+
+  handleToggleArchaicTunnelState = (tileId) => {
+    if (tileId === null || tileId === undefined) return;
+    const tiles = [...this.state.tiles];
+    const targetTile = tiles[tileId];
+    if (!targetTile) return;
+
+    const currentActive = !!(
+      targetTile.contains?.active ||
+      targetTile.contains?.state === 'active' ||
+      targetTile.active ||
+      targetTile.state === 'active'
+    );
+    const nextActive = !currentActive;
+    const nextState = nextActive ? 'active' : 'dormant';
+
+    const groupTileIds = this.getVendorGroupTileIds(tiles, tileId);
+    const idsToUpdate = (groupTileIds && groupTileIds.length > 0) ? groupTileIds : [tileId];
+
+    idsToUpdate.forEach((id) => {
+      if (tiles[id] && tiles[id].contains && typeof tiles[id].contains === 'object') {
+        tiles[id] = {
+          ...tiles[id],
+          contains: {
+            ...tiles[id].contains,
+            state: nextState,
+            active: nextActive
+          },
+          active: nextActive,
+          state: nextState
+        };
+      }
+    });
+
+    const updatedLoadedBoard = this.state.loadedBoard ? {
+      ...this.state.loadedBoard,
+      tiles
+    } : null;
+
+    this.setState({
+      tiles,
+      loadedBoard: updatedLoadedBoard,
+      contextMenu: { ...(this.state.contextMenu || {}), visible: false },
+      contextMenuSubmenu: null,
+      dungeonHasUnsavedChanges: true,
+      boardHasUnsavedChanges: true
+    });
+    this.toast(`Archaic Tunnel set to ${nextState.toUpperCase()}`);
+  };
 
   handleOpenAffiliationModalFromContextMenu = () => {
     const tileId = this.state.contextMenu?.tileId;
-    this.setState({ contextMenu: { ...this.state.contextMenu, visible: false } });
+    this.setState({ contextMenu: { ...this.state.contextMenu, visible: false }, contextMenuSubmenu: null });
     if (tileId !== null && tileId !== undefined) {
       const currentTile = this.state.tiles && this.state.tiles[tileId];
       if (currentTile) {
@@ -4095,6 +4622,38 @@ class MapMakerPage extends React.Component {
           showMilitaryAffiliationModal: true,
           militaryModalTile: currentTile,
           militaryModalTileId: tileId
+        });
+      }
+    }
+  };
+
+  handleOpenMonsterBehaviorFromContextMenu = () => {
+    const tileId = this.state.contextMenu?.tileId;
+    const cmX = this.state.contextMenu?.x;
+    const cmY = this.state.contextMenu?.y;
+    this.setState({
+      contextMenu: { ...(this.state.contextMenu || {}), visible: false },
+      contextMenuSubmenu: null
+    });
+    if (tileId !== null && tileId !== undefined) {
+      const currentTile = this.state.tiles && this.state.tiles[tileId];
+      if (currentTile) {
+        const actualContains = currentTile.contains;
+        const cObj = typeof actualContains === 'object' && actualContains ? actualContains : { type: 'monster', subtype: actualContains };
+        const currentBehavior = cObj.behavior || currentTile.behavior || 'default';
+        const { name: mName, portrait: mPortrait } = this.getMonsterInfo(currentTile);
+
+        this.setState({
+          monsterBehaviorRadialMenu: {
+            visible: true,
+            tileId: tileId,
+            superboardKey: this.state.superboardZoom || null,
+            x: (typeof cmX === 'number' && cmX > 0) ? cmX : ((typeof window !== 'undefined' ? window.innerWidth : 800) / 2),
+            y: (typeof cmY === 'number' && cmY > 0) ? cmY : ((typeof window !== 'undefined' ? window.innerHeight : 600) / 2),
+            currentBehavior: currentBehavior,
+            monsterName: mName,
+            monsterPortrait: mPortrait
+          }
         });
       }
     }
@@ -6432,6 +6991,7 @@ class MapMakerPage extends React.Component {
     // First format/evaluate all passage connections in the dungeon
     dungeon = this.props.mapMaker.formatDungeon(dungeon);
     
+    const dungeonErrors = [];
     let dungeonValid = true;
     for (let key in dungeon.levels) {
       let level = dungeon.levels[key];
@@ -6441,6 +7001,7 @@ class MapMakerPage extends React.Component {
         if (!level.front.valid) {
           dungeonValid = false;
           levelValid = false;
+          (level.front.validationErrors || []).forEach(err => dungeonErrors.push(`Level ${level.id} (Front): ${err}`));
         }
       }
       if (level.back) {
@@ -6448,6 +7009,7 @@ class MapMakerPage extends React.Component {
         if (!level.back.valid) {
           dungeonValid = false;
           levelValid = false;
+          (level.back.validationErrors || []).forEach(err => dungeonErrors.push(`Level ${level.id} (Back): ${err}`));
         }
       }
       level.valid = levelValid;
@@ -6462,13 +7024,19 @@ class MapMakerPage extends React.Component {
           sb.validationErrors = res.errors;
           if (!res.valid) {
             dungeonValid = false;
+            const sbName = sbKey === 'light' ? 'Light Superboard' : (sbKey === 'dark' ? 'Dark Superboard' : sbKey);
+            (res.errors || []).forEach(err => dungeonErrors.push(`${sbName}: ${err}`));
           }
         }
       });
     }
 
     const hasSpawnPoints = this.dungeonHasSpawnPoint(dungeon);
+    if (!hasSpawnPoints) {
+      dungeonErrors.push('Main dungeon has no Player Spawn Point tile.');
+    }
     dungeon.valid = dungeonValid && hasSpawnPoints;
+    dungeon.validationErrors = Array.from(new Set(dungeonErrors));
     return dungeon;
   }
   loadPlane = (incomingPlane) => {
@@ -6488,42 +7056,86 @@ class MapMakerPage extends React.Component {
     storeMeta(meta);
   }
   loadDungeon = async (id) => {
-    const val = await loadDungeonRequest(id)
-    let e = val && Array.isArray(val.data) ? val.data[0] : (val && val.data ? val.data : null);
-    if (!e || !e.content) return;
-    let dungeon = JSON.parse(e.content);
-    dungeon.id = id || e._id;
-    dungeon._id = e._id || id;
-    dungeon = this.props.mapMaker.formatDungeon(dungeon);
-
-    // Fetch all boards and sync dynamically
+    this.setState({ loadingData: true });
     try {
-      const boardsVal = await loadAllBoardsRequest();
-      if (boardsVal && Array.isArray(boardsVal.data)) {
-        const allBoards = boardsVal.data.map(item => {
-          const b = JSON.parse(item.content);
-          b.id = item._id;
-          return b;
-        });
-        dungeon = this.syncDungeonPlanesWithBoards(dungeon, allBoards);
+      const val = await loadDungeonRequest(id)
+      let e = val && Array.isArray(val.data) ? val.data[0] : (val && val.data ? val.data : null);
+      if (!e || !e.content) return;
+      let dungeon = JSON.parse(e.content);
+      dungeon.id = id || e._id;
+      dungeon._id = e._id || id;
+      dungeon = this.props.mapMaker.formatDungeon(dungeon);
+
+      // Fetch all boards and sync dynamically
+      try {
+        const boardsVal = await loadAllBoardsRequest();
+        if (boardsVal && Array.isArray(boardsVal.data)) {
+          const allBoards = boardsVal.data.map(item => {
+            const b = JSON.parse(item.content);
+            b.id = item._id;
+            return b;
+          });
+          dungeon = this.syncDungeonPlanesWithBoards(dungeon, allBoards);
+        }
+      } catch (err) {
+        console.error('Failed to sync dungeon planes on load:', err);
       }
+
+      dungeon = this.validateDungeon(dungeon);
+      const validatedValidity = dungeon.valid;
+      const validatedErrors = dungeon.validationErrors;
+      dungeon = this.props.mapMaker.formatDungeon(dungeon);
+      dungeon.valid = validatedValidity;
+      dungeon.validationErrors = validatedErrors;
+      dungeon.id = id || e._id;
+      dungeon._id = e._id || id;
+
+      const boardBelongs = this.boardBelongsToDungeon(this.state.loadedBoard, dungeon);
+      const planeBelongs = this.planeBelongsToDungeon(this.state.loadedPlane, dungeon);
+
+      let nextTitle = this.state.selectedThingTitle;
+      if (this.state.selectedView === 'dungeon') {
+        nextTitle = `Dungeon: ${dungeon.name}`;
+      } else if (this.state.selectedView === 'board') {
+        nextTitle = (boardBelongs && this.state.loadedBoard) ? `Board: ${this.state.loadedBoard.name}` : '';
+      } else if (this.state.selectedView === 'plane') {
+        nextTitle = (planeBelongs && this.state.loadedPlane) ? `Plane: ${this.state.loadedPlane.name}` : '';
+      }
+
+      const nextState = {
+        loadedDungeon: dungeon,
+        selectedThingTitle: nextTitle,
+        superboardZoom: null
+      };
+
+      if (!boardBelongs && this.state.loadedBoard) {
+        nextState.loadedBoard = null;
+        nextState.tiles = this.createBlankBoardTiles();
+        nextState.zoomLevelId = null;
+        nextState.zoomMiniboardIndex = null;
+        nextState.zoomOrientation = null;
+        setEditorPreference('loadedBoardId', null);
+      }
+
+      if (!planeBelongs && this.state.loadedPlane) {
+        nextState.loadedPlane = null;
+        setEditorPreference('loadedPlaneId', null);
+      }
+
+      await new Promise((resolve) => {
+        this.setState(nextState, () => {
+          this.addDungeonPlanesAndBoardsToState(dungeon);
+          resolve();
+        });
+      });
+      this.setLoadedDungeonDropdownValue(dungeon.name)
     } catch (err) {
-      console.error('Failed to sync dungeon planes on load:', err);
+      console.error('Failed to load dungeon:', err);
+    } finally {
+      if (this._isMounted !== false) {
+        this.setState({ loadingData: false });
+      }
     }
-
-    dungeon = this.validateDungeon(dungeon);
-    dungeon = this.props.mapMaker.formatDungeon(dungeon);
-    dungeon.id = id || e._id;
-    dungeon._id = e._id || id;
-
-    this.setState({
-      loadedDungeon: dungeon,
-      selectedThingTitle: this.state.selectedView === 'dungeon' ? `Dungeon: ${dungeon.name}` : this.state.selectedThingTitle,
-      superboardZoom: null
-    }, () => {
-      this.addDungeonPlanesAndBoardsToState(dungeon);
-    })
-    this.setLoadedDungeonDropdownValue(dungeon.name)
   }
   loadAllDungeons = async () => {
     try {
@@ -6577,17 +7189,34 @@ class MapMakerPage extends React.Component {
     }
   }
 
+  createBlankBoardTiles = () => {
+    return Array.from({ length: 225 }, (_, i) => ({
+      type: 'board-tile',
+      id: i,
+      coordinates: [i % 15, Math.floor(i / 15)],
+      contains: { type: 'empty_space', subtype: null },
+      color: null,
+      image: null
+    }));
+  }
+
   planeBelongsToDungeon = (plane, dungeon) => {
     if (!dungeon || !plane) return false;
-    if (plane.name && plane.name.toLowerCase().startsWith((dungeon.name + '_').toLowerCase())) {
+    if (plane.name && dungeon.name && plane.name.toLowerCase().startsWith((dungeon.name + '_').toLowerCase())) {
       return true;
     }
     if (Array.isArray(dungeon.levels)) {
       return dungeon.levels.some(lvl => {
         const f = lvl.front;
         const b = lvl.back;
-        return (f && (f.id === plane.id || f.name === plane.name)) ||
-               (b && (b.id === plane.id || b.name === plane.name));
+        const planeMatches = (p) => {
+          if (!p) return false;
+          if (plane.id && (p.id === plane.id || p._id === plane.id)) return true;
+          if (plane._id && (p.id === plane._id || p._id === plane._id)) return true;
+          if (p.name && plane.name && p.name === plane.name) return true;
+          return false;
+        };
+        return planeMatches(f) || planeMatches(b);
       });
     }
     return false;
@@ -6595,6 +7224,23 @@ class MapMakerPage extends React.Component {
 
   boardBelongsToDungeon = (board, dungeon, referencedBoardIds = null) => {
     if (!dungeon || !board) return false;
+
+    if (referencedBoardIds && (board.id || board._id)) {
+      const bId = board.id || board._id;
+      if (typeof referencedBoardIds.has === 'function' ? referencedBoardIds.has(bId) : (Array.isArray(referencedBoardIds) && referencedBoardIds.includes(bId))) {
+        return true;
+      }
+    }
+
+    // Check if board name starts with dungeon prefix
+    if (board.name && dungeon.name && board.name.toLowerCase().startsWith((dungeon.name + '_').toLowerCase())) {
+      return true;
+    }
+
+    // Check folder path
+    if (board.folderPath && dungeon.name && board.folderPath.toLowerCase().startsWith((dungeon.name + '/').toLowerCase())) {
+      return true;
+    }
 
     // Check if explicitly assigned to active dungeon planes/levels
     if (Array.isArray(dungeon.levels)) {
@@ -6613,13 +7259,30 @@ class MapMakerPage extends React.Component {
       if (isAssigned) return true;
     }
 
+    // Check if assigned to superboards
+    if (dungeon.superboards) {
+      for (const key of ['light', 'dark']) {
+        const sb = dungeon.superboards[key];
+        if (sb && Array.isArray(sb.miniboards)) {
+          const match = sb.miniboards.some(mb => {
+            if (!mb || Object.keys(mb).length === 0 || Array.isArray(mb)) return false;
+            if (board.id && (mb.id === board.id || mb._id === board.id)) return true;
+            if (board._id && (mb.id === board._id || mb._id === board._id)) return true;
+            if (mb.name && board.name && mb.name === board.name) return true;
+            return false;
+          });
+          if (match) return true;
+        }
+      }
+    }
+
     // Check if staged
     const staged = this.isBoardStaged(board);
     if (staged) {
-      if (board.folderPath && board.folderPath.toLowerCase().startsWith((dungeon.name + '/').toLowerCase())) {
+      if (board.folderPath && dungeon.name && board.folderPath.toLowerCase().startsWith((dungeon.name + '/').toLowerCase())) {
         return true;
       }
-      if (board.name && board.name.includes('_')) {
+      if (board.name && dungeon.name && board.name.includes('_')) {
         const parts = board.name.split('_');
         if (parts[0].toLowerCase() === dungeon.name.toLowerCase()) {
           return true;
@@ -8307,6 +8970,7 @@ class MapMakerPage extends React.Component {
     if (e.target && e.target.value && e.target.value !== 'Dungeon Selector') {
       dungeon = this.state.dungeons.find(x => x.name === e.target.value)
       this.setState({
+        loadingData: true,
         dungeonOverlayOn: false,
         overlayData: null,
         dungeonHasUnsavedChanges: false,
@@ -8321,19 +8985,71 @@ class MapMakerPage extends React.Component {
         }
         formatted = this.validateDungeon(formatted);
         formatted = this.props.mapMaker.formatDungeon(formatted);
-        this.setState({
+
+        const boardBelongs = this.boardBelongsToDungeon(this.state.loadedBoard, formatted);
+        const planeBelongs = this.planeBelongsToDungeon(this.state.loadedPlane, formatted);
+
+        let nextTitle = this.state.selectedThingTitle;
+        if (this.state.selectedView === 'dungeon') {
+          nextTitle = `Dungeon: ${formatted.name}`;
+        } else if (this.state.selectedView === 'board') {
+          nextTitle = (boardBelongs && this.state.loadedBoard) ? `Board: ${this.state.loadedBoard.name}` : '';
+        } else if (this.state.selectedView === 'plane') {
+          nextTitle = (planeBelongs && this.state.loadedPlane) ? `Plane: ${this.state.loadedPlane.name}` : '';
+        }
+
+        const nextState = {
           loadedDungeon: formatted,
-          selectedThingTitle: this.state.selectedView === 'dungeon' ? `Dungeon: ${formatted.name}` : this.state.selectedThingTitle
-        }, () => {
+          selectedThingTitle: nextTitle,
+          superboardZoom: null,
+          loadingData: false
+        };
+
+        if (!boardBelongs && this.state.loadedBoard) {
+          nextState.loadedBoard = null;
+          nextState.tiles = this.createBlankBoardTiles();
+          nextState.zoomLevelId = null;
+          nextState.zoomMiniboardIndex = null;
+          nextState.zoomOrientation = null;
+          setEditorPreference('loadedBoardId', null);
+        }
+
+        if (!planeBelongs && this.state.loadedPlane) {
+          nextState.loadedPlane = null;
+          setEditorPreference('loadedPlaneId', null);
+        }
+
+        this.setState(nextState, () => {
           this.addDungeonPlanesAndBoardsToState(formatted);
         });
         this.setLoadedDungeonDropdownValue(formatted.name);
+      } else {
+        this.setState({ loadingData: false });
       }
     } else {
-      this.setState({
+      const nextState = {
         loadedDungeon: null,
-        selectedThingTitle: this.state.selectedView === 'dungeon' ? '' : this.state.selectedThingTitle
-      })
+        loadingData: false,
+        selectedThingTitle: this.state.selectedView === 'dungeon' ? '' : this.state.selectedThingTitle,
+        superboardZoom: null
+      };
+      if (this.state.loadedBoard) {
+        nextState.loadedBoard = null;
+        nextState.tiles = this.createBlankBoardTiles();
+        nextState.zoomLevelId = null;
+        nextState.zoomMiniboardIndex = null;
+        nextState.zoomOrientation = null;
+        if (this.state.selectedView === 'board') {
+          nextState.selectedThingTitle = '';
+        }
+      }
+      if (this.state.loadedPlane) {
+        nextState.loadedPlane = null;
+        if (this.state.selectedView === 'plane') {
+          nextState.selectedThingTitle = '';
+        }
+      }
+      this.setState(nextState);
       setEditorPreference('loadedPlaneId', null);
       setEditorPreference('loadedBoardId', null);
     }
@@ -8402,94 +9118,270 @@ class MapMakerPage extends React.Component {
           </div>
         </div>}
 
-        {this.state.contextMenu && this.state.contextMenu.visible && (
-          <div
-            className="context-menu-backdrop"
-            style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999, background: 'transparent' }}
-            onClick={() => this.setState({ contextMenu: { ...this.state.contextMenu, visible: false } })}
-            onContextMenu={(e) => {
-              e.preventDefault();
-              this.setState({ contextMenu: { ...this.state.contextMenu, visible: false } });
-            }}
-          >
+        {this.state.contextMenu && this.state.contextMenu.visible && (() => {
+          const tileId = this.state.contextMenu.tileId;
+          const currentTile = this.state.tiles && this.state.tiles[tileId];
+          const isMonster = this.isMonsterTile(currentTile);
+          const winW = (typeof window !== 'undefined' && window.innerWidth) || 1024;
+          const isSubmenuLeft = this.state.contextMenu.x > (winW - 340);
+
+          return (
             <div
-              className="custom-context-menu"
-              style={{
-                position: 'absolute',
-                top: this.state.contextMenu.y,
-                left: this.state.contextMenu.x,
-                backgroundColor: '#1c1c1e',
-                border: '1px solid rgba(255, 255, 255, 0.15)',
-                borderRadius: '8px',
-                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5)',
-                padding: '6px 0',
-                zIndex: 10000,
-                minWidth: '150px',
-                display: 'flex',
-                flexDirection: 'column',
-                backdropFilter: 'blur(10px)'
+              className="context-menu-backdrop"
+              style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999, background: 'transparent' }}
+              onClick={() => this.setState({ contextMenu: { ...this.state.contextMenu, visible: false }, contextMenuSubmenu: null })}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                this.setState({ contextMenu: { ...this.state.contextMenu, visible: false }, contextMenuSubmenu: null });
               }}
             >
-              <button
+              <div
+                className="custom-context-menu"
                 style={{
-                  background: 'transparent',
-                  border: 'none',
-                  color: '#ffffff',
-                  padding: '10px 16px',
-                  textAlign: 'left',
-                  cursor: 'pointer',
-                  fontSize: '13px',
-                  transition: 'background-color 0.2s',
-                  outline: 'none',
-                  fontFamily: 'inherit'
+                  position: 'absolute',
+                  top: this.state.contextMenu.y,
+                  left: this.state.contextMenu.x,
+                  backgroundColor: '#1c1c1e',
+                  border: '1px solid rgba(255, 255, 255, 0.15)',
+                  borderRadius: '8px',
+                  boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5)',
+                  padding: '6px 0',
+                  zIndex: 10000,
+                  minWidth: '160px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  backdropFilter: 'blur(10px)'
                 }}
-                onMouseEnter={(e) => e.target.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'}
-                onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
-                onClick={this.handleGetCoordinates}
               >
-                Get Coordinates
-              </button>
-              <button
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  color: '#ffffff',
-                  padding: '10px 16px',
-                  textAlign: 'left',
-                  cursor: 'pointer',
-                  fontSize: '13px',
-                  transition: 'background-color 0.2s',
-                  outline: 'none',
-                  fontFamily: 'inherit'
-                }}
-                onMouseEnter={(e) => e.target.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'}
-                onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
-                onClick={this.handleOpenAffiliationModalFromContextMenu}
-              >
-                Assign Affiliation
-              </button>
-              <button
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  color: '#ffffff',
-                  padding: '10px 16px',
-                  textAlign: 'left',
-                  cursor: 'pointer',
-                  fontSize: '13px',
-                  transition: 'background-color 0.2s',
-                  outline: 'none',
-                  fontFamily: 'inherit'
-                }}
-                onMouseEnter={(e) => e.target.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'}
-                onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
-                onClick={this.handleStoreCoordinates}
-              >
-                Store Coordinates
-              </button>
+                <button
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: '#ffffff',
+                    padding: '10px 16px',
+                    textAlign: 'left',
+                    cursor: 'pointer',
+                    fontSize: '13px',
+                    transition: 'background-color 0.2s',
+                    outline: 'none',
+                    fontFamily: 'inherit'
+                  }}
+                  onMouseEnter={(e) => e.target.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'}
+                  onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
+                  onClick={this.handleGetCoordinates}
+                >
+                  Get Coordinates
+                </button>
+                <button
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: '#ffffff',
+                    padding: '10px 16px',
+                    textAlign: 'left',
+                    cursor: 'pointer',
+                    fontSize: '13px',
+                    transition: 'background-color 0.2s',
+                    outline: 'none',
+                    fontFamily: 'inherit'
+                  }}
+                  onMouseEnter={(e) => e.target.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'}
+                  onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
+                  onClick={this.handleOpenAffiliationModalFromContextMenu}
+                >
+                  Assign Affiliation
+                </button>
+                {(() => {
+                  const isArchaic = currentTile && (
+                    String(currentTile.contains?.subtype || currentTile.contains?.type || currentTile.image || '').includes('archaic_tunnel') ||
+                    String(currentTile.contains?.subtype || currentTile.contains?.type || currentTile.image || '').includes('archaic tunnel')
+                  );
+                  if (!isArchaic) return null;
+                  const isCurrentActive = !!(
+                    currentTile?.contains?.active ||
+                    currentTile?.contains?.state === 'active' ||
+                    currentTile?.active ||
+                    currentTile?.state === 'active'
+                  );
+                    const currentVar = currentTile?.contains?.variation || currentTile?.variation || 'facing_left';
+                    const VAR_NAMES = {
+                      facing_left: 'Facing Left ◀',
+                      facing_right: 'Facing Right ▶',
+                      facing_up: 'Facing Up ▲',
+                      facing_down: 'Facing Down ▼'
+                    };
+                    return (
+                      <>
+                        <button
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            color: isCurrentActive ? '#60a5fa' : '#9ca3af',
+                            padding: '10px 16px',
+                            textAlign: 'left',
+                            cursor: 'pointer',
+                            fontSize: '13px',
+                            transition: 'background-color 0.2s',
+                            outline: 'none',
+                            fontFamily: 'inherit',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between'
+                          }}
+                          onMouseEnter={(e) => e.target.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'}
+                          onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
+                          onClick={() => this.handleToggleArchaicTunnelState(tileId)}
+                        >
+                          <span>State: {isCurrentActive ? 'Active 🌀' : 'Dormant ⭕'}</span>
+                          <span style={{ fontSize: '11px', color: '#f9b115' }}>Toggle</span>
+                        </button>
+                        <button
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            color: '#38bdf8',
+                            padding: '10px 16px',
+                            textAlign: 'left',
+                            cursor: 'pointer',
+                            fontSize: '13px',
+                            transition: 'background-color 0.2s',
+                            outline: 'none',
+                            fontFamily: 'inherit',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between'
+                          }}
+                          onMouseEnter={(e) => e.target.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'}
+                          onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
+                          onClick={() => {
+                            this.handleDoubleClick(currentTile);
+                            this.setState({ contextMenu: { ...(this.state.contextMenu || {}), visible: false }, contextMenuSubmenu: null });
+                          }}
+                        >
+                          <span>{VAR_NAMES[currentVar] || currentVar}</span>
+                          <span style={{ fontSize: '11px', color: '#f9b115' }}>Cycle</span>
+                        </button>
+                      </>
+                    );
+                  })()}
+                {isMonster && (
+                  <div
+                    style={{ position: 'relative' }}
+                    onMouseEnter={() => this.setState({ contextMenuSubmenu: 'behavior' })}
+                    onMouseLeave={() => this.setState({ contextMenuSubmenu: null })}
+                  >
+                    <button
+                      style={{
+                        background: this.state.contextMenuSubmenu === 'behavior' ? 'rgba(255, 255, 255, 0.1)' : 'transparent',
+                        border: 'none',
+                        color: '#ffffff',
+                        padding: '10px 16px',
+                        textAlign: 'left',
+                        cursor: 'pointer',
+                        fontSize: '13px',
+                        transition: 'background-color 0.2s',
+                        outline: 'none',
+                        fontFamily: 'inherit',
+                        width: '100%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between'
+                      }}
+                      onClick={this.handleOpenMonsterBehaviorFromContextMenu}
+                    >
+                      <span>Assign Behavior</span>
+                      <span style={{ fontSize: '10px', color: '#9ca3af', marginLeft: '8px' }}>▶</span>
+                    </button>
+
+                    {this.state.contextMenuSubmenu === 'behavior' && (
+                      <div
+                        className="custom-context-submenu"
+                        style={{
+                          position: 'absolute',
+                          top: 0,
+                          left: isSubmenuLeft ? undefined : '100%',
+                          right: isSubmenuLeft ? '100%' : undefined,
+                          marginLeft: isSubmenuLeft ? undefined : '4px',
+                          marginRight: isSubmenuLeft ? '4px' : undefined,
+                          backgroundColor: '#1c1c1e',
+                          border: '1px solid rgba(255, 255, 255, 0.15)',
+                          borderRadius: '8px',
+                          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5)',
+                          padding: '6px 0',
+                          zIndex: 10001,
+                          minWidth: '150px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          backdropFilter: 'blur(10px)'
+                        }}
+                      >
+                        {[
+                          { key: 'asleep', label: 'Asleep', icon: '💤', color: '#c084fc' },
+                          { key: 'default', label: 'Default', icon: '🛡️', color: '#93c5fd' },
+                          { key: 'aggressive', label: 'Aggressive', icon: '⚔️', color: '#fca5a5' },
+                          { key: 'patrol', label: 'Patrol', icon: '🔄', color: '#fde68a' }
+                        ].map((item) => {
+                          const currentBehavior = (typeof currentTile?.contains === 'object' && currentTile?.contains?.behavior) || 'default';
+                          const isCurrent = currentBehavior === item.key;
+                          return (
+                            <button
+                              key={item.key}
+                              style={{
+                                background: 'transparent',
+                                border: 'none',
+                                color: isCurrent ? item.color : '#ffffff',
+                                padding: '8px 14px',
+                                textAlign: 'left',
+                                cursor: 'pointer',
+                                fontSize: '12px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px',
+                                transition: 'background-color 0.2s',
+                                outline: 'none',
+                                fontFamily: 'inherit',
+                                fontWeight: isCurrent ? 'bold' : 'normal'
+                              }}
+                              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'}
+                              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                this.handleSelectMonsterBehavior(item.key, tileId);
+                              }}
+                            >
+                              <span>{item.icon}</span>
+                              <span>{item.label}</span>
+                              {isCurrent && <span style={{ marginLeft: 'auto', fontSize: '11px' }}>✓</span>}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+                <button
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: '#ffffff',
+                    padding: '10px 16px',
+                    textAlign: 'left',
+                    cursor: 'pointer',
+                    fontSize: '13px',
+                    transition: 'background-color 0.2s',
+                    outline: 'none',
+                    fontFamily: 'inherit'
+                  }}
+                  onMouseEnter={(e) => e.target.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'}
+                  onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
+                  onClick={this.handleStoreCoordinates}
+                >
+                  Store Coordinates
+                </button>
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {this.state.planeBoardContextMenu && this.state.planeBoardContextMenu.visible && (
           <div
@@ -9218,6 +10110,7 @@ class MapMakerPage extends React.Component {
             {this.state.modalType === 'create sync planes' && <CModalTitle>Establish planes for Level {this.state.syncModalLevelName}</CModalTitle>}
                         {this.state.modalType === 'delete dungeon level' && <CModalTitle>Delete Level</CModalTitle>}
             {this.state.modalType === 'confirm restore dungeon' && <CModalTitle>Restore From Backup</CModalTitle>}
+            {this.state.modalType === 'confirm delete dungeon' && <CModalTitle style={{ color: '#ef4444', fontFamily: "'Cinzel', serif" }}>Confirm Dungeon Deletion</CModalTitle>}
           </CModalHeader>
           <CModalBody>
              {(this.state.modalType === 'name dungeon' || this.state.modalType === 'rename dungeon') && <input ref={this.state.dungeonNameInput} className="dungeonname-input" type="text" defaultValue={this.state.loadedDungeon?.name || ''} placeholder={this.state.loadedDungeon?.name || ''} />}
@@ -9302,6 +10195,58 @@ class MapMakerPage extends React.Component {
                   Are you sure you want to restore dungeon "{dungeonName}" from the stored backup snapshot created on {formattedDate}?
                   <br /><br />
                   <span style={{ color: '#ff4d4f', fontSize: '14px', fontWeight: 'bold' }}>Any unsaved changes will be overwritten.</span>
+                </div>
+              );
+            })()}
+            {this.state.modalType === 'confirm delete dungeon' && (() => {
+              const dungeonName = this.state.loadedDungeon?.name || 'this dungeon';
+              return (
+                <div className="confirm-delete-dungeon-container" style={{
+                  padding: '16px 20px',
+                  color: '#e0dcd3',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '16px',
+                  textAlign: 'center'
+                }}>
+                  <div style={{
+                    width: '56px',
+                    height: '56px',
+                    borderRadius: '50%',
+                    background: 'rgba(239, 68, 68, 0.12)',
+                    border: '1px solid rgba(239, 68, 68, 0.4)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '26px',
+                    color: '#ef4444',
+                    boxShadow: '0 0 20px rgba(239, 68, 68, 0.2)'
+                  }}>
+                    🗑️
+                  </div>
+
+                  <div style={{ fontSize: '1.1rem', fontWeight: '500', lineHeight: '1.5' }}>
+                    Are you sure you want to delete <strong style={{ color: '#ffd700', textShadow: '0 0 8px rgba(255, 215, 0, 0.3)' }}>{dungeonName}</strong>?
+                  </div>
+
+                  <div style={{
+                    background: 'rgba(12, 10, 9, 0.75)',
+                    border: '1px solid rgba(229, 181, 79, 0.25)',
+                    borderRadius: '6px',
+                    padding: '12px 16px',
+                    fontSize: '0.9rem',
+                    color: 'rgba(224, 220, 211, 0.85)',
+                    lineHeight: '1.5',
+                    textAlign: 'left',
+                    width: '100%',
+                    boxSizing: 'border-box'
+                  }}>
+                    <div style={{ color: '#e5b54f', fontWeight: 'bold', marginBottom: '4px', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      🛡️ Backup Policy
+                    </div>
+                    This dungeon will be archived and can be restored from backup for <strong>24 hours</strong>, after which deletion is permanent.
+                  </div>
                 </div>
               );
             })()}
@@ -9557,6 +10502,24 @@ class MapMakerPage extends React.Component {
               <React.Fragment>
                 <CButton color="secondary" onClick={() => this.closeModal()}>Cancel</CButton>
                 <CButton color="primary" onClick={this.executeRestoreDungeonFromBackup}>Restore from Backup</CButton>
+              </React.Fragment>
+            ) : this.state.modalType === 'confirm delete dungeon' ? (
+              <React.Fragment>
+                <CButton color="secondary" onClick={() => this.closeModal()}>Cancel</CButton>
+                <CButton
+                  color="danger"
+                  onClick={this.executeDeleteDungeon}
+                  style={{
+                    background: 'linear-gradient(135deg, #dc2626 0%, #991b1b 100%)',
+                    border: '1px solid #ef4444',
+                    color: '#ffffff',
+                    fontWeight: 'bold',
+                    boxShadow: '0 4px 14px rgba(220, 38, 38, 0.4)',
+                    letterSpacing: '0.5px'
+                  }}
+                >
+                  Delete Dungeon
+                </CButton>
               </React.Fragment>
             ) : (
               <React.Fragment>
@@ -9882,6 +10845,7 @@ class MapMakerPage extends React.Component {
                   } : undefined}
                 >
                   <BoardView
+                    loadingData={this.state.loadingData}
                     tileSize={this.state.tileSize}
                     loadedBoard={this.state.loadedBoard}
                     boardSize={this.state.boardSize}
@@ -9922,6 +10886,8 @@ class MapMakerPage extends React.Component {
                     gates={GATES}
                     keys={KEYS}
                     handleContextMenu={this.handleContextMenu}
+                    patrolPlacement={this.state.patrolPlacement}
+                    cancelPatrolPlacement={() => this.setState({ patrolPlacement: null })}
                   />
                 </div>
                 {/* Floating zoom-reset button — mobile only */}
@@ -9982,6 +10948,7 @@ class MapMakerPage extends React.Component {
 
 
             {this.state.selectedView === 'plane' && <PlaneView
+              loadingData={this.state.loadingData}
               tileSize={this.state.tileSize}
               boardSize={this.state.boardSize}
               boardsFolders={this.state.boardsFolders}
@@ -10423,6 +11390,21 @@ class MapMakerPage extends React.Component {
             </div>
           </div>
         )}
+        {/* Floating Patrol Placement Banner */}
+        {this.state.patrolPlacement && (
+          <div className="patrol-placement-banner">
+            <span className="patrol-banner-icon">🎯</span>
+            <span className="patrol-banner-text">
+              <strong>Patrol Mode:</strong> Click destination tile on the board (Esc to cancel)
+            </span>
+            <button
+              className="patrol-banner-cancel-btn"
+              onClick={this.cancelPatrolPlacement}
+            >
+              ✕ Cancel
+            </button>
+          </div>
+        )}
         {/* Monster Behavior Radial Selection Menu */}
         {this.state.monsterBehaviorRadialMenu?.visible && (() => {
           const menu = this.state.monsterBehaviorRadialMenu;
@@ -10434,14 +11416,16 @@ class MapMakerPage extends React.Component {
           ];
 
           const positions = [
-            { x: 0, y: -95 },  // Asleep (Top)
-            { x: 95, y: 0 },   // Default (Right)
-            { x: 0, y: 95 },   // Aggressive (Bottom)
-            { x: -95, y: 0 }   // Patrol (Left)
+            { x: 0, y: -115 },  // Asleep (Top)
+            { x: 115, y: 0 },   // Default (Right)
+            { x: 0, y: 115 },   // Aggressive (Bottom)
+            { x: -115, y: 0 }   // Patrol (Left)
           ];
 
-          const menuX = Math.min(Math.max(menu.x, 140), window.innerWidth - 140);
-          const menuY = Math.min(Math.max(menu.y, 140), window.innerHeight - 140);
+          const winW = (typeof window !== 'undefined' && window.innerWidth) || 1024;
+          const winH = (typeof window !== 'undefined' && window.innerHeight) || 768;
+          const menuX = Math.min(Math.max(menu.x, 175), winW - 175);
+          const menuY = Math.min(Math.max(menu.y, 175), winH - 175);
 
           return (
             <div
@@ -10465,8 +11449,8 @@ class MapMakerPage extends React.Component {
                   left: `${menuX}px`,
                   top: `${menuY}px`,
                   transform: 'translate(-50%, -50%)',
-                  width: '250px',
-                  height: '250px',
+                  width: '320px',
+                  height: '320px',
                   pointerEvents: 'auto'
                 }}
                 onClick={(e) => e.stopPropagation()}
@@ -10483,10 +11467,10 @@ class MapMakerPage extends React.Component {
                   {positions.map((pos, idx) => (
                     <line
                       key={idx}
-                      x1="125"
-                      y1="125"
-                      x2={125 + pos.x}
-                      y2={125 + pos.y}
+                      x1="160"
+                      y1="160"
+                      x2={160 + pos.x}
+                      y2={160 + pos.y}
                       stroke={behaviors[idx].border}
                       strokeWidth="2.5"
                       strokeDasharray="4 3"
@@ -10499,11 +11483,11 @@ class MapMakerPage extends React.Component {
                 <div
                   style={{
                     position: 'absolute',
-                    left: '125px',
-                    top: '125px',
+                    left: '160px',
+                    top: '160px',
                     transform: 'translate(-50%, -50%)',
-                    width: '76px',
-                    height: '76px',
+                    width: '86px',
+                    height: '86px',
                     borderRadius: '50%',
                     background: 'radial-gradient(circle, #1e1b2e 0%, #0d0b18 100%)',
                     border: '2.5px solid #f9b115',
@@ -10518,8 +11502,8 @@ class MapMakerPage extends React.Component {
                   {menu.monsterPortrait && (
                     <div
                       style={{
-                        width: '42px',
-                        height: '42px',
+                        width: '54px',
+                        height: '54px',
                         borderRadius: '50%',
                         backgroundImage: toCssUrl(resolvePortraitUrl(menu.monsterPortrait)),
                         backgroundSize: 'cover',
@@ -10528,9 +11512,33 @@ class MapMakerPage extends React.Component {
                       }}
                     />
                   )}
-                  <span style={{ fontSize: '9px', fontWeight: 'bold', color: '#f9b115', textTransform: 'uppercase', letterSpacing: '0.5px', marginTop: '2px', textAlign: 'center', maxWidth: '68px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {/* Nameplate badge anchored to the bottom of the center node */}
+                  <div
+                    style={{
+                      position: 'absolute',
+                      bottom: '-10px',
+                      left: '50%',
+                      transform: 'translateX(-50%)',
+                      background: 'rgba(13, 11, 24, 0.96)',
+                      border: '1.5px solid #f9b115',
+                      borderRadius: '10px',
+                      padding: '2px 8px',
+                      boxShadow: '0 2px 10px rgba(0, 0, 0, 0.8), 0 0 8px rgba(249, 177, 21, 0.35)',
+                      whiteSpace: 'nowrap',
+                      fontSize: '9.5px',
+                      fontWeight: 'bold',
+                      color: '#f9b115',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.5px',
+                      maxWidth: '120px',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      zIndex: 12
+                    }}
+                    title={menu.monsterName || 'Monster'}
+                  >
                     {menu.monsterName || 'Monster'}
-                  </span>
+                  </div>
                 </div>
 
                 {/* 4 Radial Option Nodes */}
@@ -10544,11 +11552,11 @@ class MapMakerPage extends React.Component {
                       onClick={() => this.handleSelectMonsterBehavior(b.key)}
                       style={{
                         position: 'absolute',
-                        left: `${125 + pos.x}px`,
-                        top: `${125 + pos.y}px`,
+                        left: `${160 + pos.x}px`,
+                        top: `${160 + pos.y}px`,
                         transform: 'translate(-50%, -50%)',
-                        width: isSelected ? '58px' : '52px',
-                        height: isSelected ? '58px' : '52px',
+                        width: isSelected ? '82px' : '76px',
+                        height: isSelected ? '82px' : '76px',
                         borderRadius: '50%',
                         background: isSelected ? b.color : 'rgba(20, 16, 32, 0.95)',
                         border: `2px solid ${b.border}`,
@@ -10557,12 +11565,14 @@ class MapMakerPage extends React.Component {
                         flexDirection: 'column',
                         alignItems: 'center',
                         justifyContent: 'center',
+                        padding: '0 4px',
+                        boxSizing: 'border-box',
                         cursor: 'pointer',
                         transition: 'transform 0.15s ease-in-out, box-shadow 0.15s ease-in-out',
                         zIndex: 15
                       }}
                       onMouseEnter={(e) => {
-                        e.currentTarget.style.transform = 'translate(-50%, -50%) scale(1.15)';
+                        e.currentTarget.style.transform = 'translate(-50%, -50%) scale(1.12)';
                         e.currentTarget.style.boxShadow = `0 0 28px ${b.glow}`;
                       }}
                       onMouseLeave={(e) => {
@@ -10570,8 +11580,23 @@ class MapMakerPage extends React.Component {
                         e.currentTarget.style.boxShadow = isSelected ? `0 0 24px ${b.glow}` : `0 0 12px ${b.glow}`;
                       }}
                     >
-                      <span style={{ fontSize: '18px', lineHeight: 1 }}>{b.icon}</span>
-                      <span style={{ fontSize: '9px', fontWeight: 'bold', color: isSelected ? '#ffffff' : b.border, marginTop: '2px' }}>{b.label}</span>
+                      <span style={{ fontSize: '20px', lineHeight: 1 }}>{b.icon}</span>
+                      <span
+                        style={{
+                          fontSize: '9.5px',
+                          fontWeight: 'bold',
+                          color: isSelected ? '#ffffff' : b.border,
+                          marginTop: '3px',
+                          textAlign: 'center',
+                          whiteSpace: 'nowrap',
+                          maxWidth: '66px',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          letterSpacing: '0.2px'
+                        }}
+                      >
+                        {b.label}
+                      </span>
                     </div>
                   );
                 })}

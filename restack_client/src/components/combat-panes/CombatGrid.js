@@ -1792,6 +1792,14 @@ export default function CombatGrid(props) {
                         transition: 'opacity 0.25s ease-in-out'
                     }}
                 >
+                    {selectedFighter?.id === fighter.id && !isFighterDead && (
+                        <div className="selected-unit-reticle" data-testid="selected-unit-reticle">
+                            <div className="reticle-corner top-left" />
+                            <div className="reticle-corner top-right" />
+                            <div className="reticle-corner bottom-left" />
+                            <div className="reticle-corner bottom-right" />
+                        </div>
+                    )}
                     {/* PvP soft blue/green glow for player units (positioned behind portrait) */}
                     {isPvP && !details?.dead && (
                         <div
@@ -2816,6 +2824,14 @@ export default function CombatGrid(props) {
                         transition: typeof unit.opacityTransition === 'string' ? unit.opacityTransition : 'opacity 0.25s ease-in-out'
                     }}
                 >
+                    {selectedMonster?.id === unit.id && !isDead && (
+                        <div className="selected-unit-reticle" data-testid="selected-unit-reticle">
+                            <div className="reticle-corner top-left" />
+                            <div className="reticle-corner top-right" />
+                            <div className="reticle-corner bottom-left" />
+                            <div className="reticle-corner bottom-right" />
+                        </div>
+                    )}
                     <div
                         key={isDamagedMonster ? isDamagedMonster.key : 'rest'}
                         className={`unit-damaged-recoil-wrapper${isDamagedMonster ? ` damaged-jerk-${isDamagedMonster.direction}` : ''}`}
