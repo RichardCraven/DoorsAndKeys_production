@@ -31,7 +31,7 @@ const DEFAULT_CLASS_SKILLS = {
   barbarian: ['sword_swing', 'barbarian_cleave', 'barbarian_berserker', 'fury'],
   engineer: ['build_turret', 'build_walker', 'build_wall', 'engineer_repair', 'wrench_strike'],
   wizard: ['fireball', 'ice_bolt', 'arcane_shield', 'mana_overflow'],
-  ranger: ['loose', 'notch', 'mark', 'nimble_dodge', 'eagle_eye'],
+  ranger: ['loose', 'hunting_knife', 'notch', 'mark', 'nimble_dodge', 'eagle_eye'],
   sage: ['heal', 'circle_of_protection', 'owls_insight', 'herbalism', 'breadcrumbs']
 };
 
@@ -1223,7 +1223,7 @@ export default function LandingPage(props) {
       <header className="landing-header">
         <div className="header-logo" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '2px' }}>
           <span className="logo-title">Dream Tower</span>
-          <span className="logo-subtitle" style={{ textAlign: 'left', alignSelf: 'flex-start' }}>v 0.9.3  BETA</span>
+          <span className="logo-subtitle" style={{ textAlign: 'left', alignSelf: 'flex-start' }}>v 0.9.5  BETA</span>
           {serverWarming && (
             <span style={{
               marginLeft: '8px',

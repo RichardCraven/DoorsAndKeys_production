@@ -124,16 +124,27 @@ const AnimatedXPBar = ({ percentBefore, percentAfter, levelTransition }) => {
 
 // const SHOW_BORDERS = true;
 class MonsterBattle extends React.Component {
+    getRows = () => {
+        if (this.props.boardSize === 'large') return 8;
+        return MAX_ROWS; // 6
+    }
+
+    getCols = () => {
+        if (this.props.boardSize === 'large') return 12;
+        return this.state.numBoardColumns || NUM_COLUMNS; // 8
+    }
+
     getTileSize = () => {
         let size;
+        const numRows = this.getRows();
         if (this.state.isMobileLandscape) {
-            size = Math.floor((window.innerHeight - 4) / 6);
+            size = Math.floor((window.innerHeight - 4) / numRows);
         } else {
             const vh = typeof window !== 'undefined' ? window.innerHeight : 900;
             // Reserved height: top header & margins (~54px) + grid bottom margin (~8px) + interaction pane (~205px) + border/safety (~13px) = 280px
             const reserved = 280;
-            const computed = Math.floor((vh - reserved) / 6);
-            size = Math.max(50, Math.min(100, computed));
+            const computed = Math.floor((vh - reserved) / numRows);
+            size = Math.max(numRows === 8 ? 36 : 50, Math.min(100, computed));
         }
         if (this._animManagerRedux) {
             this._animManagerRedux.TILE_SIZE = size;
@@ -379,8 +390,8 @@ class MonsterBattle extends React.Component {
             activeAnimations: [],
             logFilterSelectedFighter: false,
             logFontSize: 12,
-            // Board column count — starts at 8, expanded by entropic_kindred
-            numBoardColumns: NUM_COLUMNS,
+            // Board column count — starts at 8 (12 for large), expanded by entropic_kindred
+            numBoardColumns: props.boardSize === 'large' ? 12 : NUM_COLUMNS,
             // Animated column-flash strips for entropic_kindred board expansion
             entropicKindredNewCols: [],
             // ── Manual Input drag-to-target visuals ──────────────────────────
@@ -570,15 +581,17 @@ class MonsterBattle extends React.Component {
         }
 
         let arr = [], ghostPortraitMatrix = [];
-        for (let i = 0; i < MAX_ROWS * NUM_COLUMNS; i++) {
-            let x = i % NUM_COLUMNS,
-                y = Math.floor(i / NUM_COLUMNS)
+        const numCols = this.getCols();
+        const numRows = this.getRows();
+        for (let i = 0; i < numRows * numCols; i++) {
+            let x = i % numCols,
+                y = Math.floor(i / numCols);
             arr.push({
                 id: i,
                 x,
                 y
-            })
-            ghostPortraitMatrix.push(null)
+            });
+            ghostPortraitMatrix.push(null);
         }
 
         // const crewLeader = this.props.crew.find(e=>e.isLeader)
@@ -666,7 +679,7 @@ class MonsterBattle extends React.Component {
                 // 2. Generate the new empty tiles at the insertion columns (insertAt ... insertAt + addedCols - 1)
                 const newTiles = [];
                 for (let col = insertAt; col < insertAt + addedCols; col++) {
-                    for (let row = 0; row < MAX_ROWS; row++) {
+                    for (let row = 0; row < this.getRows(); row++) {
                         newTiles.push({
                             id: -1, // temporary placeholder
                             x: col,
@@ -730,6 +743,7 @@ class MonsterBattle extends React.Component {
         }
 
         this.props.combatManager.initializeCombat({
+            boardSize: this.props.boardSize || 'small',
             crew: this.props.crew,
             leader: this.getCrewLeader(),
             monster: this.props.monster,
@@ -744,7 +758,7 @@ class MonsterBattle extends React.Component {
         }
 
         if (this.props.animationManager && typeof this.props.animationManager.initialize === 'function') {
-            this.props.animationManager.initialize(NUM_COLUMNS, MAX_ROWS);
+            this.props.animationManager.initialize(numCols, numRows);
         }
 
         this.setState({
@@ -3014,7 +3028,7 @@ class MonsterBattle extends React.Component {
         const numCols = this.state.numBoardColumns;
         // Clamp to valid grid bounds
         const gridX = Math.max(0, Math.min(numCols - 1, rawX));
-        const gridY = Math.max(0, Math.min(MAX_ROWS - 1, rawY));
+        const gridY = Math.max(0, Math.min(this.getRows() - 1, rawY));
         // Off-board: check boundaries
         const offBoard = touch.clientX < rect.left || touch.clientX > rect.right ||
                          touch.clientY < rect.top  || touch.clientY > rect.bottom;
@@ -3075,7 +3089,7 @@ class MonsterBattle extends React.Component {
         const numCols = this.state.numBoardColumns;
         // Clamp to valid grid bounds
         const gridX = Math.max(0, Math.min(numCols - 1, rawX));
-        const gridY = Math.max(0, Math.min(MAX_ROWS - 1, rawY));
+        const gridY = Math.max(0, Math.min(this.getRows() - 1, rawY));
         // Off-board: suppress target when cursor is clearly outside the board
         const offBoard = event.clientX < rect.left || event.clientX > rect.right ||
                          event.clientY < rect.top  || event.clientY > rect.bottom;
@@ -4269,7 +4283,7 @@ class MonsterBattle extends React.Component {
                     style={{
                         position: 'relative',
                         width: currentTileSize * this.state.numBoardColumns + (SHOW_TILE_BORDERS ? this.state.numBoardColumns * 2 : 0) + 'px',
-                        height: currentTileSize * MAX_ROWS + (SHOW_TILE_BORDERS ? MAX_ROWS * 2 : 0) + 'px',
+                        height: currentTileSize * this.getRows() + (SHOW_TILE_BORDERS ? this.getRows() * 2 : 0) + 'px',
                         background: '#161618',
                         borderRadius: '16px',
                         border: '2px solid rgba(255, 255, 255, 0.08)',
@@ -4549,13 +4563,12 @@ class MonsterBattle extends React.Component {
                         // Find the main monster (isMonster = true, not a minion)
                         const mainMonster = this.state.battleData && Object.values(this.state.battleData).find(c => c && c.isMonster && !c.isMinion);
                         if (mainMonster && mainMonster.coordinates) {
-                            // Main monster is 2x scale (occupies coordinates.x, coordinates.y anchor, which is bottom-right or bottom-left of a 2x2).
-                            // Let's compute its visual center X/Y using tilePos style logic.
-                            // Anchor coordinates:
+                            // Main monster is 2x scale or 3x scale (occupies coordinates.x, coordinates.y anchor).
+                            // Compute visual center X/Y using tilePos style logic.
                             const mx = mainMonster.coordinates.x;
                             const my = mainMonster.coordinates.y;
 
-                            const isHuge = mainMonster.tier === 4 || mainMonster.type === 'dragon' || mainMonster.key === 'dragon' || mainMonster.huge === true || mainMonster.size === 3;
+                            const isHuge = mainMonster.huge === true || mainMonster.isHuge === true || mainMonster.tier === 4 || mainMonster.type === 'dragon' || mainMonster.key === 'dragon' || mainMonster.size === 3 || mainMonster.scale === 3;
 
                             let bubbleCenterX = 0;
                             let bubbleCenterY = 0;
@@ -4578,61 +4591,82 @@ class MonsterBattle extends React.Component {
                                 bubbleCenterY = topPos; // Directly above the top row
                             }
 
+                            // 3x3 monsters enlarge vertically by 0.3 * currentTileSize during greeting, requiring higher yOffset so bubble floats cleanly above portrait
+                            const yOffset = isHuge ? 88 : ((mainMonster.isLarge || mainMonster.size === 2) ? 52 : 45);
+
                             return (
-                                <div
-                                    className="message-container speech-bubble"
-                                    style={{
-                                        position: 'absolute',
-                                        left: `${bubbleCenterX}px`,
-                                        top: `${bubbleCenterY - 45}px`, // Place it slightly above the monster's top border
-                                        transform: 'translateX(-50%)',
-                                        width: 'max-content',
-                                        maxWidth: '220px',
-                                        height: 'auto',
-                                        padding: '10px 14px',
-                                        background: 'rgba(20, 20, 22, 0.96)',
-                                        border: '2px solid #ff5400',
-                                        borderRadius: '12px',
-                                        color: '#ffffff',
-                                        fontSize: '14px',
-                                        fontWeight: '600',
-                                        textAlign: 'center',
-                                        boxShadow: '0 8px 24px rgba(0,0,0,0.8), 0 0 15px rgba(255, 84, 0, 0.4)',
-                                        zIndex: 2000,
-                                        pointerEvents: 'none',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                    }}
-                                >
-                                    {this.state.message}
-                                    {/* Small arrow pointing down towards the monster */}
-                                    <div style={{
-                                        position: 'absolute',
-                                        bottom: '-8px',
-                                        left: '50%',
-                                        transform: 'translateX(-50%)',
-                                        width: '0',
-                                        height: '0',
-                                        borderLeft: '8px solid transparent',
-                                        borderRight: '8px solid transparent',
-                                        borderTop: '8px solid rgba(20, 20, 22, 0.96)',
-                                        zIndex: 451
-                                    }} />
-                                    {/* Outline for the arrow */}
-                                    <div style={{
-                                        position: 'absolute',
-                                        bottom: '-10px',
-                                        left: '50%',
-                                        transform: 'translateX(-50%)',
-                                        width: '0',
-                                        height: '0',
-                                        borderLeft: '9px solid transparent',
-                                        borderRight: '9px solid transparent',
-                                        borderTop: '9px solid #ff5400',
-                                        zIndex: 450
-                                    }} />
-                                </div>
+                                <React.Fragment key="esoteric-dialogue-banner">
+                                    <style>{`
+                                        @keyframes esoteric-bubble-float {
+                                            0% { transform: translateX(-50%) translateY(0px); filter: drop-shadow(0 0 12px rgba(255, 84, 0, 0.3)); }
+                                            50% { transform: translateX(-50%) translateY(-4px); filter: drop-shadow(0 0 20px rgba(255, 84, 0, 0.55)); }
+                                            100% { transform: translateX(-50%) translateY(0px); filter: drop-shadow(0 0 12px rgba(255, 84, 0, 0.3)); }
+                                        }
+                                    `}</style>
+                                    <div
+                                        className="message-container esoteric-dialogue-banner"
+                                        style={{
+                                            position: 'absolute',
+                                            left: `${bubbleCenterX}px`,
+                                            top: `${bubbleCenterY - yOffset}px`,
+                                            transform: 'translateX(-50%)',
+                                            width: 'max-content',
+                                            maxWidth: '260px',
+                                            height: 'auto',
+                                            padding: '10px 18px',
+                                            background: 'linear-gradient(135deg, rgba(14, 10, 24, 0.97), rgba(28, 14, 22, 0.97))',
+                                            border: '1.5px solid rgba(255, 110, 30, 0.85)',
+                                            outline: '1px solid rgba(212, 175, 55, 0.35)',
+                                            outlineOffset: '-4px',
+                                            borderRadius: '4px',
+                                            color: '#f5e6ca',
+                                            fontFamily: "'Palatino Linotype', 'Cinzel', 'Georgia', serif",
+                                            fontSize: '13.5px',
+                                            fontWeight: '600',
+                                            fontStyle: 'italic',
+                                            letterSpacing: '0.8px',
+                                            textAlign: 'center',
+                                            boxShadow: '0 12px 32px rgba(0, 0, 0, 0.9), 0 0 20px rgba(255, 84, 0, 0.3), inset 0 0 14px rgba(147, 51, 234, 0.2)',
+                                            zIndex: 2000,
+                                            pointerEvents: 'none',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            gap: '6px',
+                                            animation: 'esoteric-bubble-float 3s ease-in-out infinite',
+                                        }}
+                                    >
+                                        <span style={{ color: '#d4af37', fontSize: '11px', opacity: 0.8, fontStyle: 'normal' }}>✦</span>
+                                        <span style={{ textShadow: '0 0 8px rgba(255, 100, 30, 0.6), 0 2px 4px rgba(0, 0, 0, 0.9)' }}>
+                                            {this.state.message}
+                                        </span>
+                                        <span style={{ color: '#d4af37', fontSize: '11px', opacity: 0.8, fontStyle: 'normal' }}>✦</span>
+
+                                        {/* Esoteric sharp sigil pointer stem */}
+                                        <div style={{
+                                            position: 'absolute',
+                                            bottom: '-11px',
+                                            left: '50%',
+                                            transform: 'translateX(-50%)',
+                                            width: '0',
+                                            height: '0',
+                                            borderLeft: '7px solid transparent',
+                                            borderRight: '7px solid transparent',
+                                            borderTop: '11px solid rgba(255, 110, 30, 0.85)',
+                                        }}>
+                                            <div style={{
+                                                position: 'absolute',
+                                                top: '-12px',
+                                                left: '-5px',
+                                                width: '0',
+                                                height: '0',
+                                                borderLeft: '5px solid transparent',
+                                                borderRight: '5px solid transparent',
+                                                borderTop: '9px solid rgba(14, 10, 24, 0.97)',
+                                            }} />
+                                        </div>
+                                    </div>
+                                </React.Fragment>
                             );
                         }
 
@@ -4878,13 +4912,14 @@ class MonsterBattle extends React.Component {
                             isPvP={!!(this.props.isPvP || this.props.isPvPMode)}
                             isPvPMode={!!(this.props.isPvP || this.props.isPvPMode)}
                             opponentCrew={this.props.opponentCrew}
+                            boardSize={this.props.boardSize}
                         />
 
                         {/* ── Manual Input drag arc SVG overlay ──────────────────────── */}
                         {(() => {
                             const CELL = currentTileSize + (SHOW_TILE_BORDERS ? 2 : 0);
                             const boardW = currentTileSize * this.state.numBoardColumns + (SHOW_TILE_BORDERS ? this.state.numBoardColumns * 2 : 0);
-                            const boardH = currentTileSize * MAX_ROWS + (SHOW_TILE_BORDERS ? MAX_ROWS * 2 : 0);
+                            const boardH = currentTileSize * this.getRows() + (SHOW_TILE_BORDERS ? this.getRows() * 2 : 0);
 
                             // ── Committed (persistent ghost) arc ───────────────────────────
                             const committed = !this.state.dragSource && this.state.committedArc;

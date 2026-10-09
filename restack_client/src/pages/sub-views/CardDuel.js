@@ -1029,6 +1029,14 @@ export default class CardDuel extends React.Component {
         return `M ${startX} ${startY} Q ${ctrlX} ${ctrlY} ${targetX} ${targetY}`;
     };
 
+    isPygmyUnit = (unit) => {
+        if (!unit) return false;
+        const typeStr = String(unit.type || unit.memberType || unit.subtype || '').toLowerCase();
+        const nameStr = String(unit.name || '').toLowerCase();
+        const idStr = String(unit.id || '').toLowerCase();
+        return typeStr.includes('pygmy') || nameStr.includes('pygmy') || idStr.includes('pygmy');
+    };
+
     getValidTargetTiles = (unit) => {
         if (!unit || unit.anchorRow === undefined) return { moves: [], attacks: [], heroAttack: false };
         const { grid, currentTurn, gameOver, isAiThinking } = this.state;
@@ -1043,17 +1051,20 @@ export default class CardDuel extends React.Component {
 
         const isRanger = !!(unit.isRanger || (unit.memberType && unit.memberType.toLowerCase().includes('ranger')) || unit.type === 'ranger');
         const isWizard = !!(unit.isWizard || (unit.memberType && unit.memberType.toLowerCase().includes('wizard')) || unit.type === 'wizard' || (unit.name && unit.name.toLowerCase().includes('wizard')));
-        const isRegularPygmy = (unit.type === 'pygmy' || (unit.name && unit.name.toLowerCase().includes('pygmy'))) && (unit.width || 1) === 1 && (unit.height || 1) === 1;
+        const isPygmy = this.isPygmyUnit(unit);
 
         const unitKeys = Array.isArray(unit.occupiedKeys) && unit.occupiedKeys.length > 0
             ? unit.occupiedKeys
             : [`${r}_${c}`];
 
-        // 1-space adjacent empty slots are valid moves
-        const moveOffsets = [
-            [-1, 0], [1, 0], [0, -1], [0, 1],
-            [-1, -1], [-1, 1], [1, -1], [1, 1]
-        ];
+        // 1-space adjacent empty slots are valid moves.
+        // All pygmy units regardless of size can only move forward.
+        const moveOffsets = isPygmy
+            ? (unit.owner === 'player' ? [[-1, 0]] : [[1, 0]])
+            : [
+                [-1, 0], [1, 0], [0, -1], [0, 1],
+                [-1, -1], [-1, 1], [1, -1], [1, 1]
+            ];
 
         moveOffsets.forEach(([dr, dc]) => {
             const targetAnchorRow = r + dr;
@@ -1064,7 +1075,7 @@ export default class CardDuel extends React.Component {
                 for (let mdr = 0; mdr < h; mdr++) {
                     for (let mdc = 0; mdc < w; mdc++) {
                         const subKey = `${targetAnchorRow + mdr}_${targetAnchorCol + mdc}`;
-                        if (!moves.includes(subKey)) moves.push(subKey);
+                        if (!unitKeys.includes(subKey) && !moves.includes(subKey)) moves.push(subKey);
                     }
                 }
             }
@@ -1072,14 +1083,14 @@ export default class CardDuel extends React.Component {
 
         // Tactical Attack target offsets:
         // Most units can only attack directly in front of them or to the side.
-        // Regular 1-tile pygmy units can only attack forward, not to the side.
+        // All pygmy units regardless of size can only attack forward, not to the side.
         // Diagonal attacks are a special ability limited to the wizard.
         const attackOffsets = [];
         if (unit.owner === 'player') {
             // Directly in front (row - 1)
             attackOffsets.push([-1, 0]);
-            // To the side (left/right) - regular 1 tile pygmy units cannot attack to the side
-            if (!isRegularPygmy) {
+            // To the side (left/right) - all pygmy units can only attack forward, not to the side
+            if (!isPygmy) {
                 attackOffsets.push([0, -1], [0, 1]);
             }
             // Wizard special ability: attack diagonally (NE and NW)
@@ -1089,8 +1100,8 @@ export default class CardDuel extends React.Component {
         } else {
             // Directly in front for reaper (row + 1)
             attackOffsets.push([1, 0]);
-            // To the side (left/right) - regular 1 tile pygmy units cannot attack to the side
-            if (!isRegularPygmy) {
+            // To the side (left/right) - all pygmy units can only attack forward, not to the side
+            if (!isPygmy) {
                 attackOffsets.push([0, -1], [0, 1]);
             }
             // Wizard special ability: attack diagonally (SE and SW)
@@ -1180,6 +1191,14 @@ export default class CardDuel extends React.Component {
         }
         targetRow = destAnchorRow;
         targetCol = destAnchorCol;
+
+        if (this.isPygmyUnit(unit)) {
+            const requiredRowChange = unit.owner === 'player' ? -1 : 1;
+            if (targetRow !== unit.anchorRow + requiredRowChange || targetCol !== unit.anchorCol) {
+                this.addLog(`⚠️ ${unit.name} can only move forward!`);
+                return;
+            }
+        }
 
         const oldRow = unit.anchorRow;
         const oldCol = unit.anchorCol;
@@ -1926,15 +1945,15 @@ export default class CardDuel extends React.Component {
                 : [`${r}_${c}`];
 
             const isWizard = !!(u.isWizard || (u.memberType && u.memberType.toLowerCase().includes('wizard')) || u.type === 'wizard' || (u.name && u.name.toLowerCase().includes('wizard')));
-            const isRegularPygmy = (u.type === 'pygmy' || (u.name && u.name.toLowerCase().includes('pygmy'))) && (u.width || 1) === 1 && (u.height || 1) === 1;
+            const isPygmy = this.isPygmyUnit(u);
 
             // Most units can only attack directly in front of them or to the side.
-            // Regular 1-tile pygmy units can only attack forward, not to the side.
+            // All pygmy units regardless of size can only attack forward, not to the side.
             // Diagonal attacks are a special ability limited to the wizard.
             const attackOffsets = [
                 [1, 0]   // Directly in front (row + 1)
             ];
-            if (!isRegularPygmy) {
+            if (!isPygmy) {
                 attackOffsets.push([0, -1], [0, 1]); // Left and right side
             }
             if (isWizard) {
@@ -1970,11 +1989,14 @@ export default class CardDuel extends React.Component {
                 // If all forward tiles are blocked by player units, check if this
                 // reaper unit's ATK exceeds the blocker's current HP — if so,
                 // it Overruns: destroys the blocking unit and advances into the tile.
-                const forwardCandidates = [
-                    [r + 1, c],
-                    [r + 1, c - 1],
-                    [r + 1, c + 1]
-                ].filter(([nr, nc]) => nr >= 0 && nr <= 4 && nc >= 0 && nc <= 4);
+                const forwardCandidates = (isPygmy
+                    ? [[r + 1, c]]
+                    : [
+                        [r + 1, c],
+                        [r + 1, c - 1],
+                        [r + 1, c + 1]
+                    ]
+                ).filter(([nr, nc]) => nr >= 0 && nr <= 4 && nc >= 0 && nc <= 4);
 
                 const forwardMoves = forwardCandidates.filter(
                     ([nr, nc]) => !currentGrid[`${nr}_${nc}`]
@@ -2351,16 +2373,30 @@ export default class CardDuel extends React.Component {
                 return;
             }
 
-            // If clicking an enemy unit that cannot be attacked (e.g. diagonal for non-wizards or sideways for regular 1-tile pygmies)
+            // If clicking an enemy unit that cannot be attacked (e.g. diagonal for non-wizards or sideways/diagonal for pygmies)
             if (targetUnit && targetUnit.owner !== selectedBoardUnit.owner) {
                 const isWiz = !!(selectedBoardUnit.isWizard || (selectedBoardUnit.memberType && selectedBoardUnit.memberType.toLowerCase().includes('wizard')) || selectedBoardUnit.type === 'wizard' || (selectedBoardUnit.name && selectedBoardUnit.name.toLowerCase().includes('wizard')));
-                const isRegularPygmy = (selectedBoardUnit.type === 'pygmy' || (selectedBoardUnit.name && selectedBoardUnit.name.toLowerCase().includes('pygmy'))) && (selectedBoardUnit.width || 1) === 1 && (selectedBoardUnit.height || 1) === 1;
+                const isPygmy = this.isPygmyUnit(selectedBoardUnit);
                 const dr = Math.abs(r - selectedBoardUnit.anchorRow);
                 const dc = Math.abs(c - selectedBoardUnit.anchorCol);
                 if (dr === 1 && dc === 1 && !isWiz) {
                     this.addLog(`⚠️ ${selectedBoardUnit.name} cannot attack diagonally. Diagonal attacks are limited to Wizards!`);
-                } else if (dr === 0 && dc === 1 && isRegularPygmy) {
+                } else if (isPygmy) {
                     this.addLog(`⚠️ ${selectedBoardUnit.name} can only attack forward, not to the side!`);
+                }
+            }
+
+            // If clicking an empty adjacent tile that cannot be moved into by a pygmy (pygmies can only move forward)
+            if (!targetUnit) {
+                const isPygmy = this.isPygmyUnit(selectedBoardUnit);
+                if (isPygmy) {
+                    const h = selectedBoardUnit.height || 1;
+                    const w = selectedBoardUnit.width || 1;
+                    const isAdjacentVicinity = (r >= selectedBoardUnit.anchorRow - 1 && r <= selectedBoardUnit.anchorRow + h) &&
+                                              (c >= selectedBoardUnit.anchorCol - 1 && c <= selectedBoardUnit.anchorCol + w);
+                    if (isAdjacentVicinity) {
+                        this.addLog(`⚠️ ${selectedBoardUnit.name} can only move forward!`);
+                    }
                 }
             }
         }

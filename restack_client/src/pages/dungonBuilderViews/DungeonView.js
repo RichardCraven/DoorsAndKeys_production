@@ -1472,7 +1472,7 @@ class DungeonView extends React.Component {
                     style={{
                         width: this.props.superboardZoom ? '750px' : (this.props.boardSize + 'px'),
                         height: this.props.superboardZoom ? '790px' : (this.props.boardSize + 'px'),
-                        backgroundColor: 'white',
+                        backgroundColor: '#0b0a08',
                         transition: 'all 0.3s ease'
                     }}
                     >
@@ -1773,7 +1773,7 @@ class DungeonView extends React.Component {
                                                 height: this.props.tileSize*6,
                                                 width: this.props.tileSize*6,
                                                 backgroundColor: 
-                                                this.props.hoveredDungeonSection === `${levelIndex}_front` ? 'lightgoldenrodyellow': 'white'
+                                                this.props.hoveredDungeonSection === `${levelIndex}_front` ? 'lightgoldenrodyellow': 'rgba(15, 13, 10, 0.8)'
                                             }}
 
                                             onDragOver={(event)=>this.props.onDragOverDungeon(event, levelIndex, 'front')}
@@ -1881,7 +1881,7 @@ class DungeonView extends React.Component {
                                                 height: this.props.tileSize*6,
                                                 width: this.props.tileSize*6,
                                                 backgroundColor: 
-                                                this.props.hoveredDungeonSection === `${levelIndex}_back` ? 'lightgoldenrodyellow': 'white'
+                                                this.props.hoveredDungeonSection === `${levelIndex}_back` ? 'lightgoldenrodyellow': 'rgba(15, 13, 10, 0.8)'
                                             }}
 
                                             onDragOver={(event)=>this.props.onDragOverDungeon(event, levelIndex, 'back')}

@@ -97,7 +97,6 @@ export function computeTemporalStrainTier(debtMs, level) {
 }
 
 export const BASE_AND_ALT_CREW_NAMES = [
-    'Theodora (Ascetic)',
     'Glitterburn',
     'Loryastes',
     'Zildjikan',
@@ -279,8 +278,15 @@ export function CrewManager() {
                 if (!member.passives.includes('master_builder')) member.passives.push('master_builder');
             }
 
+            // Ranger starts with hunting_knife melee attack (migration-safe)
+            if ((member.type || member.image) === 'ranger') {
+                if (!Array.isArray(member.skills)) member.skills = [];
+                if (!member.skills.includes('hunting_knife')) member.skills.push('hunting_knife');
+            }
+
             // Expedition skills default initialization
             const defaultExpeditionSkills = {
+                wizard: ['astral_conduit', 'ley_tap', 'scry'],
                 sage: ['healing_ground', 'sing'],
                 ranger: ['sneak_attack', 'spike_trap'],
                 soldier: ['soldier_shield', 'breacher'],
@@ -293,6 +299,8 @@ export function CrewManager() {
                 if (defaultExpeditionSkills[mClass]) {
                     member.expeditionSkills = [...defaultExpeditionSkills[mClass]];
                 }
+            } else if (mClass === 'wizard' && !member.expeditionSkills.includes('astral_conduit')) {
+                member.expeditionSkills.unshift('astral_conduit');
             }
 
             member.specialActions.forEach(a => {
@@ -1316,6 +1324,7 @@ export function CrewManager() {
             inventory: [],
             skills: ['magic_missile', 'fireball', 'ice_blast'],
             passives: ['magic_affinity', 'arcane_sense'],
+            expeditionSkills: ['astral_conduit', 'ley_tap', 'dimensional_pocket', 'scry'],
             weaknesses: ['ice', 'fire', 'electricity', 'blood_magic'],
             description: "Hailing from the magister's college, Zildjikan was the dean of transmutation. A powerful magic user, he has been known to linger for long periods in the silent realm, searching for secret truths.",
             specialActions: [],
@@ -1381,8 +1390,7 @@ export function CrewManager() {
             portrait: images['sage_portrait'],
             portraitOptions: [
                 { id: 'loryastes', name: 'Loryastes', defaultName: 'Loryastes', portrait: images['sage_portrait'], image: 'sage' },
-                { id: 'theodora', name: 'Theodora', defaultName: 'Theodora', portrait: images['sage_alt_grandmotherly_portrait'] || images['sage_alt_portrait'], image: 'sage_alt' },
-                { id: 'theodora_ascetic', name: 'Theodora (Ascetic)', defaultName: 'Theodora (Ascetic)', portrait: images['sage_alt_shaved_portrait'] || images['sage_alt_shaved'], image: 'sage_alt_shaved' }
+                { id: 'theodora', name: 'Theodora', defaultName: 'Theodora', portrait: images['sage_alt_portrait'], image: 'sage_alt' }
             ],
             inventory: [],
             skills: ['heal', 'circle_of_protection'],
@@ -1408,7 +1416,7 @@ export function CrewManager() {
                 { id: 'ekatra', name: 'Ekatra', defaultName: 'Ekatra', portrait: images['ranger_alt_portrait'], image: 'ranger_alt' }
             ],
             inventory: [],
-            skills: ['loose', 'notch', 'mark'],
+            skills: ['loose', 'hunting_knife', 'notch', 'mark'],
             expeditionSkills: ['sneak_attack', 'spike_trap'],
             passives: ['nimble_dodge', 'eagle_eye', 'hunters_quarry'],
             weaknesses: ['ice', 'curse', 'crushing'],

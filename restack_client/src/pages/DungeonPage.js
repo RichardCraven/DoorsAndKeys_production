@@ -5412,6 +5412,16 @@ class DungeonPage extends React.Component {
         } catch (e) {
             console.warn('Error starting Outpost attack interval', e);
         }
+
+        // Start 1.5-second Patrolling Monsters movement loop
+        try {
+            this.patrolInterval = this._setInterval(() => {
+                this.tickPatrollingMonsters();
+            }, 1500);
+        } catch (e) {
+            console.warn('Error starting Patrol interval', e);
+        }
+
         // Ensure initial layout calculations run once on mount so the board renders
         // correctly without requiring a manual window resize.
         try {
@@ -17406,7 +17416,8 @@ class DungeonPage extends React.Component {
 
             if (isWizardSelected && (now - lastFire >= 6000)) {
                 const { gx: pGx, gy: pGy } = this.state.superboardPlayerPos;
-                const radius = 3.5;
+                const visionRange = typeof this.getRangedVisionRange === 'function' ? this.getRangedVisionRange() : 3;
+                const radius = Math.max(3.5, visionRange + 0.5);
 
                 let nearestTarget = null;
                 let minTargetDist = 999;
@@ -19746,7 +19757,8 @@ class DungeonPage extends React.Component {
                                 rally: { name: 'Rally', desc: '+5 bonus Resolve on combat victory' },
                                 iron_will: { name: 'Iron Will', desc: 'Party Resolve never drops below 20 from deaths' },
                                 arcane_sense: { name: 'Arcane Sense', desc: 'Identifies chest tier before opening' },
-                                ley_tap: { name: 'Ley Tap', desc: 'Draw energy at Magic Nexus — recover 15% endurance' },
+                                ley_tap: { name: 'Ley Tap', desc: 'Draw energy from Shrines — restores +15 Resolve' },
+                                astral_conduit: { name: 'Astral Conduit', desc: 'Recovers +5 Resolve for every 10 steps & reveals adjacent rooms' },
                                 dimensional_pocket: { name: 'Dimensional Pocket', desc: '+2 shared inventory slots' },
                                 scry: { name: 'Scry', desc: 'Reveals all chests and monsters for 30s once per run' },
                                 iron_gut: { name: 'Iron Gut', desc: 'Barbarian does not count toward camping food cost' },
@@ -21937,6 +21949,7 @@ class DungeonPage extends React.Component {
                                                     const isFlashing = this.state.flashingSkillSlot === slotIdx;
                                                     const currentMember = selectedMember || this.state.selectedCrewMember;
                                                     const defaultExpSkills = {
+                                                        wizard: ['astral_conduit', 'ley_tap', 'scry'],
                                                         sage: ['healing_ground', 'sing'],
                                                         ranger: ['sneak_attack', 'spike_trap'],
                                                         soldier: ['soldier_shield', 'breacher'],
@@ -25620,11 +25633,19 @@ class DungeonPage extends React.Component {
 
     isAggroMonsterObj = (containsObj, tile) => {
         if (!containsObj && !tile) return false;
+
+        // Asleep behavior: asleep monsters do NOT trigger aggro unless woken up
+        const b = (typeof containsObj === 'object' && containsObj?.behavior) || (tile && (tile.behavior || (tile.contains && tile.contains.behavior)));
+        const bState = (typeof containsObj === 'object' && (containsObj?.behaviorState || containsObj?.isWokenUp)) || (tile && (tile.behaviorState || tile.isWokenUp));
+        if (b === 'asleep' && bState !== 'awake' && bState !== true) {
+            return false;
+        }
+
         if (this.state && this.state.aggroOn && this.isMonsterObj(tile, containsObj)) return true;
         if (tile && (tile.aggro === true || tile.isAggro === true)) return true;
         if (containsObj) {
             if (typeof containsObj === 'object') {
-                if (containsObj.aggro === true || containsObj.isAggro === true) return true;
+                if (containsObj.aggro === true || containsObj.isAggro === true || containsObj.behavior === 'aggressive') return true;
                 const typeKey = containsObj.type || containsObj.subtype || containsObj.key || containsObj.monsterType;
                 const mm = this.props.monsterManager || defaultMonsterManager;
                 if (typeKey && (mm?.monsters?.[typeKey]?.aggro === true || defaultMonsterManager.monsters?.[typeKey]?.aggro === true)) return true;
@@ -25662,6 +25683,73 @@ class DungeonPage extends React.Component {
             const targetTileId = monsterTile.id !== undefined ? monsterTile.id : monsterTile;
             this.triggerMonsterBattle(true, targetTileId);
         }, 450);
+    };
+
+    tickPatrollingMonsters = () => {
+        if (this.state.inMonsterBattle || this.state.inTowerSiege || this._isAggroAttacking || this.state.keysLocked) {
+            return;
+        }
+        const bm = this.props.boardManager;
+        if (!bm || !Array.isArray(bm.tiles)) return;
+
+        const patrolTiles = bm.tiles.filter(t => {
+            if (!t || !t.contains) return false;
+            const behavior = typeof t.contains === 'object' ? t.contains.behavior : null;
+            return behavior === 'patrol' && !t.isPursuing && t.color !== 'black' && !t.fog;
+        });
+
+        if (patrolTiles.length === 0) return;
+
+        let tilesChanged = false;
+        for (const mTile of patrolTiles) {
+            const mIdx = mTile.id;
+            const mRow = Math.floor(mIdx / 15);
+            const mCol = mIdx % 15;
+
+            const dirs = [
+                { dRow: -1, dCol: 0 },
+                { dRow: 1, dCol: 0 },
+                { dRow: 0, dCol: -1 },
+                { dRow: 0, dCol: 1 }
+            ];
+            const validNeighbors = [];
+            for (const dir of dirs) {
+                const nRow = mRow + dir.dRow;
+                const nCol = mCol + dir.dCol;
+                if (nRow < 0 || nRow >= 15 || nCol < 0 || nCol >= 15) continue;
+                const nIdx = bm.getIndexFromCoordinates ? bm.getIndexFromCoordinates([nRow, nCol]) : (nRow * 15 + nCol);
+                const nTile = bm.tiles[nIdx];
+                if (!nTile) continue;
+
+                const isVoid = nTile.isVoid || nTile.color === 'black' || nTile.contains === 'void' || (typeof nTile.contains === 'object' && nTile.contains?.type === 'void');
+                const hasObstacle = nTile.contains && typeof nTile.contains === 'object' && (nTile.contains.type === 'gate' || nTile.contains.type === 'building' || nTile.contains.type === 'monster');
+                const isPlayerTile = bm.playerTile && bm.playerTile.location && bm.playerTile.location[0] === nRow && bm.playerTile.location[1] === nCol;
+
+                if (!isVoid && !hasObstacle && !isPlayerTile) {
+                    validNeighbors.push(nTile);
+                }
+            }
+
+            if (validNeighbors.length > 0) {
+                const destTile = validNeighbors[Math.floor(Math.random() * validNeighbors.length)];
+                destTile.contains = mTile.contains;
+                destTile.image = mTile.image;
+
+                mTile.contains = null;
+                mTile.image = null;
+                tilesChanged = true;
+            }
+        }
+
+        if (tilesChanged) {
+            if (typeof bm.refreshTiles === 'function') {
+                try { bm.refreshTiles(); } catch (e) {}
+            }
+            if (typeof this.forceUpdate === 'function') {
+                try { this.forceUpdate(); } catch (e) {}
+            }
+            this.checkAggroMonsters();
+        }
     };
 
     checkAggroMonsters = () => {
@@ -25706,7 +25794,6 @@ class DungeonPage extends React.Component {
                 if (isVoid) continue;
 
                 if (this.isAggroMonsterObj(targetTile.contains, targetTile)) {
-                    // Attack vector: from monster (mGx, mGy) to player (pGx, pGy)
                     const attackRow = pGy - mGy;
                     const attackCol = pGx - mGx;
                     this.triggerAggroMonsterAttack(targetTile, attackRow, attackCol);
@@ -25744,11 +25831,11 @@ class DungeonPage extends React.Component {
                 }
             }
 
-            // Radius check for pursuit: if monsters are within AGGRO_RADIUS (and not orthogonally adjacent)
+            // Radius check for pursuit / aggressive behavior:
             for (let dRow = -AGGRO_RADIUS; dRow <= AGGRO_RADIUS; dRow++) {
                 for (let dCol = -AGGRO_RADIUS; dCol <= AGGRO_RADIUS; dCol++) {
                     if (dRow === 0 && dCol === 0) continue;
-                    if (Math.abs(dRow) + Math.abs(dCol) === 1) continue; // Orthogonal adjacency already handled above
+                    if (Math.abs(dRow) + Math.abs(dCol) === 1) continue; // Orthogonal adjacency handled above
 
                     const mRow = pRow + dRow;
                     const mCol = pCol + dCol;
@@ -25759,10 +25846,20 @@ class DungeonPage extends React.Component {
                     if (!mTile) continue;
                     if (mTile.color === 'black' || mTile.fog === true) continue; // Hidden in fog of war
 
+                    const mObj = mTile.contains;
+                    const behavior = typeof mObj === 'object' ? mObj?.behavior : null;
+
+                    // Aggressive behavior: attacks or pursues if within 2 tiles
+                    const dist = Math.max(Math.abs(dRow), Math.abs(dCol));
+                    if (behavior === 'aggressive' && dist <= 2) {
+                        if (!mTile.isPursuing) {
+                            this.startMonsterPursuit(mTile);
+                            return true;
+                        }
+                    }
+
                     if (this.isAggroMonsterObj(mTile.contains, mTile)) {
-                        const mObj = mTile.contains;
                         const radius = (typeof mObj === 'object' && mObj?.aggroRadius) || AGGRO_RADIUS;
-                        const dist = Math.max(Math.abs(dRow), Math.abs(dCol));
                         if (dist <= radius && !mTile.isPursuing) {
                             this.startMonsterPursuit(mTile);
                         }
@@ -25772,6 +25869,7 @@ class DungeonPage extends React.Component {
         }
         return false;
     };
+
 
     getSelectedCrewMember = () => {
         const meta = getMeta() || {};
@@ -25826,16 +25924,16 @@ class DungeonPage extends React.Component {
         ).toLowerCase();
         const bgLower = String(this.state.activeAvatarBg || '').toLowerCase();
 
-        if (mType.includes('wizard') || mType.includes('zildjikan') || bgLower.includes('wizard') || bgLower.includes('zildjikan')) return 2;
-        if (mType.includes('ranger') || mType.includes('dormund') || mType.includes('archer') || mType.includes('rogue') || mType.includes('hunter') || bgLower.includes('ranger') || bgLower.includes('dormund')) return 4;
+        if (mType.includes('wizard') || mType.includes('zildjikan') || bgLower.includes('wizard') || bgLower.includes('zildjikan')) return 3;
+        if (mType.includes('ranger') || mType.includes('dormund') || mType.includes('archer') || mType.includes('rogue') || mType.includes('hunter') || bgLower.includes('ranger') || bgLower.includes('dormund')) return 5;
 
         for (let member of crew) {
             if (!member) continue;
             const t = String(member.type || member.role || member.class || member.image || member.portrait || member.name || '').toLowerCase();
-            if (t.includes('ranger') || t.includes('dormund') || t.includes('archer') || t.includes('rogue')) return 4;
+            if (t.includes('ranger') || t.includes('dormund') || t.includes('archer') || t.includes('rogue')) return 5;
         }
-        if (this.state.equippedRangedWeapon || this.state.hasRangedWeapon) return 4;
-        return 2;
+        if (this.state.equippedRangedWeapon || this.state.hasRangedWeapon) return 5;
+        return 3;
     };
 
     hasRangedWeaponEquipped = () => {
@@ -28153,25 +28251,25 @@ class DungeonPage extends React.Component {
     }
 
     handleBoardTouchEnd = (e) => {
-        this._lastTouchHandledTime = Date.now();
         if (this.state.mobileTouchTileId !== null) {
             const tile = this.state.tiles[this.state.mobileTouchTileId];
             if (tile) {
-                this.handleClick(tile);
+                this.handleClick(tile, true);
             }
             this.setState({ mobileTouchTileId: null });
         }
+        this._lastTouchHandledTime = Date.now();
         if (e && typeof e.preventDefault === 'function' && e.cancelable) {
             e.preventDefault();
         }
     }
 
-    handleClick = (tile) => {
+    handleClick = (tile, isTouch = false) => {
         if (!tile || !tile.coordinates) return;
         if (this.state.keysLocked || this.state.inMonsterBattle || this.state.playerAnimating || this.state.activeConstruction) return;
 
         // Prevent synthetic mouse clicks following a touch event handled in handleBoardTouchEnd
-        if (Date.now() - (this._lastTouchHandledTime || 0) < 400) {
+        if (!isTouch && Date.now() - (this._lastTouchHandledTime || 0) < 400) {
             return;
         }
 
@@ -31250,6 +31348,7 @@ class DungeonPage extends React.Component {
         const memberName = selectedMember ? (selectedMember.name || selectedMember.type || 'Crew member') : 'Crew member';
         const memberClass = ((selectedMember && (selectedMember.type || selectedMember.image)) || '').toLowerCase();
         const defaultExpSkills = {
+            wizard: ['astral_conduit', 'ley_tap', 'scry'],
             sage: ['healing_ground', 'sing'],
             ranger: ['sneak_attack', 'spike_trap'],
             soldier: ['soldier_shield', 'breacher'],
@@ -31443,6 +31542,29 @@ class DungeonPage extends React.Component {
             } else {
                 this.displayMessage("🌈 Prismatic Flare illuminated the area!");
             }
+            return;
+        }
+
+        if (skillKey === 'astral_conduit') {
+            const bm = this.props.boardManager;
+            if (bm && Array.isArray(bm.tiles)) {
+                let roomsRevealed = 0;
+                bm.tiles.forEach(tile => {
+                    if (tile && tile.hidden) {
+                        tile.hidden = false;
+                        roomsRevealed++;
+                    }
+                });
+                if (typeof bm.refreshTiles === 'function') bm.refreshTiles();
+                this.displayMessage(`🔮 Astral Conduit activated! Focused ethereal energy and revealed ${roomsRevealed} obscured area(s).`);
+            } else {
+                this.displayMessage("🔮 Astral Conduit activated! Focused ethereal energy.");
+            }
+            return;
+        }
+
+        if (skillKey === 'ley_tap') {
+            this.displayMessage("✨ Ley Tap: Taps ambient energy at Magic Nexus points to restore endurance.");
             return;
         }
 
@@ -39677,7 +39799,7 @@ class DungeonPage extends React.Component {
                         ranger: [{ key: 'keen_eye', name: 'Keen Eye', desc: 'L1: Reveals nearby traps. L2: +3 DEX to trap saves.' }, { key: 'hunters_quarry', name: "Hunter's Quarry", desc: '+10% food drop on monster defeat' }, { key: 'trapper', name: 'Trapper', desc: '25% chance to negate any trap entirely.' }, { key: 'trailblaze', name: 'Trailblaze', desc: 'Visual breadcrumb to last camp spot' }, { key: 'scrounging_rat', name: 'Scrounging Rat', desc: 'Forage for food in camp: 15-30 food (3h) / 30-50 food (2h) / 50-80 food (1h).' }, { key: 'fastidious_crow', name: 'Fastidious Crow', desc: 'Scout a 10x10 board area for 24h. Process: 20m. Cooldown: 6h / 3h. Reward: 5-20g / 25-80g + 30% shard chance.' }],
                         sage: [{ key: 'herbalism', name: 'Herbalism', desc: 'Camp costs 1 less food per member' }, { key: 'mend', name: 'Mend', desc: 'Out-of-combat potions restore +15% HP' }, { key: 'ritual_efficiency', name: 'Ritual Efficiency', desc: 'Ritual prep time -25%' }, { key: 'revive', name: 'Revive', desc: 'Once per run: fallen member revived at 25% HP' }, { key: 'awake_refreshed', name: 'Awake Refreshed', desc: 'Recuperates an additional +10/+20/+40 Resolve after camping.' }],
                         soldier: [{ key: 'fortify', name: 'Fortify', desc: 'Resolve does not decay while camping' }, { key: 'breacher', name: 'Breacher', desc: 'Force open any Major or Minor Gate' }, { key: 'rally', name: 'Rally', desc: '+5 bonus Resolve on combat victory' }, { key: 'iron_will', name: 'Iron Will', desc: 'Party Resolve never drops below 20 from deaths' }, { key: 'awake_refreshed', name: 'Awake Refreshed', desc: 'Recuperates an additional +10/+20/+40 Resolve after camping.' }, { key: 'strong_resolve', name: 'Strong Resolve', desc: 'Reduces Resolve penalties by 40%/75%/90%.' }],
-                        wizard: [{ key: 'arcane_sense', name: 'Arcane Sense', desc: 'Identifies chest tier before opening' }, { key: 'ley_tap', name: 'Ley Tap', desc: 'Draw energy at Magic Nexus — recover 15% endurance' }, { key: 'dimensional_pocket', name: 'Dimensional Pocket', desc: '+2 shared inventory slots' }, { key: 'scry', name: 'Scry', desc: 'Reveals all chests and monsters for 30s once per run' }],
+                        wizard: [{ key: 'arcane_sense', name: 'Arcane Sense', desc: 'Identifies chest tier before opening' }, { key: 'ley_tap', name: 'Ley Tap', desc: 'Draw energy from Shrines — restores +15 Resolve' }, { key: 'astral_conduit', name: 'Astral Conduit', desc: 'Recovers +5 Resolve for every 10 steps & reveals adjacent rooms' }, { key: 'dimensional_pocket', name: 'Dimensional Pocket', desc: '+2 shared inventory slots' }, { key: 'scry', name: 'Scry', desc: 'Reveals all chests and monsters for 30s once per run' }],
                         barbarian: [{ key: 'iron_gut', name: 'Iron Gut', desc: 'Barbarian does not count toward camping food cost' }, { key: 'savage_haul', name: 'Savage Haul', desc: 'Grants +2/+4/+6 Strength and +10/+20/+30 Max HP' }, { key: 'bloodhound', name: 'Bloodhound', desc: 'Reveals all monsters on miniboard entry' }, { key: 'endure', name: 'Endure', desc: 'Zero-food camp: no Resolve penalty, crew heals to 50%. Auto-triggers on camp; 20% chance during 10m exhaustion window.' }],
                         monk: [{ key: 'swift_step', name: 'Swift Step', desc: 'Movement animation 30% faster' }, { key: 'focused_rest', name: 'Focused Rest', desc: 'Camping duration -30% (same healing)' }, { key: 'silent_awareness', name: 'Silent Awareness', desc: 'Cuts ambush chance in obscured spaces by 50% when Monk is selected' }, { key: 'pressure_points', name: 'Pressure Points', desc: '15% vendor discount once per vendor' }, { key: 'astral_map', name: 'Astral Map', desc: 'Full fog reveal for 60s once per run' }],
                         summoner: [{ key: 'spirit_sight', name: 'Spirit Sight', desc: 'Narrative tiles and shrines glow through fog' }, { key: 'plunder', name: 'Plunder', desc: 'Open a chest a second time once per run' }, { key: 'soul_tap', name: 'Soul Tap', desc: 'Transfers accumulated power of fallen friendly units to the Summoner' }, { key: 'soul_tithe', name: 'Soul Tithe', desc: '+1 Shimmering Dust per combat victory' }, { key: 'dark_pact', name: 'Dark Pact', desc: 'Trade Shimmering Dust at vendors (1 Dust = 25g)' }],

@@ -37,8 +37,10 @@ export let MAX_DEPTH = 7;
 export function setMaxDepth(val) {
     MAX_DEPTH = val;
 }
-// ^ index 7, actual col count is 8
-const MAX_LANES = 6
+export let MAX_LANES = 6;
+export function setMaxLanes(val) {
+    MAX_LANES = val;
+}
 const getSurroundings = (coords) => {
     const N = {x: coords.x, y: coords.y-1},
               S = {x: coords.x, y: coords.y+1},
@@ -51,7 +53,61 @@ const getSurroundings = (coords) => {
     return {N,S,E,W,NW,NE,SW,SE}
 }
 const PC_TYPES = ['soldier','ranger','wizard', 'monk', 'sage', 'barbarian']
+// ─── Natural Barrier registry ─────────────────────────────────────────────────
+// Registered natural barriers on large grids (e.g. 12x8)
+export const activeNaturalBarriers = [];
+
+export function setNaturalBarriers(barriers) {
+    activeNaturalBarriers.length = 0;
+    if (Array.isArray(barriers)) {
+        activeNaturalBarriers.push(...barriers);
+    }
+}
+
+export function isNaturalBarrierAt(coords) {
+    if (!coords || !activeNaturalBarriers.length) return false;
+    return activeNaturalBarriers.some(b => b.x === coords.x && b.y === coords.y);
+}
+
+/**
+ * Returns the first barrier coordinate intercepted along the straight path
+ * from sourceCoord to targetCoord, or null if no barrier is struck.
+ */
+export function getBarrierCollision(sourceCoord, targetCoord, barriers = activeNaturalBarriers) {
+    if (!sourceCoord || !targetCoord || !barriers || !barriers.length) return null;
+    const x0 = sourceCoord.x;
+    const y0 = sourceCoord.y;
+    const x1 = targetCoord.x;
+    const y1 = targetCoord.y;
+    if (x0 === x1 && y0 === y1) return null;
+
+    const dx = x1 - x0;
+    const dy = y1 - y0;
+    const dist = Math.hypot(dx, dy);
+    if (dist <= 0) return null;
+
+    const steps = Math.max(Math.ceil(dist * 30), 20);
+    for (let i = 1; i <= steps; i++) {
+        const t = i / steps;
+        const px = x0 + 0.5 + t * dx;
+        const py = y0 + 0.5 + t * dy;
+        const tileX = Math.floor(px);
+        const tileY = Math.floor(py);
+        if (tileX === x0 && tileY === y0) continue;
+        const hit = barriers.find(b => b.x === tileX && b.y === tileY);
+        if (hit) {
+            return { x: hit.x, y: hit.y };
+        }
+    }
+    return null;
+}
+
+export function isPathBlockedByBarrier(sourceCoord, targetCoord, barriers = activeNaturalBarriers) {
+    return !!getBarrierCollision(sourceCoord, targetCoord, barriers);
+}
+
 const someoneIsInCoords = (coords, combatants)=>{
+    if (isNaturalBarrierAt(coords)) return true;
     if(!combatants) return false
     return Object.values(combatants).some(e=>{
         try {
@@ -131,6 +187,7 @@ const isLargeMover = (caller) => {
 
 const isAvailableToMoveInto = (coords, combatants, fromCoords = null, caller = null) => {
     if (isOutOfBounds(coords)) return false;
+    if (isNaturalBarrierAt(coords)) return false;
     if (someoneIsInCoords(coords, combatants)) return false;
     if (fromCoords && crossesShieldWall(fromCoords, coords)) return false;
     // Huge movers occupy 3x3 tiles
@@ -148,6 +205,7 @@ const isAvailableToMoveInto = (coords, combatants, fromCoords = null, caller = n
         ];
         for (const hc of hugeCoords) {
             if (isOutOfBounds(hc)) return false;
+            if (isNaturalBarrierAt(hc)) return false;
             if (Object.values(combatants).some(e => {
                 if (!e || e.id === caller.id) return false;
                 if (e.coordinates && e.coordinates.x === hc.x && e.coordinates.y === hc.y) return true;
@@ -166,6 +224,7 @@ const isAvailableToMoveInto = (coords, combatants, fromCoords = null, caller = n
         ];
         for (const lc of largeCoords) {
             if (isOutOfBounds(lc)) return false;
+            if (isNaturalBarrierAt(lc)) return false;
             if (Object.values(combatants).some(e => {
                 if (!e || e.id === caller.id) return false;
                 if (e.coordinates && e.coordinates.x === lc.x && e.coordinates.y === lc.y) return true;
@@ -220,7 +279,7 @@ const findLaneWithClearLOS = (caller, target, combatants) => {
         : [target.coordinates];
         
     const callerX = caller.coordinates.x;
-    const possibleLanes = [0, 1, 2, 3, 4, 5]; // MAX_LANES is 5 (index 0-5)
+    const possibleLanes = Array.from({ length: MAX_LANES }, (_, i) => i);
     
     // Sort lanes by vertical distance to caller
     possibleLanes.sort((a, b) => Math.abs(a - caller.coordinates.y) - Math.abs(b - caller.coordinates.y));
@@ -230,7 +289,8 @@ const findLaneWithClearLOS = (caller, target, combatants) => {
         // AND have a clear path from (callerX, y)
         const clearTileInLane = allTargetTiles.find(t => {
             if (t.y !== y) return false;
-            return !isPathBlockedByFriendly({x: callerX, y: y}, t, combatants);
+            return !isPathBlockedByFriendly({x: callerX, y: y}, t, combatants)
+                && !isPathBlockedByBarrier({x: callerX, y: y}, t);
         });
         
         if (clearTileInLane) return y;
@@ -538,7 +598,7 @@ const goTowards = (caller, combatants, targetTile, forwardFirst = false) => {
             newCoords = W;
         }
     }
-    if(newCoords.x > MAX_DEPTH-1) newCoords.x = MAX_DEPTH -1;
+    if(newCoords.x > MAX_DEPTH) newCoords.x = MAX_DEPTH;
     if(newCoords.x < 0) newCoords.x = 0
     if(newCoords.y > MAX_LANES-1) newCoords.y = MAX_LANES -1;
     if(newCoords.y < 0) newCoords.y = 0;
@@ -562,6 +622,9 @@ export const MovementMethods = {
     findLaneWithClearLOS,
     goTowards,
     teleportToBackLine,
+    isNaturalBarrierAt,
+    getBarrierCollision,
+    isPathBlockedByBarrier,
     goUp: (caller, combatants) => {
         // const enemyTarget = Object.values(combatants).find(e=>e.id === caller.targetId);
         let coords = caller.coordinates;
@@ -899,7 +962,7 @@ export const MovementMethods = {
             if (dx > 0) newDepth = callerDepth + 1;
         }
 
-        const occupied = (x, y) => liveCombatants.some(e => {
+        const occupied = (x, y) => isNaturalBarrierAt({ x, y }) || liveCombatants.some(e => {
             if (e.id === caller.id) return false;
             const ex = (e.coordinates && typeof e.coordinates.x === 'number') ? e.coordinates.x : e.depth;
             const ey = (e.coordinates && typeof e.coordinates.y === 'number') ? e.coordinates.y : e.position;

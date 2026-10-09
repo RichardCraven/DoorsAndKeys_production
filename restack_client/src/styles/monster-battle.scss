@@ -256,14 +256,14 @@
 // properties regardless of DOM ancestry.
 .unit-tile {
     .portrait.fighter-portrait {
-        width: 100px;
-        height: 100px;
+        width: 100%;
+        height: 100%;
         aspect-ratio: 1/1;
-        border-radius: 100px;
+        border-radius: 50%;
         background-size: 100% 100%;
         background-repeat: no-repeat;
         background-position: center;
-        position: absolute;
+        position: relative;
         top: 0;
         left: 0;
         cursor: pointer;
@@ -335,14 +335,14 @@
     }
 
     .portrait.opponent-portrait {
-        width: 100px;
-        height: 100px;
+        width: 100%;
+        height: 100%;
         aspect-ratio: 1/1;
-        border-radius: 100px;
+        border-radius: 50%;
         background-size: 100% 100%;
         background-repeat: no-repeat;
         background-position: center;
-        position: absolute;
+        position: relative;
         top: 0;
         left: 0;
         cursor: pointer;
@@ -356,13 +356,13 @@
     }
 
     .portrait.monster-portrait {
-        width: 100px;
-        height: 100px;
-        border-radius: 100px;
+        width: 100%;
+        height: 100%;
+        border-radius: 50%;
         background-size: 100% 100%;
         background-repeat: no-repeat;
         background-position: center;
-        position: absolute;
+        position: relative;
         top: 0;
         left: 0;
         
@@ -426,14 +426,29 @@
         }
     }
 
+    .portrait.natural-barrier-portrait {
+        width: 100%;
+        height: 100%;
+        border-radius: 4px;
+        background-size: cover;
+        background-repeat: no-repeat;
+        background-position: center;
+        transform: none !important;
+        cursor: default;
+        pointer-events: none;
+        box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.75), 0 2px 6px rgba(0, 0, 0, 0.5);
+        border: 1px solid rgba(100, 100, 100, 0.4);
+        z-index: 2;
+    }
+
     .portrait.minion-portrait {
-        width: 100px;
-        height: 100px;
-        border-radius: 100px;
+        width: 100%;
+        height: 100%;
+        border-radius: 50%;
         background-size: 100% 100%;
         background-repeat: no-repeat;
         background-position: center;
-        position: absolute;
+        position: relative;
         top: 0;
         left: 0;
         
@@ -12109,6 +12124,7 @@ $gb-starlight: #fef08a;
     transform-origin: 0 50%;
     pointer-events: none;
     z-index: 4300;
+    transform: rotate(var(--beam-angle, 0deg));
     animation: gbSparkFly 0.6s cubic-bezier(0.2, 0.8, 0.4, 1) forwards;
 }
 
@@ -12135,7 +12151,8 @@ $gb-starlight: #fef08a;
     background: radial-gradient(ellipse at left, rgba(#ffffff, 0.9) 0%, rgba($gb-gold, 0.7) 40%, rgba($gb-prism, 0.4) 70%, transparent 100%);
     clip-path: polygon(0% 50%, 100% 0%, 100% 100%);
     box-shadow: 0 0 30px $gb-gold;
-    animation: scaleUpFadeOut 1s ease-out forwards;
+    transform: rotate(var(--beam-angle, 0deg));
+    animation: gbFanBurst 1s ease-out forwards;
 }
 
 .glitterburn-snare-deploy {
@@ -12249,9 +12266,15 @@ $gb-starlight: #fef08a;
 }
 
 @keyframes gbSparkFly {
-    0% { opacity: 0; transform: scaleX(0.1); }
-    50% { opacity: 1; transform: scaleX(1); }
-    100% { opacity: 0; transform: scaleX(1); }
+    0% { opacity: 0; transform: rotate(var(--beam-angle, 0deg)) scaleX(0.1); }
+    50% { opacity: 1; transform: rotate(var(--beam-angle, 0deg)) scaleX(1); }
+    100% { opacity: 0; transform: rotate(var(--beam-angle, 0deg)) scaleX(1); }
+}
+
+@keyframes gbFanBurst {
+    0% { opacity: 0; transform: rotate(var(--beam-angle, 0deg)) scale(0.4); }
+    20% { opacity: 1; transform: rotate(var(--beam-angle, 0deg)) scale(1.1); }
+    100% { opacity: 0; transform: rotate(var(--beam-angle, 0deg)) scale(1.3); }
 }
 
 @keyframes gbVeilFlash {

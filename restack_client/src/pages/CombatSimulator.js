@@ -215,6 +215,7 @@ class CrewManagerPage extends React.Component {
             preppedCrew: [],
             outfitWithEquipment: true,
             useReduxCombat: true,
+            boardSize: 'small',
             // Enemy selection
             selectedMonsterKey: 'mummy',
             selectedMinionKeys: ['skeleton', 'skeleton', 'skeleton', null],
@@ -309,13 +310,17 @@ class CrewManagerPage extends React.Component {
                 selectedMonsterKey: savedDefaults.selectedMonsterKey ?? 'mummy', 
                 selectedMinionKeys: savedDefaults.selectedMinionKeys ?? ['skeleton', 'skeleton', 'skeleton', null],
                 lord: savedDefaults.lord ?? false,
-                randomTierPoints: savedDefaults.randomTierPoints ?? 6
+                randomTierPoints: savedDefaults.randomTierPoints ?? 6,
+                boardSize: savedDefaults.boardSize ?? 'small',
+                startWithFamiliar: savedDefaults.startWithFamiliar ?? true
               }
             : { 
                 selectedMonsterKey: 'mummy', 
                 selectedMinionKeys: ['skeleton', 'skeleton', 'skeleton', null],
                 lord: false,
-                randomTierPoints: 6
+                randomTierPoints: 6,
+                boardSize: 'small',
+                startWithFamiliar: true
               };
 
         // Restore saved crew roster if present; otherwise fall back to the hardcoded defaults above
@@ -453,6 +458,103 @@ class CrewManagerPage extends React.Component {
             selectedCrewMember: crewMember
         });
     }
+    toggleCrewMemberPortrait = (event, targetMember) => {
+        if (event) {
+            event.stopPropagation();
+            event.preventDefault();
+        }
+        const member = targetMember || this.state.selectedCrewMember;
+        if (!member) return;
+
+        const { options, selectedCrew, selectedCrewMember } = this.state;
+        const adventurers = (this.props.crewManager && this.props.crewManager.adventurers) || [];
+        const template = adventurers.find(a => (a.id && a.id === member.id) || (a.type && a.type === member.type));
+
+        const portraitOptions = member.portraitOptions || (template && template.portraitOptions);
+        if (!portraitOptions || portraitOptions.length <= 1) return;
+
+        const currentPortrait = member.portrait;
+        let currentIndex = portraitOptions.findIndex(p => p.portrait === currentPortrait);
+        if (currentIndex === -1 && typeof member.portraitIndex === 'number') {
+            currentIndex = member.portraitIndex;
+        }
+        if (currentIndex === -1) currentIndex = 0;
+
+        const nextIndex = (currentIndex + 1) % portraitOptions.length;
+        const currentOpt = portraitOptions[currentIndex];
+        const nextOpt = portraitOptions[nextIndex];
+
+        const currentDefaultName = currentOpt ? (currentOpt.defaultName || currentOpt.name) : null;
+        const nextDefaultName = nextOpt ? (nextOpt.defaultName || nextOpt.name) : null;
+
+        const getUpdatedName = (existingName) => {
+            if (!existingName) return nextDefaultName || existingName;
+            if (currentDefaultName && existingName.trim().toLowerCase() === currentDefaultName.trim().toLowerCase()) {
+                return nextDefaultName || existingName;
+            }
+            return existingName;
+        };
+
+        const updatedOptions = options.map(o => {
+            if (o && ((o.id && member.id && o.id === member.id) || (o.type && member.type && o.type === member.type))) {
+                const nextName = getUpdatedName(o.name);
+                return {
+                    ...o,
+                    portrait: nextOpt.portrait,
+                    image: nextOpt.image || o.image,
+                    portraitIndex: nextIndex,
+                    portraitOptions: portraitOptions,
+                    name: nextName
+                };
+            }
+            return o;
+        });
+
+        const updatedSelectedCrew = selectedCrew.map(c => {
+            if (c && ((c.id && member.id && c.id === member.id) || (c.type && member.type && c.type === member.type))) {
+                const nextName = getUpdatedName(c.name);
+                return {
+                    ...c,
+                    portrait: nextOpt.portrait,
+                    image: nextOpt.image || c.image,
+                    portraitIndex: nextIndex,
+                    portraitOptions: portraitOptions,
+                    name: nextName
+                };
+            }
+            return c;
+        });
+
+        let updatedSelectedMember = selectedCrewMember;
+        if (selectedCrewMember && ((selectedCrewMember.id && member.id && selectedCrewMember.id === member.id) || (selectedCrewMember.type && member.type && selectedCrewMember.type === member.type))) {
+            const nextName = getUpdatedName(selectedCrewMember.name);
+            updatedSelectedMember = {
+                ...selectedCrewMember,
+                portrait: nextOpt.portrait,
+                image: nextOpt.image || selectedCrewMember.image,
+                portraitIndex: nextIndex,
+                portraitOptions: portraitOptions,
+                name: nextName
+            };
+        }
+
+        if (this.tempCrewManager && Array.isArray(this.tempCrewManager.crew)) {
+            const tempMember = this.tempCrewManager.crew.find(c => (c.id && member.id && c.id === member.id) || (c.type && member.type && c.type === member.type));
+            if (tempMember) {
+                tempMember.portrait = nextOpt.portrait;
+                tempMember.image = nextOpt.image || tempMember.image;
+                tempMember.portraitIndex = nextIndex;
+                tempMember.name = getUpdatedName(tempMember.name);
+            }
+        }
+
+        this.setState({
+            options: updatedOptions,
+            selectedCrew: updatedSelectedCrew,
+            selectedCrewMember: updatedSelectedMember,
+            isRealCrewCloned: false
+        });
+    }
     addMember = (index) => {
         let member = this.state.selectedCrewMember
         let crew = this.state.selectedCrew;
@@ -523,6 +625,8 @@ class CrewManagerPage extends React.Component {
             fighterSkillTiers: this.state.fighterSkillTiers,
             lord: this.state.lord,
             randomTierPoints: this.state.randomTierPoints,
+            boardSize: this.state.boardSize || 'small',
+            startWithFamiliar: this.state.startWithFamiliar !== false,
         };
         storeMeta(meta);
         this.setState({ defaultEnemySaved: true });
@@ -960,7 +1064,7 @@ class CrewManagerPage extends React.Component {
 
                         if (member.skills) {
                             const BASIC_ATTACK_KEYS = [
-                                'slash', 'magic_missile', 'monk_punch', 'heal', 'loose', 
+                                'slash', 'magic_missile', 'monk_punch', 'heal', 'loose', 'hunting_knife',
                                 'barbarian_slash', 'sword_swing', 'axe_throw', 'summon_skeleton', 
                                 'claw_strike', 'claws', 'rake', 'gore_horns', 'snake_strike', 
                                 'grasp', 'void_lance', 'crush', 'tackle', 'major_magic_missile', 'greater_magic_missile',
@@ -973,6 +1077,7 @@ class CrewManagerPage extends React.Component {
                             if (member.type === 'ranger') {
                                 if (!specials.includes('notch')) specials.push('notch');
                                 if (!basics.includes('loose')) basics.push('loose');
+                                if (!basics.includes('hunting_knife')) basics.push('hunting_knife');
                             } else if (member.type === 'sage') {
                                 if (!basics.includes('heal')) basics.push('heal');
                             } else if (member.type === 'soldier') {
@@ -1062,24 +1167,26 @@ class CrewManagerPage extends React.Component {
                 }
             });
 
-            // Automatically equip archaic_rune on the first PC unit of the group that has a pet slot
-            const firstPC = clonedCrew.find(member => member);
-            if (firstPC) {
-                const hasPetSlotItem = firstPC.inventory && firstPC.inventory.some(i => i && i.equippedSlot === 'pet');
-                if (!hasPetSlotItem) {
-                    try {
-                        const archaicRuneBase = this.props.inventoryManager.runes['archaic_rune'];
-                        if (archaicRuneBase) {
-                            const archaicRune = clone(archaicRuneBase);
-                            archaicRune._im_key = 'archaic_rune';
-                            archaicRune.equippedBy = firstPC.id;
-                            archaicRune.equippedSlot = 'pet';
-                            firstPC.inventory = firstPC.inventory || [];
-                            firstPC.inventory = firstPC.inventory.filter(i => !i || i.equippedSlot !== 'pet');
-                            firstPC.inventory.push(archaicRune);
+            // Automatically equip archaic_rune on the first PC unit of the group that has a pet slot if enabled
+            if (this.state.startWithFamiliar !== false) {
+                const firstPC = clonedCrew.find(member => member);
+                if (firstPC) {
+                    const hasPetSlotItem = firstPC.inventory && firstPC.inventory.some(i => i && i.equippedSlot === 'pet');
+                    if (!hasPetSlotItem) {
+                        try {
+                            const archaicRuneBase = this.props.inventoryManager.runes['archaic_rune'];
+                            if (archaicRuneBase) {
+                                const archaicRune = clone(archaicRuneBase);
+                                archaicRune._im_key = 'archaic_rune';
+                                archaicRune.equippedBy = firstPC.id;
+                                archaicRune.equippedSlot = 'pet';
+                                firstPC.inventory = firstPC.inventory || [];
+                                firstPC.inventory = firstPC.inventory.filter(i => !i || i.equippedSlot !== 'pet');
+                                firstPC.inventory.push(archaicRune);
+                            }
+                        } catch (e) {
+                            console.warn('Simulator archaic rune default assignment failed', e);
                         }
-                    } catch (e) {
-                        console.warn('Simulator archaic rune default assignment failed', e);
                     }
                 }
             }
@@ -1128,7 +1235,7 @@ class CrewManagerPage extends React.Component {
                     const selectedTier = this.getSimSkillTier(pvpMember.type);
                     if (pvpMember.skills) {
                         const BASIC_ATTACK_KEYS = [
-                            'slash', 'magic_missile', 'monk_punch', 'heal', 'loose', 
+                            'slash', 'magic_missile', 'monk_punch', 'heal', 'loose', 'hunting_knife',
                             'barbarian_slash', 'sword_swing', 'axe_throw', 'summon_skeleton', 
                             'claw_strike', 'claws', 'rake', 'gore_horns', 'snake_strike', 
                             'grasp', 'void_lance', 'crush', 'tackle', 'major_magic_missile', 'greater_magic_missile',
@@ -1141,6 +1248,7 @@ class CrewManagerPage extends React.Component {
                         if (pvpMember.type === 'ranger') {
                             if (!specials.includes('notch')) specials.push('notch');
                             if (!basics.includes('loose')) basics.push('loose');
+                            if (!basics.includes('hunting_knife')) basics.push('hunting_knife');
                         } else if (pvpMember.type === 'sage') {
                             if (!basics.includes('heal')) basics.push('heal');
                         } else if (pvpMember.type === 'soldier') {
@@ -1567,14 +1675,58 @@ class CrewManagerPage extends React.Component {
                                         (c.name && e.name && c.name === e.name) ||
                                         (c.type && e.type && c.type === e.type)
                                     ));
-                                    return <ProgressiveBgImage className={`portrait${isSelected ? ' selected' : ''}${isAssigned ? ' assigned' : ''}`} key={i}
-                                        src={e.portrait}
-                                        style={{
-                                            filter: isAssigned ? 'grayscale(1) brightness(0.4) contrast(0.85)' : undefined,
-                                            opacity: isAssigned ? 0.55 : 1
-                                        }}
-                                        onClick={(event) => this.selectCrewMember(event, e)}
-                                    />
+                                    const template = (this.props.crewManager && this.props.crewManager.adventurers && this.props.crewManager.adventurers.find(a => (a.id && a.id === e.id) || (a.type && a.type === e.type)));
+                                    const portraitOpts = e.portraitOptions || (template && template.portraitOptions);
+                                    const hasAltPortraits = portraitOpts && portraitOpts.length > 1;
+
+                                    return (
+                                        <div key={i} style={{ position: 'relative', display: 'inline-block' }}>
+                                            <ProgressiveBgImage className={`portrait${isSelected ? ' selected' : ''}${isAssigned ? ' assigned' : ''}`}
+                                                src={e.portrait}
+                                                style={{
+                                                    filter: isAssigned ? 'grayscale(1) brightness(0.4) contrast(0.85)' : undefined,
+                                                    opacity: isAssigned ? 0.55 : 1
+                                                }}
+                                                onClick={(event) => this.selectCrewMember(event, e)}
+                                            />
+                                            {hasAltPortraits && (
+                                                <button
+                                                    className="portrait-variant-toggle-btn"
+                                                    title="Toggle alternate portrait"
+                                                    onClick={(event) => this.toggleCrewMemberPortrait(event, e)}
+                                                    style={{
+                                                        position: 'absolute',
+                                                        bottom: '6px',
+                                                        right: '6px',
+                                                        background: 'rgba(0, 0, 0, 0.85)',
+                                                        color: '#c084fc',
+                                                        border: '1px solid #c084fc',
+                                                        borderRadius: '50%',
+                                                        width: '24px',
+                                                        height: '24px',
+                                                        minWidth: '24px',
+                                                        minHeight: '24px',
+                                                        maxWidth: '24px',
+                                                        maxHeight: '24px',
+                                                        padding: 0,
+                                                        margin: 0,
+                                                        boxSizing: 'border-box',
+                                                        aspectRatio: '1 / 1',
+                                                        fontSize: '13px',
+                                                        lineHeight: '1',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        cursor: 'pointer',
+                                                        zIndex: 10,
+                                                        boxShadow: '0 2px 6px rgba(0,0,0,0.6)'
+                                                    }}
+                                                >
+                                                    ↻
+                                                </button>
+                                            )}
+                                        </div>
+                                    );
                                 }
                                 )}
                             </div>
@@ -1685,25 +1837,25 @@ class CrewManagerPage extends React.Component {
                                         </div>}
                                     </div>
                                 })}
-                                <div className="sim-gear-option" style={{ marginTop: '10px', display: 'flex', alignItems: 'center', gap: '6px', color: '#ccc', fontSize: '12px' }}>
+                                <div className="sim-gear-option" style={{ marginTop: '10px', display: 'flex', alignItems: 'center', gap: '6px', color: '#ccc', fontSize: '12px', textAlign: 'left' }}>
                                     <input
                                         id="outfit-equipment-cb"
                                         type="checkbox"
                                         checked={this.state.outfitWithEquipment}
                                         onChange={e => this.setState({ outfitWithEquipment: e.target.checked })}
                                     />
-                                    <label htmlFor="outfit-equipment-cb">Outfit with equipment</label>
+                                    <label htmlFor="outfit-equipment-cb" style={{ textAlign: 'left', cursor: 'pointer' }}>Outfit with equipment</label>
                                 </div>
-                                <div className="sim-redux-combat-option" style={{ marginTop: '10px', display: 'flex', alignItems: 'center', gap: '6px', color: '#ccc', fontSize: '12px' }}>
+                                <div className="sim-redux-combat-option" style={{ marginTop: '10px', display: 'flex', alignItems: 'center', gap: '6px', color: '#ccc', fontSize: '12px', textAlign: 'left' }}>
                                     <input
                                         id="redux-combat-cb"
                                         type="checkbox"
                                         checked={this.state.useReduxCombat}
                                         onChange={e => this.setState({ useReduxCombat: e.target.checked })}
                                     />
-                                    <label htmlFor="redux-combat-cb">Use Rounds System (Redux Combat)</label>
+                                    <label htmlFor="redux-combat-cb" style={{ textAlign: 'left', cursor: 'pointer' }}>Use Rounds System (Redux Combat)</label>
                                 </div>
-                                <div className="sim-real-crew-option" style={{ marginTop: '10px', display: 'flex', alignItems: 'center', gap: '6px', color: '#ccc', fontSize: '12px' }}>
+                                <div className="sim-real-crew-option" style={{ marginTop: '10px', display: 'flex', alignItems: 'center', gap: '6px', color: '#ccc', fontSize: '12px', textAlign: 'left' }}>
                                     <input
                                         id="real-crew-clone-cb"
                                         type="checkbox"
@@ -1711,11 +1863,67 @@ class CrewManagerPage extends React.Component {
                                         onChange={this.toggleRealCrewClone}
                                         style={{ cursor: 'pointer' }}
                                     />
-                                    <label htmlFor="real-crew-clone-cb" style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <label htmlFor="real-crew-clone-cb" style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', textAlign: 'left' }}>
                                         Clone Real Active Crew
                                         <span className={`real-crew-status-pill ${this.state.isRealCrewCloned ? 'active' : 'inactive'}`}>
                                             {this.state.isRealCrewCloned ? 'ACTIVE' : 'OFF'}
                                         </span>
+                                    </label>
+                                </div>
+                                <div className="sim-board-size-option" style={{ marginTop: '10px', display: 'flex', alignItems: 'center', gap: '8px', color: '#ccc', fontSize: '12px', textAlign: 'left' }}>
+                                    <label style={{ fontSize: '12px', color: '#ccc', fontWeight: '600', textAlign: 'left' }}>Board Size:</label>
+                                    <button
+                                        type="button"
+                                        className={`board-size-btn ${this.state.boardSize !== 'large' ? 'active' : ''}`}
+                                        onClick={() => this.setState({ boardSize: 'small' })}
+                                        style={{
+                                            padding: '3px 10px',
+                                            fontSize: '11px',
+                                            borderRadius: '4px',
+                                            border: '1px solid #555',
+                                            background: this.state.boardSize !== 'large' ? '#c084fc' : '#222',
+                                            color: this.state.boardSize !== 'large' ? '#18181b' : '#ccc',
+                                            fontWeight: '600',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.15s ease'
+                                        }}
+                                    >
+                                        Small (6x8)
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className={`board-size-btn ${this.state.boardSize === 'large' ? 'active' : ''}`}
+                                        onClick={() => this.setState({ boardSize: 'large' })}
+                                        style={{
+                                            padding: '3px 10px',
+                                            fontSize: '11px',
+                                            borderRadius: '4px',
+                                            border: '1px solid #555',
+                                            background: this.state.boardSize === 'large' ? '#c084fc' : '#222',
+                                            color: this.state.boardSize === 'large' ? '#18181b' : '#ccc',
+                                            fontWeight: '600',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.15s ease'
+                                        }}
+                                    >
+                                        Large (8x12)
+                                    </button>
+                                </div>
+                                <div className="sim-familiar-option" style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '8px', color: '#ccc', fontSize: '12px', textAlign: 'left' }}>
+                                    <label style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', userSelect: 'none', textAlign: 'left' }}>
+                                        <input
+                                            type="checkbox"
+                                            checked={this.state.startWithFamiliar !== false}
+                                            onChange={(e) => {
+                                                const val = e.target.checked;
+                                                this.setState({ startWithFamiliar: val });
+                                                const meta = getMeta();
+                                                if (!meta.simulatorDefaults) meta.simulatorDefaults = {};
+                                                meta.simulatorDefaults.startWithFamiliar = val;
+                                                storeMeta(meta);
+                                            }}
+                                        />
+                                        <span style={{ textAlign: 'left' }}>Start with Familiar (Archaic Rune)</span>
                                     </label>
                                 </div>
                             </div>
@@ -2031,6 +2239,7 @@ class CrewManagerPage extends React.Component {
                         useConsumableFromInventory={this.useConsumableFromInventory || null}
                         intervals={INTERVALS}
                         intervalDisplayNames={INTERVAL_DISPLAY_NAMES}
+                        boardSize={this.state.boardSize || 'small'}
                     ></MonsterBattle>
                 </div>}
             </div>

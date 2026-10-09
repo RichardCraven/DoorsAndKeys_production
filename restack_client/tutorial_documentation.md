@@ -132,3 +132,23 @@ Reserved for upcoming game expansions:
 - **Automatons & Automation**: Setting up mechanical harvesters and generators.
 - **Scrying & Lore**: Uncovering secret map loci and answering lore riddles.
 - **Tower Siege**: Multi-floor assault mechanics against boss commanders.
+
+---
+
+## 6. Established Combat Grid Sizes & Specifications
+
+DreamTower uses standardized combat grid tiers designed for different encounter scales:
+
+| Grid Tier | Dimensions (Rows × Cols) | Total Tiles | Accessible Routes | Description |
+| :--- | :--- | :--- | :--- | :--- |
+| **`small`** | 6 Rows × 8 Columns | 48 Tiles | Dungeons, Random Encounters, Combat Simulator (Default) | Standard battle layout for squad encounters. |
+| **`large`** | 8 Rows × 12 Columns | 96 Tiles | **Combat Simulator Only** (Toggleable) | Expanded tactical grid offering 96 tiles for large squad/minion testing. |
+| **`siege`** | 14 Rows × 20 Columns | 280 Tiles | Siege Mode (`TowerSiege`) | Massive battlefield grid for army-vs-army siege engagements. |
+
+### Responsive Tile Sizing Rules
+All combat views dynamically calculate `TILE_SIZE` based on the viewport height and board row count so the full board remains visible on-screen without vertical scrolling:
+$$\text{TileSize} = \text{clamp}\left(\left\lfloor \frac{\text{ViewportHeight} - \text{ReservedUIHeight}}{\text{Rows}} \right\rfloor, \text{MinTileSize}, \text{MaxTileSize}\right)$$
+- **Small (6x8)**: Rows = 6, TileSize range: 50px – 100px.
+- **Large (8x12)**: Rows = 8, TileSize range: 36px – 85px.
+- **Siege (14x20)**: Rows = 14, TileSize range: 30px – 56px.
+

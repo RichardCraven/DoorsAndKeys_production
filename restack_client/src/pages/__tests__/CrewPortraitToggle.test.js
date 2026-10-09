@@ -26,8 +26,6 @@ jest.mock('../../utils/images', () => ({
     monk_alt_portrait: 'monk_alt_img.png',
     sage_portrait: 'sage_img.png',
     sage_alt_portrait: 'sage_alt_img.png',
-    sage_alt_grandmotherly_portrait: 'sage_alt_img.png',
-    sage_alt_shaved_portrait: 'sage_alt_shaved_img.png',
     engineer: 'engineer_img.png',
     engineer_alt_portrait: 'engineer_alt_img.png',
     summoner: 'summoner_img.png',
@@ -273,7 +271,7 @@ describe('Crew Portrait Toggle Mechanic', () => {
         expect(nameInput.value).toBe('Yu');
     });
 
-    test('toggling Sage cycles between Loryastes, Theodora, and Theodora (Ascetic)', () => {
+    test('toggling Sage switches between Loryastes and Theodora', () => {
         const { container } = render(
             <MemoryRouter>
                 <CrewManagerPage crewManager={crewManager} />
@@ -289,15 +287,11 @@ describe('Crew Portrait Toggle Mechanic', () => {
         const toggleBtn = container.querySelector('.portrait-toggle-btn');
         expect(toggleBtn).not.toBeNull();
         
-        // 1st toggle: switch to Theodora (Grandmotherly)
+        // 1st toggle: switch to Theodora
         fireEvent.click(toggleBtn);
         expect(nameInput.value).toBe('Theodora');
 
-        // 2nd toggle: switch to Theodora (Ascetic) (Shaved Head)
-        fireEvent.click(toggleBtn);
-        expect(nameInput.value).toBe('Theodora (Ascetic)');
-
-        // 3rd toggle: cycle back to Loryastes
+        // 2nd toggle: switch back to Loryastes
         fireEvent.click(toggleBtn);
         expect(nameInput.value).toBe('Loryastes');
     });
@@ -346,7 +340,7 @@ describe('Crew Portrait Toggle Mechanic', () => {
         expect(nameInput.value).toBe('Vaelis');
     });
 
-    test('toggling Sage updates description to reflect Theodora and Theodora (Ascetic)', () => {
+    test('toggling Sage updates description to reflect Theodora', () => {
         const { container } = render(
             <MemoryRouter>
                 <CrewManagerPage crewManager={crewManager} />
@@ -363,11 +357,6 @@ describe('Crew Portrait Toggle Mechanic', () => {
         // Toggle to Theodora
         fireEvent.click(toggleBtn);
         expect(descEl.textContent).toContain('Theodora is the headmaster of Citadel library');
-        expect(descEl.textContent).not.toContain('Loryastes');
-
-        // Toggle to Theodora (Ascetic)
-        fireEvent.click(toggleBtn);
-        expect(descEl.textContent).toContain('Theodora (Ascetic) is the headmaster of Citadel library');
         expect(descEl.textContent).not.toContain('Loryastes');
 
         // Typing custom name in input updates description immediately

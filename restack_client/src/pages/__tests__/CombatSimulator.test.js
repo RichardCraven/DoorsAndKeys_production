@@ -402,3 +402,42 @@ test('CombatSimulator submit preserves real weapons and skills when isRealCrewCl
     // Real skills must be preserved
     expect(preppedSoldier.skills).toEqual(['custom_soldier_skill_1', 'custom_soldier_skill_2']);
 });
+
+test('CombatSimulator toggleCrewMemberPortrait cycles through portraitOptions', () => {
+    const portraitOptions = [
+        { id: 'seren', name: 'Seren', portrait: 'seren.png' },
+        { id: 'odran', name: 'Odran', portrait: 'odran.png' }
+    ];
+    const horoAdv = { id: 'horo1', type: 'horologist', name: 'Seren', portrait: 'seren.png', portraitOptions };
+
+    const instance = new CrewManagerPage({
+        inventoryManager: { initializeItems: jest.fn() },
+        crewManager: { adventurers: [horoAdv] },
+        monsterManager: { getMonster: jest.fn() }
+    });
+
+    instance.setState = jest.fn((updater) => {
+        const next = typeof updater === 'function' ? updater(instance.state) : updater;
+        instance.state = { ...instance.state, ...next };
+    });
+
+    instance.state = {
+        options: [horoAdv],
+        selectedCrew: [horoAdv],
+        selectedCrewMember: horoAdv
+    };
+
+    // First toggle: Seren -> Odran
+    instance.toggleCrewMemberPortrait({ stopPropagation: jest.fn(), preventDefault: jest.fn() }, horoAdv);
+    expect(instance.state.selectedCrewMember.portrait).toBe('odran.png');
+    expect(instance.state.selectedCrewMember.name).toBe('Odran');
+    expect(instance.state.selectedCrew[0].portrait).toBe('odran.png');
+    expect(instance.state.options[0].portrait).toBe('odran.png');
+
+    // Second toggle: Odran -> Seren
+    instance.toggleCrewMemberPortrait({ stopPropagation: jest.fn(), preventDefault: jest.fn() }, instance.state.selectedCrewMember);
+    expect(instance.state.selectedCrewMember.portrait).toBe('seren.png');
+    expect(instance.state.selectedCrewMember.name).toBe('Seren');
+    expect(instance.state.selectedCrew[0].portrait).toBe('seren.png');
+});
+

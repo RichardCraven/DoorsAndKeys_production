@@ -116,14 +116,14 @@ describe('Direction Facing, Range Rings, and Spacebar Attack', () => {
             });
         });
 
-        it('assigns 2-tile radius for wizard and 4-tile radius for ranger', () => {
+        it('assigns 3-tile radius for wizard and 5-tile radius for ranger', () => {
             const wizardSpecs = getCrewRangeRingSpecs({ type: 'wizard' }, '', false, 48);
             expect(wizardSpecs.isWizard).toBe(true);
-            expect(wizardSpecs.rangeTiles).toBe(2);
+            expect(wizardSpecs.rangeTiles).toBe(3);
 
             const rangerSpecs = getCrewRangeRingSpecs({ type: 'ranger' }, '', false, 48);
             expect(rangerSpecs.isRanger).toBe(true);
-            expect(rangerSpecs.rangeTiles).toBe(4);
+            expect(rangerSpecs.rangeTiles).toBe(5);
         });
 
         it('excludes glitterburn from range rings', () => {

@@ -137,7 +137,7 @@ class PlaneView extends React.Component {
                     className="board map-board" 
                     style={{
                         width: this.props.boardSize+'px', height: this.props.boardSize+ 'px',
-                        backgroundColor: 'white'
+                        backgroundColor: '#0b0a08'
                     }}
                     >
                         <div className="mini-boards-container">
@@ -151,7 +151,7 @@ class PlaneView extends React.Component {
                                         width: (this.props.tileSize*15)/3-2+'px',
                                         backgroundColor: 
                                         this.props.hoveredSection === boardIndex ? 'lightgoldenrodyellow': 
-                                        (this.props.adjacencyHoverIdx === boardIndex ? 'lightgreen' : 'white')
+                                        (this.props.adjacencyHoverIdx === boardIndex ? 'lightgreen' : '#0b0a08')
                                         }}
                                         onDragOver={(event)=>this.props.onDragOver(event, boardIndex)}
                                         onDrop={(event)=>{this.props.onDrop(event, boardIndex)}}

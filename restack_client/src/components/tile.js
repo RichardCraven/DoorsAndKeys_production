@@ -2665,8 +2665,49 @@ function Tile(props) {
                                   }}
                               />
                           );
-
                       })()}
+
+                      {/* Monster Behavior Indicator Badge (Shown in both Dungeon Builder & Dungeon) */}
+                      {isMonsterOrPygmyTile && (!isBlackTile || props.inSuperboard) && props.type !== 'overlay-tile' && ((color !== 'black' && currentTileColor !== 'black') || props.inSuperboard) && (() => {
+                          const behavior = (containsObj && containsObj.behavior) || (currentContains && typeof currentContains === 'object' && currentContains.behavior) || props.behavior || 'default';
+
+                          const behaviorConfig = {
+                              asleep: { icon: '💤', label: 'Asleep', color: '#a855f7', bg: 'linear-gradient(135deg, rgba(168, 85, 247, 0.95), rgba(126, 34, 206, 0.95))', border: 'rgba(216, 180, 254, 0.9)', glow: '0 0 8px rgba(168, 85, 247, 0.8)' },
+                              default: { icon: '🛡️', label: 'Default', color: '#3b82f6', bg: 'linear-gradient(135deg, rgba(59, 130, 246, 0.95), rgba(29, 78, 216, 0.95))', border: 'rgba(147, 197, 253, 0.9)', glow: '0 0 8px rgba(59, 130, 246, 0.7)' },
+                              aggressive: { icon: '⚔️', label: 'Aggressive', color: '#ef4444', bg: 'linear-gradient(135deg, rgba(239, 68, 68, 0.95), rgba(185, 28, 28, 0.95))', border: 'rgba(254, 202, 202, 0.9)', glow: '0 0 10px rgba(239, 68, 68, 0.9)' },
+                              patrol: { icon: '🔄', label: 'Patrol', color: '#f59e0b', bg: 'linear-gradient(135deg, rgba(245, 158, 11, 0.95), rgba(180, 83, 9, 0.95))', border: 'rgba(253, 230, 138, 0.9)', glow: '0 0 8px rgba(245, 158, 11, 0.8)' }
+                          };
+                          const cfg = behaviorConfig[behavior] || behaviorConfig.default;
+
+                          return (
+                              <div
+                                  className={`monster-behavior-badge monster-behavior-${behavior}`}
+                                  title={`Behavior: ${cfg.label}`}
+                                  style={{
+                                      position: 'absolute',
+                                      top: '2px',
+                                      right: '2px',
+                                      width: '18px',
+                                      height: '18px',
+                                      borderRadius: '50%',
+                                      background: cfg.bg,
+                                      border: `1.5px solid ${cfg.border}`,
+                                      boxShadow: cfg.glow,
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      fontSize: '10px',
+                                      lineHeight: 1,
+                                      zIndex: 25,
+                                      pointerEvents: 'none',
+                                      userSelect: 'none'
+                                  }}
+                              >
+                                  <span>{cfg.icon}</span>
+                              </div>
+                          );
+                      })()}
+
 
                       {/* Faint gold light source glow emanating from behind key items in the dungeon (disabled in palette/builder/inventory) */}
                       {isKeyTile && !isBlackTile && !isBuilderTile && props.type !== 'overlay-tile' && props.type !== 'inventory-tile' && props.type !== 'crew-tile' && props.type !== 'equip-slot' && !props.isInInventory && color !== 'black' && currentTileColor !== 'black' && (

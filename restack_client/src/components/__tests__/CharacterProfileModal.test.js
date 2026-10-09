@@ -6,7 +6,7 @@ import { getReflectedDescription } from "../../utils/crew-manager";
 describe("CharacterProfileModal: Name reflection in lore description", () => {
     const defaultSage = {
         id: 456,
-        name: "Theodora (Ascetic)",
+        name: "Theodora",
         type: "sage",
         level: 1,
         isLeader: true,
@@ -14,21 +14,8 @@ describe("CharacterProfileModal: Name reflection in lore description", () => {
         description: "Loryastes is the headmaster of Citadel library, chronicler of the histories of three monarchies, and a pupil of The Great Scribe"
     };
 
-    test("renders reflected name in lore text when character is Theodora (Ascetic)", () => {
-        render(<CharacterProfileModal crewMember={{ ...defaultSage }} onClose={jest.fn()} />);
-
-        const loreEl = document.querySelector(".char-lore-text");
-        expect(loreEl).not.toBeNull();
-        expect(loreEl.textContent).toContain("Theodora (Ascetic) is the headmaster of Citadel library");
-        expect(loreEl.textContent).not.toContain("Loryastes");
-    });
-
     test("renders reflected name in lore text when character is Theodora", () => {
-        const theodoraSage = {
-            ...defaultSage,
-            name: "Theodora"
-        };
-        render(<CharacterProfileModal crewMember={theodoraSage} onClose={jest.fn()} />);
+        render(<CharacterProfileModal crewMember={{ ...defaultSage }} onClose={jest.fn()} />);
 
         const loreEl = document.querySelector(".char-lore-text");
         expect(loreEl).not.toBeNull();
@@ -68,9 +55,6 @@ describe("CharacterProfileModal: Name reflection in lore description", () => {
 describe("getReflectedDescription helper", () => {
     test("reflects alternate names for Sage, Soldier, and Monk", () => {
         const sageDesc = "Loryastes is the headmaster of Citadel library, chronicler of the histories of three monarchies, and a pupil of The Great Scribe";
-        expect(getReflectedDescription(sageDesc, "Theodora (Ascetic)", { type: "sage" }))
-            .toBe("Theodora (Ascetic) is the headmaster of Citadel library, chronicler of the histories of three monarchies, and a pupil of The Great Scribe");
-        
         expect(getReflectedDescription(sageDesc, "Theodora", { type: "sage" }))
             .toBe("Theodora is the headmaster of Citadel library, chronicler of the histories of three monarchies, and a pupil of The Great Scribe");
 
@@ -94,7 +78,7 @@ describe("getReflectedDescription helper", () => {
     });
 
     test("correctly handles switching back to base name from alternate name", () => {
-        const altDesc = "Theodora (Ascetic) is the headmaster of Citadel library, chronicler of the histories of three monarchies, and a pupil of The Great Scribe";
+        const altDesc = "Theodora is the headmaster of Citadel library, chronicler of the histories of three monarchies, and a pupil of The Great Scribe";
         expect(getReflectedDescription(altDesc, "Loryastes", { type: "sage" }))
             .toBe("Loryastes is the headmaster of Citadel library, chronicler of the histories of three monarchies, and a pupil of The Great Scribe");
     });
