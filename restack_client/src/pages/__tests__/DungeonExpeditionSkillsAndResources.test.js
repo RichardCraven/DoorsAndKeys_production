@@ -111,8 +111,10 @@ describe('DungeonPage: Collapsible Resources & Expedition Skills', () => {
     // Exactly 3 empty slots
     const slots = container.querySelectorAll('.expedition-skill-slot');
     expect(slots.length).toBe(3);
-    slots.forEach(slot => {
-      expect(slot.getAttribute('title')).toContain('Expedition Skill Slot');
+    slots.forEach((slot, idx) => {
+      const tooltip = slot.querySelector('.expedition-skill-tooltip');
+      expect(tooltip).not.toBeNull();
+      expect(tooltip.textContent).toContain(`Slot ${idx + 1}`);
     });
   });
 
@@ -260,8 +262,10 @@ describe('DungeonPage: Collapsible Resources & Expedition Skills', () => {
       expect(slots[1].classList.contains('selected-slot')).toBe(true);
       expect(slots[2].classList.contains('selected-slot')).toBe(false);
 
-      expect(slots[1].getAttribute('title')).toContain('Selected');
-      expect(slots[1].getAttribute('title')).toContain('Shift+Space to trigger');
+      const activeTooltip = slots[1].querySelector('.expedition-skill-tooltip');
+      expect(activeTooltip).not.toBeNull();
+      expect(activeTooltip.textContent).toContain('Selected');
+      expect(activeTooltip.textContent).toContain('Shift+Space to trigger');
     });
 
     test('Shift + Spacebar triggers the selected Expedition Skill and flashes the slot', () => {
@@ -455,5 +459,79 @@ describe('DungeonPage: Collapsible Resources & Expedition Skills', () => {
       expect(nameLine.textContent).toBe('Theodora (Ascetic) the Sage');
     });
   });
+
+  describe('DungeonPage: Custom Expedition Skill Tooltip & Codex Button', () => {
+    test('renders custom tooltip and clickable codex ? button inside expedition skill slots', () => {
+      const mockCrew = [
+        { id: 101, name: 'Loryastes', type: 'sage', hp: 20, max_hp: 20, color: '#3b82f6', expeditionSkills: ['healing_ground', 'sing'] }
+      ];
+      const pageInstance = new DungeonPage({
+        inventoryManager: {},
+        crewManager: { crew: mockCrew },
+        saveUserData: jest.fn()
+      });
+      pageInstance.state = {
+        crew: mockCrew,
+        selectedCrewMember: mockCrew[0],
+        tileSize: 48,
+        crewHoverMatrix: {}
+      };
+      pageInstance.setState = jest.fn((updater) => {
+        const patch = typeof updater === 'function' ? updater(pageInstance.state) : updater;
+        pageInstance.state = { ...pageInstance.state, ...patch };
+      });
+      pageInstance.selectExpeditionSkillSlot = jest.fn();
+      pageInstance.triggerSelectedExpeditionSkill = jest.fn();
+
+      const { container } = render(<div>{pageInstance.renderCrewListSection()}</div>);
+
+      const tooltips = container.querySelectorAll('.expedition-skill-tooltip');
+      expect(tooltips.length).toBe(3);
+
+      const codexBtns = container.querySelectorAll('.expedition-skill-codex-btn');
+      expect(codexBtns.length).toBe(2); // 2 active skills: healing_ground, sing
+
+      expect(tooltips[0].textContent).toContain('Healing Ground');
+      expect(tooltips[0].textContent).toContain('Creates a sanctuary of continuous restoration.');
+      expect(tooltips[1].textContent).toContain('Sing');
+      expect(tooltips[1].textContent).toContain('Chants sacred hymns to soothe and bolster allies.');
+
+      // Click the ? button for Sing
+      fireEvent.click(codexBtns[1]);
+
+      expect(pageInstance.setState).toHaveBeenCalledWith({
+        showCodex: true,
+        codexEntry: { tab: 'skills', entryId: 'sing', search: 'Sing' }
+      });
+
+      // Clicking ? button stops propagation, so slot trigger is NOT called
+      expect(pageInstance.selectExpeditionSkillSlot).not.toHaveBeenCalled();
+      expect(pageInstance.triggerSelectedExpeditionSkill).not.toHaveBeenCalled();
+    });
+
+    test('ensures all 15 expedition skills have valid entries in skillsMatrix', () => {
+      const skillsMatrix = require('../../utils/skills-matrix').default;
+      const expeditionSkills = [
+        'astral_conduit', 'ley_tap', 'dimensional_pocket', 'scry',
+        'healing_ground', 'sing',
+        'sneak_attack', 'spike_trap',
+        'soldier_shield', 'breacher',
+        'wandering_eye',
+        'blinding_beacon', 'prismatic_flare',
+        'rewind_step', 'stopwatch'
+      ];
+
+      expeditionSkills.forEach(skillKey => {
+        const entry = skillsMatrix[skillKey];
+        expect(entry).toBeDefined();
+        expect(entry.id).toBe(skillKey);
+        expect(entry.name).toBeTruthy();
+        expect(entry.desc).toBeTruthy();
+        expect(entry.class).toBeTruthy();
+        expect(entry.icon).toBeDefined();
+      });
+    });
+  });
 });
+
 

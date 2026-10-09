@@ -717,7 +717,7 @@ class CrewManagerPage extends React.Component {
         const allRosterKeys = ['sobek', 'skeleton', 'goblin_thief', 'goblin_warrior', 'goblin_warchief', 'goblin_chef', 'ogre', 'troll', 'mummy', 'wraith', 'vampire', 'gorgon', 'witch', 'beholder', 'kabuki_demon', 'djinn', 'vallgorguina_djinn', 'dragon', 'sphinx', 'goat_demon', 'cyclops', 'high_priest_of_the_basilisk', 'shade', 'hashmallim', 'hagigah', 'blalok', 'qlippoth', 'eidolon'];
         const rosterMonsters = allRosterKeys
             .map(k => monsterManager.getMonster(k))
-            .filter(m => m && m.tier && !m.isMinion);
+            .filter(m => m && m.tier && !m.isMinion && !m.locked);
 
         // Shuffle helper
         const shuffle = (arr) => {
@@ -784,6 +784,8 @@ class CrewManagerPage extends React.Component {
     }
 
     addEnemyFromRoster = (monsterKey) => {
+        const targetMonster = this.props.monsterManager.getMonster(monsterKey);
+        if (targetMonster && targetMonster.locked) return;
         // Fill main monster slot first, then minion slots in order
         if (!this.state.selectedMonsterKey) {
             const monster = this.props.monsterManager.getMonster(monsterKey);
@@ -2112,23 +2114,39 @@ class CrewManagerPage extends React.Component {
                                 {['sobek', 'goblin_thief', 'goblin_warrior', 'goblin_warchief', 'goblin_chef', 'skeleton', 'beholder_minion', 'horned_pet', 'blalok', 'shade', 'troll', 'mummy', 'basilisk_cultists', 'wraith', 'ogre', 'gorgon', 'vampire', 'high_priest_of_the_basilisk', 'goat_demon', 'cyclops', 'witch', 'beholder', 'kabuki_demon', 'qlippoth', 'eidolon', 'djinn', 'vallgorguina_djinn', 'sphinx', 'dragon', 'hagigah', 'hashmallim']
                                     .map(k => this.props.monsterManager.getMonster(k))
                                     .filter(Boolean)
-                                    .map((m, i) => (
-                                        <ProgressiveBgImage
-                                            key={m.key || i}
-                                            className="monster-roster-portrait"
-                                            src={m.portrait}
-                                            title={formatMonsterType(m.type)}
-                                            onClick={() => {
-                                                if (this.state.selectedEnemyForInfo && this.state.selectedEnemyForInfo.key === m.key) {
-                                                    this.addEnemyFromRoster(m.key);
-                                                } else {
-                                                    this.setState({ selectedEnemyForInfo: m });
-                                                }
-                                            }}
-                                        >
-                                            <div className="monster-roster-name">{formatMonsterType(m.type)}</div>
-                                        </ProgressiveBgImage>
-                                    ))}
+                                    .map((m, i) => {
+                                        const isLocked = !!m.locked;
+                                        return (
+                                            <ProgressiveBgImage
+                                                key={m.key || i}
+                                                className={`monster-roster-portrait ${isLocked ? 'locked' : ''}`}
+                                                src={m.portrait}
+                                                title={isLocked ? `${formatMonsterType(m.type)} (Locked — Not Ready)` : formatMonsterType(m.type)}
+                                                style={isLocked ? { opacity: 0.45, filter: 'grayscale(0.8)', cursor: 'not-allowed', position: 'relative' } : {}}
+                                                onClick={() => {
+                                                    if (isLocked) return;
+                                                    if (this.state.selectedEnemyForInfo && this.state.selectedEnemyForInfo.key === m.key) {
+                                                        this.addEnemyFromRoster(m.key);
+                                                    } else {
+                                                        this.setState({ selectedEnemyForInfo: m });
+                                                    }
+                                                }}
+                                            >
+                                                {isLocked && (
+                                                    <div style={{
+                                                        position: 'absolute',
+                                                        top: '2px',
+                                                        right: '2px',
+                                                        fontSize: '12px',
+                                                        background: 'rgba(0,0,0,0.7)',
+                                                        borderRadius: '3px',
+                                                        padding: '1px 3px'
+                                                    }}>🔒</div>
+                                                )}
+                                                <div className="monster-roster-name">{formatMonsterType(m.type)}{isLocked ? ' 🔒' : ''}</div>
+                                            </ProgressiveBgImage>
+                                        );
+                                    })}
                             </div>
 
                             {/* ── Player Controlled Units Subsection (PvP Opponent Squad) ── */}

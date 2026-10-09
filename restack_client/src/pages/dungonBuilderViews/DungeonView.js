@@ -861,24 +861,24 @@ class DungeonView extends React.Component {
                     </div>
                 )}
 
-                <div className="level-wrapper superboards-level-wrapper" style={{ marginTop: '5px', display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}>
+                <div className="superboards-level-wrapper" style={{ marginTop: '5px', display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%', boxSizing: 'border-box' }}>
                     {/* Header Readout / Breadcrumbs */}
-                    <div className="level-info superboard-level-info" style={{ width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', borderBottom: '1px solid rgba(168, 85, 247, 0.3)', paddingBottom: '8px', marginBottom: '12px' }}>
+                    <div className="superboard-level-info" style={{ width: '100%', maxWidth: '100%', boxSizing: 'border-box', display: 'flex', flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center', gap: '8px', borderBottom: '1px solid rgba(168, 85, 247, 0.3)', padding: '0 16px 8px 16px', marginBottom: '12px' }}>
                         {isZoomed ? (
-                            <div className="superboard-breadcrumbs" style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#c084fc', fontSize: '15px', fontWeight: 'bold' }}>
+                            <div className="superboard-breadcrumbs" style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center', gap: '8px', color: '#c084fc', fontSize: '15px', fontWeight: 'bold', maxWidth: '100%', boxSizing: 'border-box' }}>
                                 <span
                                     onClick={() => this.props.setSuperboardZoom && this.props.setSuperboardZoom(null)}
-                                    style={{ cursor: 'pointer', opacity: 0.85, textDecoration: 'underline', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                                    style={{ cursor: 'pointer', opacity: 0.85, textDecoration: 'underline', display: 'inline-flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap', flexShrink: 0 }}
                                     title="Click to return to side-by-side overview"
                                 >
                                     ✦ Superboards (Pocket Dimensions)
                                 </span>
                                 <span style={{ color: 'rgba(255, 255, 255, 0.4)' }}>/</span>
-                                <span style={{ color: currentZoomKey === 'light' ? '#fbbf24' : '#c084fc' }}>
+                                <span style={{ color: currentZoomKey === 'light' ? '#fbbf24' : '#c084fc', whiteSpace: 'nowrap', flexShrink: 0 }}>
                                     {currentZoomKey === 'light' ? 'Light Superboard' : 'Dark Superboard'}
                                 </span>
-                                <div style={{ marginLeft: '16px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                    <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#a4b0be' }}>Floor:</span>
+                                <div style={{ marginLeft: '12px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                                    <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#a4b0be', whiteSpace: 'nowrap' }}>Floor:</span>
                                     <select
                                         value={this.props.loadedDungeon?.superboards?.[currentZoomKey]?.floorTexture || ''}
                                         onChange={(e) => this.props.handleSuperboardFloorTextureChange && this.props.handleSuperboardFloorTextureChange(currentZoomKey, e.target.value)}
@@ -900,7 +900,7 @@ class DungeonView extends React.Component {
                                             </option>
                                         ))}
                                     </select>
-                                    <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#a4b0be', marginLeft: '6px' }}>Reward:</span>
+                                    <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#a4b0be', marginLeft: '6px', whiteSpace: 'nowrap' }}>Reward:</span>
                                     <select
                                         value={(() => {
                                             const r = this.props.loadedDungeon?.superboards?.[currentZoomKey]?.victoryReward || { gold: 1000, dust: 100 };
@@ -957,7 +957,7 @@ class DungeonView extends React.Component {
                                 </div>
                             </div>
                         ) : (
-                            <div className="level-readout" style={{ color: '#c084fc', fontSize: '15px', fontWeight: 'bold', letterSpacing: '0.5px' }}>
+                            <div className="superboard-readout" style={{ color: '#c084fc', fontSize: '15px', fontWeight: 'bold', letterSpacing: '0.5px', whiteSpace: 'nowrap', textAlign: 'center' }}>
                                 ✦ Superboards (Pocket Dimensions)
                             </div>
                         )}
@@ -1536,7 +1536,34 @@ class DungeonView extends React.Component {
                                 </div>
                             </div>}
                             <div className="dungeon-name" style={{ display: 'flex', alignItems: 'center' }}>
-                                { this.props.loadedDungeon && <div className={`dungeon-validity-indicator ${this.props.loadedDungeon.valid ? 'valid' : 'invalid'}`}></div>}
+                                { this.props.loadedDungeon && (
+                                    <div
+                                        className={`dungeon-validity-indicator ${this.props.loadedDungeon.valid ? 'valid' : 'invalid'}`}
+                                        title={
+                                            this.props.loadedDungeon.valid
+                                                ? 'Dungeon is valid!'
+                                                : (this.props.loadedDungeon.validationErrors && this.props.loadedDungeon.validationErrors.length > 0)
+                                                    ? this.props.loadedDungeon.validationErrors.join('\n')
+                                                    : 'Dungeon has validation errors (check spawn points and pocket dimensions).'
+                                        }
+                                    >
+                                        <div className="validation-errors-tooltip">
+                                            {this.props.loadedDungeon.valid ? (
+                                                <div className="valid-text">Dungeon is valid!</div>
+                                            ) : (
+                                                <ul>
+                                                    {(this.props.loadedDungeon.validationErrors && this.props.loadedDungeon.validationErrors.length > 0) ? (
+                                                        this.props.loadedDungeon.validationErrors.map((err, errIdx) => (
+                                                            <li key={errIdx}>{err}</li>
+                                                        ))
+                                                    ) : (
+                                                        <li>Dungeon has validation errors (check spawn points and pocket dimensions).</li>
+                                                    )}
+                                                </ul>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
                                 <CFormSelect 
                                 aria-label="Dungeon Selector"
                                 ref={this.props.dungeonSelectVal}
@@ -1920,9 +1947,13 @@ class DungeonView extends React.Component {
                                 Select a dungeon, or create a new one
                             </div>}
 
-                            {(this.props.loadingData || this.props.planeSyncInProgress) && <div className="empty-dungeons-container">
-                                <CSpinner/>
-                                {this.props.planeSyncInProgress && <div style={{ marginTop: '8px' }}>Updating dungeon planes...</div>}
+                            {(this.props.loadingData || this.props.planeSyncInProgress) && <div className="empty-dungeons-container" data-testid="dungeon-loading-spinner" style={{ flexDirection: 'column' }}>
+                                <CSpinner style={{ color: '#f9b115', width: '3rem', height: '3rem' }} />
+                                {this.props.planeSyncInProgress ? (
+                                    <div style={{ marginTop: '12px', color: '#f9b115', fontSize: '14px' }}>Updating dungeon planes...</div>
+                                ) : (
+                                    <div style={{ marginTop: '12px', color: '#f9b115', fontSize: '14px' }}>Loading dungeon...</div>
+                                )}
                             </div>}
                             {this.props.generatingDungeon && <div className="empty-dungeons-container generating-dungeon-overlay">
                                 <CSpinner color="warning" />

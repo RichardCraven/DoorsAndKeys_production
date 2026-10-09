@@ -341,7 +341,21 @@ export function resolveMonsterPools(dungeon, monsters) {
                     if (!pool || pool.length === 0) return;
 
                     const chosen = pool[Math.floor(Math.random() * pool.length)];
-                    tile.contains = { type: 'monster', subtype: chosen };
+                    const existingBehavior = (typeof tile.contains === 'object' && tile.contains.behavior) || tile.behavior;
+                    const existingAggro = typeof tile.contains === 'object' && tile.contains.aggro !== undefined ? tile.contains.aggro : undefined;
+                    const existingPatrolTarget = (typeof tile.contains === 'object' && (tile.contains.patrolTarget || tile.contains.patrolDestination)) || tile.patrolTarget || tile.patrolDestination;
+                    tile.contains = {
+                        type: 'monster',
+                        subtype: chosen,
+                        ...(existingBehavior ? { behavior: existingBehavior } : {}),
+                        ...(existingAggro !== undefined ? { aggro: existingAggro } : {}),
+                        ...(existingPatrolTarget ? { patrolTarget: existingPatrolTarget, patrolDestination: existingPatrolTarget } : {})
+                    };
+                    if (existingBehavior) tile.behavior = existingBehavior;
+                    if (existingPatrolTarget) {
+                        tile.patrolTarget = existingPatrolTarget;
+                        tile.patrolDestination = existingPatrolTarget;
+                    }
                     tile.image = null;
                     resolvedCount++;
                 });
@@ -363,7 +377,21 @@ export function resolveMonsterPools(dungeon, monsters) {
                     if (!pool || pool.length === 0) return;
 
                     const chosen = pool[Math.floor(Math.random() * pool.length)];
-                    tile.contains = { type: 'monster', subtype: chosen };
+                    const existingBehavior = (typeof tile.contains === 'object' && tile.contains.behavior) || tile.behavior;
+                    const existingAggro = typeof tile.contains === 'object' && tile.contains.aggro !== undefined ? tile.contains.aggro : undefined;
+                    const existingPatrolTarget = (typeof tile.contains === 'object' && (tile.contains.patrolTarget || tile.contains.patrolDestination)) || tile.patrolTarget || tile.patrolDestination;
+                    tile.contains = {
+                        type: 'monster',
+                        subtype: chosen,
+                        ...(existingBehavior ? { behavior: existingBehavior } : {}),
+                        ...(existingAggro !== undefined ? { aggro: existingAggro } : {}),
+                        ...(existingPatrolTarget ? { patrolTarget: existingPatrolTarget, patrolDestination: existingPatrolTarget } : {})
+                    };
+                    if (existingBehavior) tile.behavior = existingBehavior;
+                    if (existingPatrolTarget) {
+                        tile.patrolTarget = existingPatrolTarget;
+                        tile.patrolDestination = existingPatrolTarget;
+                    }
                     tile.image = null;
                     resolvedCount++;
                 });

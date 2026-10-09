@@ -205,6 +205,14 @@ export default function FightersCombatGrid(props) {
                                     }}
                                     ref={el => { portraitWrapperRefs.current[fighter.id] = el }}
                                     >
+                                        {props.selectedFighter?.id === fighter.id && !fighter.dead && (
+                                            <div className="selected-unit-reticle" data-testid="selected-unit-reticle">
+                                                <div className="reticle-corner top-left" />
+                                                <div className="reticle-corner top-right" />
+                                                <div className="reticle-corner bottom-left" />
+                                                <div className="reticle-corner bottom-right" />
+                                            </div>
+                                        )}
                                         {/* PvP soft blue/green glow behind portrait */}
                                         {(props.isPvP || props.isPvPMode || props.combatManager?.data?.isPvP || props.combatManager?.data?.isPvPMode) && !details?.dead && (
                                             <div

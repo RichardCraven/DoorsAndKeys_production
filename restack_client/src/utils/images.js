@@ -1076,6 +1076,12 @@ import pocket_litter_rift_embers from '../assets/gemini_images/pocket_litter_rif
 import pocket_litter_astral_obelisk from '../assets/gemini_images/pocket_litter_astral_obelisk.png';
 import pocket_litter_ancient_reliquary from '../assets/gemini_images/pocket_litter_ancient_reliquary.png';
 import pocket_litter_celestial_geode from '../assets/gemini_images/pocket_litter_celestial_geode.png';
+import archaic_tunnel from '../assets/gemini_images/archaic_tunnel.png';
+import archaic_tunnel_dormant from '../assets/gemini_images/archaic_tunnel_dormant.png';
+import archaic_tunnel_active from '../assets/gemini_images/archaic_tunnel_active.png';
+import archaic_tunnel_vortex from '../assets/gemini_images/archaic_tunnel_vortex.png';
+import archaic_tunnel_side_dormant from '../assets/gemini_images/archaic_tunnel_side_dormant.png';
+import archaic_tunnel_side_active from '../assets/gemini_images/archaic_tunnel_side_active.png';
 import chemical_lantern from '../assets/gemini_images/chemical_lantern.png';
 import territorial_lantern from '../assets/gemini_images/territorial_lantern.png';
 import spoiled_rations from '../assets/gemini_images/spoiled_rations.png';
@@ -3024,6 +3030,14 @@ export {
     pocket_litter_astral_obelisk,
     pocket_litter_ancient_reliquary,
     pocket_litter_celestial_geode,
+    archaic_tunnel,
+    archaic_tunnel_dormant,
+    archaic_tunnel_active,
+    archaic_tunnel_vortex,
+    archaic_tunnel_side_dormant,
+    archaic_tunnel_side_active,
+    archaic_tunnel as pocket_litter_archaic_tunnel,
+    archaic_tunnel as pocket_archaic_tunnel,
     chemical_lantern,
     territorial_lantern,
     spoiled_rations,

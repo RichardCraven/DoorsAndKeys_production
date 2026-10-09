@@ -78,14 +78,15 @@ describe('DungeonBuilder delete dungeon prompt and dropdown update', () => {
     confirmSpy.mockRestore();
   });
 
-  test('displays prompt with required backup message when deleting a dungeon and cancels on reject', async () => {
-    confirmSpy.mockReturnValue(false);
-
+  test('opens styled confirmation modal when deleteDungeon() is called and does not delete when modal is closed', async () => {
     await mapmakerInstance.deleteDungeon();
 
-    expect(confirmSpy).toHaveBeenCalledTimes(1);
-    const promptArg = confirmSpy.mock.calls[0][0];
-    expect(promptArg).toMatch(/are you sure you want to delete this\?.*restored.*backup for 24 hours.*permanent/i);
+    expect(mapmakerInstance.state.showModal).toBe(true);
+    expect(mapmakerInstance.state.modalType).toBe('confirm delete dungeon');
+
+    // Close modal (cancel)
+    mapmakerInstance.closeModal();
+    expect(mapmakerInstance.state.showModal).toBe(false);
 
     // Should not call delete API or update state
     expect(deleteDungeonRequest).not.toHaveBeenCalled();
@@ -94,11 +95,11 @@ describe('DungeonBuilder delete dungeon prompt and dropdown update', () => {
   });
 
   test('calls deleteDungeonRequest with ID, removes dungeon from state and resets dropdown when confirmed', async () => {
-    confirmSpy.mockReturnValue(true);
-
     await mapmakerInstance.deleteDungeon();
+    expect(mapmakerInstance.state.showModal).toBe(true);
 
-    expect(confirmSpy).toHaveBeenCalledTimes(1);
+    await mapmakerInstance.executeDeleteDungeon();
+
     expect(deleteDungeonRequest).toHaveBeenCalledWith('dungeon-123');
 
     // loadedDungeon should be cleared
@@ -118,13 +119,13 @@ describe('DungeonBuilder delete dungeon prompt and dropdown update', () => {
   });
 
   test('falls back to finding dungeon ID from dungeons array by name if id missing on loadedDungeon', async () => {
-    confirmSpy.mockReturnValue(true);
     mapmakerInstance.state.loadedDungeon = {
       name: 'Catacombs'
       // id is omitted
     };
 
     await mapmakerInstance.deleteDungeon();
+    await mapmakerInstance.executeDeleteDungeon();
 
     expect(deleteDungeonRequest).toHaveBeenCalledWith('dungeon-123');
     expect(mapmakerInstance.state.loadedDungeon).toBeNull();

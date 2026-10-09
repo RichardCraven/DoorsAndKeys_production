@@ -81,6 +81,37 @@ class BoardView extends React.Component {
       this.state = {}
     }
 
+    calculateArcPath(startX, startY, targetX, targetY) {
+        const dx = targetX - startX;
+        const dy = targetY - startY;
+        const dist = Math.hypot(dx, dy);
+        if (dist < 1) return '';
+
+        const midX = (startX + targetX) / 2;
+        const midY = (startY + targetY) / 2;
+
+        let nx = -dy / dist;
+        let ny = dx / dist;
+
+        // Ensure the arc bows upward in screen space (-Y is up)
+        if (ny > 0) {
+            nx = -nx;
+            ny = -ny;
+        } else if (ny === 0) {
+            // Pure vertical movement (dx === 0)
+            nx = dy < 0 ? 0.75 : -0.75;
+            ny = -0.3;
+        }
+
+        // Curvature scaled with distance
+        const bow = Math.min(80, Math.max(20, dist * 0.25));
+
+        const ctrlX = midX + nx * bow;
+        const ctrlY = midY + ny * bow;
+
+        return `M ${startX} ${startY} Q ${ctrlX} ${ctrlY} ${targetX} ${targetY}`;
+    }
+
     /** Returns true when a contains object represents empty/unset floor space (including passages). */
     static isEmptySpaceContains(contains) {
         if (!contains) return true;
@@ -127,7 +158,15 @@ class BoardView extends React.Component {
             const terrainMatch = (this.props.mapMaker?.terrainOptions || []).find((entry) => entry.key === subtype);
             if (terrainMatch?.name) return terrainMatch.name;
 
+            if (subtype === 'archaic_tunnel' || subtype === 'archaic tunnel' || subtype === 'pocket_litter_archaic_tunnel') {
+                return 'Archaic Tunnel';
+            }
+
             return this.formatHoverLabel(subtype);
+        }
+
+        if (type === 'archaic_tunnel' || type === 'archaic tunnel') {
+            return 'Archaic Tunnel';
         }
 
         if (type && String(type).indexOf('tier_') === 0) {
@@ -307,92 +346,176 @@ class BoardView extends React.Component {
             }
         }
 
+        // ── Extract committed and live monster patrol routes ─────────────
+        const committedPatrolRoutes = [];
+        const activePlacementOriginId = this.props.patrolPlacement?.originTileId;
+
+        (this.props.tiles || []).forEach(tile => {
+            if (!tile) return;
+            const cObj = typeof tile.contains === 'object' && tile.contains ? tile.contains : null;
+            const isPatrol = tile.behavior === 'patrol' || cObj?.behavior === 'patrol';
+            const target = cObj?.patrolTarget || cObj?.patrolDestination || tile.patrolTarget || tile.patrolDestination;
+
+            // Skip if currently setting a new destination for this monster
+            if (activePlacementOriginId !== undefined && activePlacementOriginId !== null && activePlacementOriginId === tile.id) {
+                return;
+            }
+
+            if (isPatrol && target && target.tileId !== undefined) {
+                const originTileId = tile.id;
+                const targetTileId = target.tileId;
+                const srcCol = Array.isArray(tile.coordinates) ? tile.coordinates[0] : (originTileId % 15);
+                const srcRow = Array.isArray(tile.coordinates) ? tile.coordinates[1] : Math.floor(originTileId / 15);
+                const targetTile = this.props.tiles && this.props.tiles[targetTileId];
+                const dstCol = target.col !== undefined ? target.col : (targetTile?.coordinates && Array.isArray(targetTile.coordinates) ? targetTile.coordinates[0] : (targetTileId % 15));
+                const dstRow = target.row !== undefined ? target.row : (targetTile?.coordinates && Array.isArray(targetTile.coordinates) ? targetTile.coordinates[1] : Math.floor(targetTileId / 15));
+
+                committedPatrolRoutes.push({
+                    originTileId,
+                    targetTileId,
+                    srcCol,
+                    srcRow,
+                    dstCol,
+                    dstRow
+                });
+            }
+        });
+
+        let livePatrolRoute = null;
+        if (this.props.patrolPlacement && this.props.patrolPlacement.originTileId !== undefined && this.props.patrolPlacement.originTileId !== null) {
+            const originTileId = this.props.patrolPlacement.originTileId;
+            const originTile = this.props.tiles && this.props.tiles[originTileId];
+            const srcCol = originTile?.coordinates && Array.isArray(originTile.coordinates) ? originTile.coordinates[0] : (originTileId % 15);
+            const srcRow = originTile?.coordinates && Array.isArray(originTile.coordinates) ? originTile.coordinates[1] : Math.floor(originTileId / 15);
+
+            let dstCol = null, dstRow = null, targetTileId = null;
+            if (this.props.hoveredTileIdx !== null && this.props.hoveredTileIdx !== undefined) {
+                targetTileId = this.props.hoveredTileIdx;
+                const hoverTile = this.props.tiles && this.props.tiles[targetTileId];
+                dstCol = hoverTile?.coordinates && Array.isArray(hoverTile.coordinates) ? hoverTile.coordinates[0] : (targetTileId % 15);
+                dstRow = hoverTile?.coordinates && Array.isArray(hoverTile.coordinates) ? hoverTile.coordinates[1] : Math.floor(targetTileId / 15);
+            }
+
+            livePatrolRoute = {
+                originTileId,
+                targetTileId,
+                srcCol,
+                srcRow,
+                dstCol,
+                dstRow
+            };
+        }
+
         return (
             <div className="board-view-container" ref={this.props.boardContainerRef || null}>
                 <div className="center-board-container" style={{flexDirection: 'column'}}>
-                    <div className="level-buttons-container plane-action-buttons">
-                        <div className="icon-container" title="Save Board" onClick={() => this.props.writeBoard && this.props.writeBoard()}>
-                            {this.props.isSavingBoard ? (
-                                <CSpinner size="sm" style={{ color: 'gold' }} />
-                            ) : (
-                                <CIcon icon={cilSave} size="lg"/>
-                            )}
-                        </div>
-                        <div className="icon-container" title="Rename Board" onClick={() => this.props.loadedBoard && this.props.renameBoard && this.props.renameBoard()}>
-                            <CIcon icon={cilPencil} size="lg"/>
-                        </div>
-                        <div className="icon-container" title="Delete Board" onClick={() => this.props.loadedBoard && this.props.deleteBoard && this.props.deleteBoard(this.props.loadedBoard.id)}>
-                            <CIcon icon={cilTrash} size="lg"/>
-                        </div>
-                        <div className="icon-container" title="New Board" onClick={() => this.props.addNewBoard && this.props.addNewBoard()}>
-                            <CIcon icon={cilPlus} size="lg"/>
-                        </div>
-                        <div
-                            className="icon-container"
-                            style={{ position: 'relative' }}
-                            onMouseEnter={(e) => e.currentTarget.querySelector('.bv-fp-tooltip').style.display = 'block'}
-                            onMouseLeave={(e) => e.currentTarget.querySelector('.bv-fp-tooltip').style.display = 'none'}
-                            title="Folder Path Shorthand Help"
-                        >
-                            <span style={{
-                                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                                width: '22px', height: '22px', borderRadius: '50%',
-                                background: 'rgba(249, 177, 21, 0.15)', border: '1px solid rgba(249, 177, 21, 0.4)',
-                                color: '#f9b115', fontSize: '12px', fontWeight: 'bold', cursor: 'default',
-                                lineHeight: 1, userSelect: 'none'
-                            }}>?</span>
-                            <div className="bv-fp-tooltip" style={{
-                                display: 'none',
-                                position: 'absolute',
-                                top: '30px',
-                                left: '50%',
-                                transform: 'translateX(-50%)',
-                                zIndex: 99999,
-                                background: '#1c1c1e',
-                                border: '1px solid rgba(249, 177, 21, 0.4)',
-                                borderRadius: '8px',
-                                padding: '12px 14px',
-                                width: '300px',
-                                boxShadow: '0 8px 32px rgba(0,0,0,0.7)',
-                                pointerEvents: 'none',
-                                whiteSpace: 'normal'
-                            }}>
-                                <div style={{ color: '#f9b115', fontWeight: '700', fontSize: '12px', marginBottom: '8px' }}>
-                                    Folder Path Shorthand
-                                </div>
-                                <div style={{ color: '#e0dcd3', fontSize: '11px', lineHeight: 1.6 }}>
-                                    <div style={{ marginBottom: '6px' }}>
-                                        Use the <strong style={{ color: '#f9b115' }}>✏️ Rename</strong> icon to set a board's folder path using shorthand:
+                    {!this.props.loadingData && (
+                        <div className="level-buttons-container plane-action-buttons">
+                            <div className="icon-container" title="Save Board" onClick={() => this.props.writeBoard && this.props.writeBoard()}>
+                                {this.props.isSavingBoard ? (
+                                    <CSpinner size="sm" style={{ color: 'gold' }} />
+                                ) : (
+                                    <CIcon icon={cilSave} size="lg"/>
+                                )}
+                            </div>
+                            <div className="icon-container" title="Rename Board" onClick={() => this.props.loadedBoard && this.props.renameBoard && this.props.renameBoard()}>
+                                <CIcon icon={cilPencil} size="lg"/>
+                            </div>
+                            <div className="icon-container" title="Delete Board" onClick={() => this.props.loadedBoard && this.props.deleteBoard && this.props.deleteBoard(this.props.loadedBoard.id)}>
+                                <CIcon icon={cilTrash} size="lg"/>
+                            </div>
+                            <div className="icon-container" title="New Board" onClick={() => this.props.addNewBoard && this.props.addNewBoard()}>
+                                <CIcon icon={cilPlus} size="lg"/>
+                            </div>
+                            <div
+                                className="icon-container"
+                                style={{ position: 'relative' }}
+                                onMouseEnter={(e) => e.currentTarget.querySelector('.bv-fp-tooltip').style.display = 'block'}
+                                onMouseLeave={(e) => e.currentTarget.querySelector('.bv-fp-tooltip').style.display = 'none'}
+                                title="Folder Path Shorthand Help"
+                            >
+                                <span style={{
+                                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                    width: '22px', height: '22px', borderRadius: '50%',
+                                    background: 'rgba(249, 177, 21, 0.15)', border: '1px solid rgba(249, 177, 21, 0.4)',
+                                    color: '#f9b115', fontSize: '12px', fontWeight: 'bold', cursor: 'default',
+                                    lineHeight: 1, userSelect: 'none'
+                                }}>?</span>
+                                <div className="bv-fp-tooltip" style={{
+                                    display: 'none',
+                                    position: 'absolute',
+                                    top: '30px',
+                                    left: '50%',
+                                    transform: 'translateX(-50%)',
+                                    zIndex: 99999,
+                                    background: '#1c1c1e',
+                                    border: '1px solid rgba(249, 177, 21, 0.4)',
+                                    borderRadius: '8px',
+                                    padding: '12px 14px',
+                                    width: '300px',
+                                    boxShadow: '0 8px 32px rgba(0,0,0,0.7)',
+                                    pointerEvents: 'none',
+                                    whiteSpace: 'normal'
+                                }}>
+                                    <div style={{ color: '#f9b115', fontWeight: '700', fontSize: '12px', marginBottom: '8px' }}>
+                                        Folder Path Shorthand
                                     </div>
-                                    <code style={{ color: '#f9b115', display: 'block', marginBottom: '8px' }}>dungeon / level / orientation / slot</code>
-                                    <div style={{ marginBottom: '4px', color: '#9da5b1', fontWeight: '600' }}>Orientation</div>
-                                    <div style={{ marginBottom: '8px' }}>
-                                        <code style={{ color: '#d4a844' }}>f</code> / <code style={{ color: '#d4a844' }}>front</code> → Front &nbsp;|&nbsp;
-                                        <code style={{ color: '#d4a844' }}>b</code> / <code style={{ color: '#d4a844' }}>back</code> → Back
-                                    </div>
-                                    <div style={{ marginBottom: '4px', color: '#9da5b1', fontWeight: '600' }}>Slots</div>
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '2px 8px', fontFamily: 'monospace', fontSize: '10px', marginBottom: '8px' }}>
-                                        <span><code style={{ color: '#d4a844' }}>TL</code> top-left</span>
-                                        <span><code style={{ color: '#d4a844' }}>TM</code> top-mid</span>
-                                        <span><code style={{ color: '#d4a844' }}>TR</code> top-right</span>
-                                        <span><code style={{ color: '#d4a844' }}>ML</code> mid-left</span>
-                                        <span><code style={{ color: '#d4a844' }}>MM</code> center</span>
-                                        <span><code style={{ color: '#d4a844' }}>MR</code> mid-right</span>
-                                        <span><code style={{ color: '#d4a844' }}>BL</code> bot-left</span>
-                                        <span><code style={{ color: '#d4a844' }}>BM</code> bot-mid</span>
-                                        <span><code style={{ color: '#d4a844' }}>BR</code> bot-right</span>
-                                    </div>
-                                    <div style={{ color: '#9da5b1', fontStyle: 'italic' }}>
-                                        Example: <code style={{ color: '#f9b115' }}>primari/0/B/TR</code> → Back, Top Right
-                                    </div>
-                                    <div style={{ color: '#9da5b1', fontStyle: 'italic' }}>
-                                        Omitting orientation defaults to Front.
+                                    <div style={{ color: '#e0dcd3', fontSize: '11px', lineHeight: 1.6 }}>
+                                        <div style={{ marginBottom: '6px' }}>
+                                            Use the <strong style={{ color: '#f9b115' }}>✏️ Rename</strong> icon to set a board's folder path using shorthand:
+                                        </div>
+                                        <code style={{ color: '#f9b115', display: 'block', marginBottom: '8px' }}>dungeon / level / orientation / slot</code>
+                                        <div style={{ marginBottom: '4px', color: '#9da5b1', fontWeight: '600' }}>Orientation</div>
+                                        <div style={{ marginBottom: '8px' }}>
+                                            <code style={{ color: '#d4a844' }}>f</code> / <code style={{ color: '#d4a844' }}>front</code> → Front &nbsp;|&nbsp;
+                                            <code style={{ color: '#d4a844' }}>b</code> / <code style={{ color: '#d4a844' }}>back</code> → Back
+                                        </div>
+                                        <div style={{ marginBottom: '4px', color: '#9da5b1', fontWeight: '600' }}>Slots</div>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '2px 8px', fontFamily: 'monospace', fontSize: '10px', marginBottom: '8px' }}>
+                                            <span><code style={{ color: '#d4a844' }}>TL</code> top-left</span>
+                                            <span><code style={{ color: '#d4a844' }}>TM</code> top-mid</span>
+                                            <span><code style={{ color: '#d4a844' }}>TR</code> top-right</span>
+                                            <span><code style={{ color: '#d4a844' }}>ML</code> mid-left</span>
+                                            <span><code style={{ color: '#d4a844' }}>MM</code> center</span>
+                                            <span><code style={{ color: '#d4a844' }}>MR</code> mid-right</span>
+                                            <span><code style={{ color: '#d4a844' }}>BL</code> bot-left</span>
+                                            <span><code style={{ color: '#d4a844' }}>BM</code> bot-mid</span>
+                                            <span><code style={{ color: '#d4a844' }}>BR</code> bot-right</span>
+                                        </div>
+                                        <div style={{ color: '#9da5b1', fontStyle: 'italic' }}>
+                                            Example: <code style={{ color: '#f9b115' }}>primari/0/B/TR</code> → Back, Top Right
+                                        </div>
+                                        <div style={{ color: '#9da5b1', fontStyle: 'italic' }}>
+                                            Omitting orientation defaults to Front.
+                                        </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
-                    <div className="board map-board" 
+                    )}
+                    {this.props.loadingData ? (
+                        <div
+                            className="empty-board-loading"
+                            data-testid="board-loading-spinner"
+                            style={{
+                                width: (this.props.boardSize && this.props.boardSize > 0 ? this.props.boardSize : 540) + 'px',
+                                height: (this.props.boardSize && this.props.boardSize > 0 ? this.props.boardSize : 540) + 'px',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                backgroundColor: '#0e0e12',
+                                borderRadius: '6px',
+                                border: '1px solid #232228',
+                            }}
+                        >
+                            <CSpinner style={{ color: '#f9b115', width: '3rem', height: '3rem' }} />
+                            <div style={{ marginTop: '16px', color: '#f9b115', fontSize: '14px', letterSpacing: '0.5px' }}>
+                                Loading dungeon...
+                            </div>
+                        </div>
+                    ) : (
+                    <div className={`board map-board ${this.props.patrolPlacement ? 'patrol-placement-cursor' : ''}`}
                         onMouseLeave={() => {return this.props.setHover(null)}}
                         style={{
                         position: 'relative',
@@ -478,7 +601,270 @@ class BoardView extends React.Component {
                                 combatManager={this.props.combatManager}
                             />
                         })}
+
+                        {/* ── Monster Patrol Route & Placement SVG Overlay ── */}
+                        {this.props.boardSize > 0 && this.props.tileSize > 0 && (
+                            <svg
+                                className="patrol-route-overlay"
+                                style={{
+                                    position: 'absolute',
+                                    top: 0,
+                                    left: 0,
+                                    width: this.props.boardSize + 'px',
+                                    height: this.props.boardSize + 'px',
+                                    pointerEvents: 'none',
+                                    zIndex: 60,
+                                    overflow: 'visible'
+                                }}
+                            >
+                                <defs>
+                                    <filter id="patrol-arc-glow" x="-50%" y="-50%" width="200%" height="200%">
+                                        <feGaussianBlur stdDeviation="3.5" result="blur" />
+                                        <feMerge>
+                                            <feMergeNode in="blur" />
+                                            <feMergeNode in="SourceGraphic" />
+                                        </feMerge>
+                                    </filter>
+                                    <marker
+                                        id="patrol-arrow"
+                                        viewBox="0 0 10 10"
+                                        refX="7"
+                                        refY="5"
+                                        markerWidth="6"
+                                        markerHeight="6"
+                                        orient="auto-start-reverse"
+                                    >
+                                        <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#f59e0b" />
+                                    </marker>
+                                </defs>
+
+                                {/* Committed Patrol Routes */}
+                                {committedPatrolRoutes.map((route, rIdx) => {
+                                    const srcX = (route.srcCol + 0.5) * this.props.tileSize;
+                                    const srcY = (route.srcRow + 0.5) * this.props.tileSize;
+                                    const dstX = (route.dstCol + 0.5) * this.props.tileSize;
+                                    const dstY = (route.dstRow + 0.5) * this.props.tileSize;
+                                    const isSameTile = route.srcCol === route.dstCol && route.srcRow === route.dstRow;
+                                    const arcPath = !isSameTile ? this.calculateArcPath(srcX, srcY, dstX, dstY) : '';
+                                    const midX = (srcX + dstX) / 2;
+                                    const midY = (srcY + dstY) / 2;
+
+                                    return (
+                                        <g key={`committed_patrol_${route.originTileId}_${rIdx}`} className="patrol-route-group committed">
+                                            {/* Origin marker */}
+                                            <circle
+                                                cx={srcX}
+                                                cy={srcY}
+                                                r={this.props.tileSize * 0.44}
+                                                stroke="#f59e0b"
+                                                strokeWidth="2"
+                                                strokeDasharray="4 3"
+                                                fill="rgba(245, 158, 11, 0.12)"
+                                            />
+                                            <circle cx={srcX} cy={srcY} r="4" fill="#f59e0b" />
+                                            <text
+                                                x={srcX}
+                                                y={srcY + this.props.tileSize * 0.44}
+                                                textAnchor="middle"
+                                                fill="#f59e0b"
+                                                fontSize="8.5"
+                                                fontWeight="bold"
+                                                fontFamily="sans-serif"
+                                                style={{ filter: 'drop-shadow(0 1px 3px black)', userSelect: 'none' }}
+                                            >
+                                                ORIGIN
+                                            </text>
+
+                                            {!isSameTile && arcPath && (
+                                                <>
+                                                    {/* Arc Glow */}
+                                                    <path
+                                                        d={arcPath}
+                                                        fill="none"
+                                                        stroke="#f59e0b"
+                                                        strokeWidth="6"
+                                                        strokeOpacity="0.18"
+                                                    />
+                                                    {/* Arc Path */}
+                                                    <path
+                                                        d={arcPath}
+                                                        fill="none"
+                                                        stroke="#f59e0b"
+                                                        strokeWidth="2.5"
+                                                        strokeDasharray="8 5"
+                                                        className="patrol-arc-line-committed"
+                                                        markerEnd="url(#patrol-arrow)"
+                                                    />
+
+                                                    {/* Round-trip indicator at midpoint */}
+                                                    <g transform={`translate(${midX}, ${midY})`}>
+                                                        <rect
+                                                            x="-12"
+                                                            y="-8"
+                                                            width="24"
+                                                            height="16"
+                                                            rx="8"
+                                                            fill="rgba(18, 16, 24, 0.9)"
+                                                            stroke="#f59e0b"
+                                                            strokeWidth="1.2"
+                                                        />
+                                                        <text
+                                                            x="0"
+                                                            y="3.5"
+                                                            textAnchor="middle"
+                                                            fill="#f59e0b"
+                                                            fontSize="10"
+                                                            fontWeight="bold"
+                                                            style={{ userSelect: 'none' }}
+                                                        >
+                                                            ⇄
+                                                        </text>
+                                                    </g>
+
+                                                    {/* Destination Waypoint marker */}
+                                                    <circle
+                                                        cx={dstX}
+                                                        cy={dstY}
+                                                        r={this.props.tileSize * 0.44}
+                                                        stroke="#f59e0b"
+                                                        strokeWidth="2"
+                                                        strokeDasharray="4 2"
+                                                        fill="rgba(245, 158, 11, 0.22)"
+                                                        className="patrol-target-reticle"
+                                                    />
+                                                    <text
+                                                        x={dstX}
+                                                        y={dstY + 4}
+                                                        textAnchor="middle"
+                                                        fontSize={Math.max(13, this.props.tileSize * 0.36)}
+                                                        style={{ filter: 'drop-shadow(0 2px 4px black)', userSelect: 'none' }}
+                                                    >
+                                                        🏁
+                                                    </text>
+                                                    <text
+                                                        x={dstX}
+                                                        y={Math.max(14, dstY - this.props.tileSize * 0.44 - 2)}
+                                                        textAnchor="middle"
+                                                        fill="#f59e0b"
+                                                        fontSize="8.5"
+                                                        fontWeight="bold"
+                                                        fontFamily="Cinzel, serif"
+                                                        style={{ filter: 'drop-shadow(0 2px 4px black)', userSelect: 'none' }}
+                                                    >
+                                                        PATROL TARGET
+                                                    </text>
+                                                </>
+                                            )}
+                                        </g>
+                                    );
+                                })}
+
+                                {/* Live Patrol Placement Route */}
+                                {livePatrolRoute && (() => {
+                                    const srcX = (livePatrolRoute.srcCol + 0.5) * this.props.tileSize;
+                                    const srcY = (livePatrolRoute.srcRow + 0.5) * this.props.tileSize;
+                                    const hasTarget = livePatrolRoute.dstCol !== null && livePatrolRoute.dstRow !== null;
+                                    const dstX = hasTarget ? (livePatrolRoute.dstCol + 0.5) * this.props.tileSize : null;
+                                    const dstY = hasTarget ? (livePatrolRoute.dstRow + 0.5) * this.props.tileSize : null;
+                                    const isSameTile = hasTarget && livePatrolRoute.srcCol === livePatrolRoute.dstCol && livePatrolRoute.srcRow === livePatrolRoute.dstRow;
+                                    const livePathD = (hasTarget && !isSameTile) ? this.calculateArcPath(srcX, srcY, dstX, dstY) : '';
+
+                                    return (
+                                        <g key="live_patrol_placement" className="patrol-route-group live">
+                                            {/* Origin Marker */}
+                                            <circle
+                                                cx={srcX}
+                                                cy={srcY}
+                                                r={this.props.tileSize * 0.46}
+                                                stroke="#f59e0b"
+                                                strokeWidth="2.5"
+                                                strokeDasharray="4 3"
+                                                fill="rgba(245, 158, 11, 0.22)"
+                                                filter="url(#patrol-arc-glow)"
+                                            />
+                                            <circle cx={srcX} cy={srcY} r="5" fill="#f59e0b" filter="url(#patrol-arc-glow)" />
+                                            <text
+                                                x={srcX}
+                                                y={srcY + this.props.tileSize * 0.44 + 2}
+                                                textAnchor="middle"
+                                                fill="#f59e0b"
+                                                fontSize="9"
+                                                fontWeight="bold"
+                                                fontFamily="sans-serif"
+                                                style={{ filter: 'drop-shadow(0 1px 3px black)', userSelect: 'none' }}
+                                            >
+                                                ORIGIN
+                                            </text>
+
+                                            {/* Live Arced Line & Destination Reticle */}
+                                            {hasTarget && !isSameTile && livePathD && (
+                                                <>
+                                                    {/* Live Arc Glow */}
+                                                    <path
+                                                        d={livePathD}
+                                                        fill="none"
+                                                        stroke="#f59e0b"
+                                                        strokeWidth="8"
+                                                        strokeOpacity="0.25"
+                                                    />
+                                                    {/* Live Animated Dashed Arc Line */}
+                                                    <path
+                                                        d={livePathD}
+                                                        fill="none"
+                                                        stroke="#f59e0b"
+                                                        strokeWidth="3"
+                                                        strokeDasharray="10 6"
+                                                        className="patrol-arc-line"
+                                                        filter="url(#patrol-arc-glow)"
+                                                        markerEnd="url(#patrol-arrow)"
+                                                    />
+
+                                                    {/* Destination Target Reticle */}
+                                                    <circle
+                                                        cx={dstX}
+                                                        cy={dstY}
+                                                        r={this.props.tileSize * 0.44}
+                                                        stroke="#f59e0b"
+                                                        strokeWidth="2.5"
+                                                        strokeDasharray="4 2"
+                                                        fill="rgba(245, 158, 11, 0.28)"
+                                                        className="patrol-target-reticle"
+                                                        filter="url(#patrol-arc-glow)"
+                                                    />
+                                                    {/* Crosshairs */}
+                                                    <line x1={dstX - 12} y1={dstY} x2={dstX + 12} y2={dstY} stroke="#f59e0b" strokeWidth="2" />
+                                                    <line x1={dstX} y1={dstY - 12} x2={dstX + 12} y2={dstY} stroke="#f59e0b" strokeWidth="2" />
+                                                    {/* Waypoint Pin */}
+                                                    <text
+                                                        x={dstX}
+                                                        y={dstY + 4}
+                                                        textAnchor="middle"
+                                                        fontSize={Math.max(13, this.props.tileSize * 0.36)}
+                                                        style={{ filter: 'drop-shadow(0 2px 4px black)', userSelect: 'none' }}
+                                                    >
+                                                        🎯
+                                                    </text>
+                                                    <text
+                                                        x={dstX}
+                                                        y={Math.max(14, dstY - this.props.tileSize * 0.44 - 3)}
+                                                        textAnchor="middle"
+                                                        fill="#f59e0b"
+                                                        fontSize="10"
+                                                        fontWeight="bold"
+                                                        fontFamily="Cinzel, serif"
+                                                        style={{ filter: 'drop-shadow(0 2px 4px black)', userSelect: 'none' }}
+                                                    >
+                                                        PATROL DESTINATION
+                                                    </text>
+                                                </>
+                                            )}
+                                        </g>
+                                    );
+                                })()}
+                            </svg>
+                        )}
                     </div>
+                    )}
                 </div>
             </div>
         )

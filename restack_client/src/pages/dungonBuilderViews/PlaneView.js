@@ -118,20 +118,44 @@ class PlaneView extends React.Component {
         return (
             <div className="board-view-container">
                 <div className="center-board-container" style={{flexDirection: 'column'}}>
-                    <div className="level-buttons-container plane-action-buttons">
-                        <div className="icon-container" title="Save Plane" onClick={() => this.props.writePlane && this.props.writePlane()}>
-                            <CIcon icon={cilSave} size="lg" style={this.props.planeHasUnsavedChanges ? {color: 'gold'} : {}}/>
+                    {!this.props.loadingData && (
+                        <div className="level-buttons-container plane-action-buttons">
+                            <div className="icon-container" title="Save Plane" onClick={() => this.props.writePlane && this.props.writePlane()}>
+                                <CIcon icon={cilSave} size="lg" style={this.props.planeHasUnsavedChanges ? {color: 'gold'} : {}}/>
+                            </div>
+                            <div className="icon-container" title="Rename Plane" onClick={() => this.props.loadedPlane && this.props.renamePlane && this.props.renamePlane()}>
+                                <CIcon icon={cilPencil} size="lg"/>
+                            </div>
+                            <div className="icon-container" title="Delete Plane" onClick={() => this.props.loadedPlane && this.props.deletePlane && this.props.deletePlane()}>
+                                <CIcon icon={cilTrash} size="lg"/>
+                            </div>
+                            <div className="icon-container" title="New Plane" onClick={() => this.props.addNewPlane && this.props.addNewPlane()}>
+                                <CIcon icon={cilPlus} size="lg"/>
+                            </div>
                         </div>
-                        <div className="icon-container" title="Rename Plane" onClick={() => this.props.loadedPlane && this.props.renamePlane && this.props.renamePlane()}>
-                            <CIcon icon={cilPencil} size="lg"/>
+                    )}
+                    {this.props.loadingData ? (
+                        <div
+                            className="empty-board-loading"
+                            data-testid="plane-loading-spinner"
+                            style={{
+                                width: (this.props.boardSize && this.props.boardSize > 0 ? this.props.boardSize : 540) + 'px',
+                                height: (this.props.boardSize && this.props.boardSize > 0 ? this.props.boardSize : 540) + 'px',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                backgroundColor: '#0e0e12',
+                                borderRadius: '6px',
+                                border: '1px solid #232228',
+                            }}
+                        >
+                            <CSpinner style={{ color: '#f9b115', width: '3rem', height: '3rem' }} />
+                            <div style={{ marginTop: '16px', color: '#f9b115', fontSize: '14px', letterSpacing: '0.5px' }}>
+                                Loading dungeon...
+                            </div>
                         </div>
-                        <div className="icon-container" title="Delete Plane" onClick={() => this.props.loadedPlane && this.props.deletePlane && this.props.deletePlane()}>
-                            <CIcon icon={cilTrash} size="lg"/>
-                        </div>
-                        <div className="icon-container" title="New Plane" onClick={() => this.props.addNewPlane && this.props.addNewPlane()}>
-                            <CIcon icon={cilPlus} size="lg"/>
-                        </div>
-                    </div>
+                    ) : (
                     <div
                     onMouseLeave={() => {return this.props.setHover(null)}}
                     className="board map-board" 
@@ -205,6 +229,7 @@ class PlaneView extends React.Component {
                             }
                         </div>
                     </div>
+                    )}
                 </div>
 
                 

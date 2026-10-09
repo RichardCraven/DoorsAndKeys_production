@@ -452,7 +452,7 @@ export function BoardManager(){
                             'ore_mine', 'slate_mine', 'sawmill', 'lumber_mill', 'larder', 'dust_collector',
                             'cultivation_vat', 'domain_monolith', 'dark_domain_monolith', 'war_camp', 'war_fort',
                             'fungal_nursery', 'alchemist', 'merchant', 'dream_den', 'dream den',
-                            'rift_embers', 'pocket_litter_rift_embers'
+                            'rift_embers', 'pocket_litter_rift_embers', 'archaic_tunnel', 'pocket_litter_archaic_tunnel'
                         ];
                         const is2x2 = multi2x2.some(k => aKey.includes(k)) || aTile.isLarge || aTile.contains?.isLarge || aTile.isMultiTile || aTile.contains?.isMultiTile;
                         const aIsMulti = !!(is2x2 || (aRole === 'anchor') || aGroup);
@@ -514,6 +514,7 @@ export function BoardManager(){
             tile.isDimensionLitter || tile.isPocketLitter || (tile.contains && typeof tile.contains === 'object' && (tile.contains.isDimensionLitter || tile.contains.isPocketLitter)) ||
             sKey.includes('pocket_litter') || sKey.includes('mana_crystals') || sKey.includes('ruined_arch') ||
             sKey.includes('broken_wagon') || sKey.includes('fractured_monolith') || sKey.includes('forge_remnants') || sKey.includes('rift_embers') ||
+            sKey.includes('archaic_tunnel') || sKey.includes('archaic tunnel') ||
             sKey.includes('astral_obelisk') || sKey.includes('ancient_reliquary') || sKey.includes('celestial_geode');
         if (isDimensionLitter) {
             return true;
@@ -1247,6 +1248,14 @@ export function BoardManager(){
                 t.color = '#6b6057';
             }
 
+            // If tile contains a tier placeholder (e.g. tier_1_weapon, tier_2_weapon, tier_1_armor, tier_1_monster), resolve it
+            const resolvedTier = this.resolveTierTile(t.contains);
+            if (resolvedTier) {
+                t.contains = resolvedTier;
+                t.image = resolvedTier.subtype || resolvedTier.type;
+                continue;
+            }
+
             // if already object format, ensure minimal shape and normalize item categories
             if (typeof t.contains === 'object' && t.contains !== null && t.contains.type) {
                 const cType = String(t.contains.type).toLowerCase();
@@ -1491,65 +1500,123 @@ export function BoardManager(){
             return sum + (Number.isFinite(level) ? level : 0);
         }, 0);
     }
-    this.getRandomItemKeyForTier = (tier) => {
+    this.resolveTierTile = (contains) => {
+        if (!contains) return null;
+        let cType = typeof contains === 'object' ? String(contains.type || '').toLowerCase() : (typeof contains === 'string' ? String(contains).toLowerCase().replace(/\s+/g, '_') : '');
+        let cSubtype = typeof contains === 'object' && contains.subtype ? String(contains.subtype).toLowerCase() : '';
+
+        const tierCandidate = cType.startsWith('tier_') ? cType : (cSubtype.startsWith('tier_') ? cSubtype : null);
+        if (!tierCandidate) return null;
+
+        const parts = tierCandidate.split('_');
+        if (parts.length < 3) return null;
+        const tierNum = parseInt(parts[1], 10);
+        const category = parts[2]; // 'weapon', 'armor', 'magical', 'monster'
+
+        if (isNaN(tierNum)) return null;
+
+        if (category === 'monster') {
+            const monsterSubtype = (this.monsterManager && typeof this.monsterManager.getRandomMonsterByTier === 'function')
+                ? this.monsterManager.getRandomMonsterByTier(tierNum)
+                : (typeof this.getRandomMonster === 'function' ? this.getRandomMonster() : 'beholder_minion');
+            return { type: 'monster', subtype: monsterSubtype };
+        } else if (['weapon', 'armor', 'magical'].includes(category)) {
+            const itemKey = this.getRandomItemKeyForTier(tierNum, category);
+            if (itemKey) {
+                return { type: 'item', subtype: itemKey };
+            }
+        }
+        return null;
+    }
+    this.getRandomItemKeyForTier = (tier, itemCategory = null) => {
         const inventory = this.getCurrentInventory ? this.getCurrentInventory() : null;
         const itemRegistry = inventory && inventory.allItems ? inventory.allItems : null;
         const fallbackTierPools = {
-            1: [
-                'woodcutters_axe', 'bloodcleaver_axe', 'hillbiter_axe', 'ironcleaver_axe',
-                'rune_axe', 'timberfall_axe', 'grovehack_axe', 'stormsplitter_axe',
-                'bonecutter_axe', 'frostedge_axe', 'emberchop_axe',
-                'shortsword_sword', 'cutlass_sword', 'gladius_sword', 'falchion_sword',
-                'longsword_sword', 'broadsword_sword', 'golden_gladius_sword',
-                'wyrmsbane_sword', 'katana_sword', 'claymore_sword', 'greatsword_sword',
-                'buckler', 'infantry_shield', 'cold_steel_shield',
-                'basic_helm', 'knight_helm', 'spartan_helm',
-                'cloudfire_wand', 'animus_wand', 'glyndas_wand',
-                'archmages_staff', 'enchanters_staff', 'imperial_mage_staff',
-                'beetle_charm', 'demonskull_charm', 'hamsa_charm',
-                'elasi_amulet', 'darkarrow_amulet', 'elemental_amulet'
-            ],
-            2: [
-                'razorfang_axe', 'stonebreaker_axe', 'mossreaper_axe', 'warcleaver_axe',
-                'blackroot_axe', 'dawnsplitter_axe', 'duskbane_axe',
-                'doomreaver_sword', 'nightfall_sword', 'dreadedge_sword', 'sunsteel_sword',
-                'voidrender_sword', 'warlords_cleaver_sword', 'emberbrand_sword',
-                'crusaders_shield', 'dawnguard', 'twilight_screen',
-                'nasal_helm_upgradeable', 'soldier_helm_upgradeable', 'crusader_helm_upgradeable',
-                'cavalry_helm_upgradeable', 'war_helm_upgradeable', 'coif_helm_upgradeable',
-                'gladiator_helm_upgradeable', 'battle_mage_helm_upgradeable', 'knight_helm_upgradeable',
-                'janissary_helm_upgradeable', 'bascinet_upgradeable', 'imperial_helm_upgradeable',
-                'ranger_hood_upgradeable',
-                'justicator_wand', 'willowcaster',
-                'staff_of_espilon', 'staff_of_marduk', 'staff_of_omicron',
-                'the_watchful_eye', 'moonbird_folio', 'icewing_folio',
-                'emerald_tablet', 'ruby_tablet',
-                'warding_amulet', 'bloodvial_amulet', 'enchantress_amulet', 'goldclaw_amulet',
-                'clerics_amulet', 'queens_amulet'
-            ],
-            3: [
-                'thunderhewer_axe', 'skullsplitter_axe', 'giantsbane_axe', 'vinecutter_axe',
-                'obsidian_axe', 'ashwood_axe', 'drakebane_axe',
-                'frostbite_sword', 'bloodsong_sword', 'shadowfang_sword', 'skymourne_sword',
-                'opalveil_sword', 'titans_claw_sword', 'entropy_sword',
-                'revenants_shield', 'aegis_bulwark',
-                'juggernaut_helm', 'moonlord_helm', 'witch_knight_helm', 'collosus_helm', 'omega_helm',
-                'immortal_helm',
-                'nasal_helm_upgradeable_upgraded', 'soldier_helm_upgradeable_upgraded', 'crusader_helm_upgradeable_upgraded',
-                'cavalry_helm_upgradeable_upgraded', 'war_helm_upgradeable_upgraded', 'coif_helm_upgradeable_upgraded',
-                'gladiator_helm_upgradeable_upgraded', 'battle_mage_helm_upgradeable_upgraded', 'knight_helm_upgradeable_upgraded',
-                'janissary_helm_upgradeable_upgraded', 'bascinet_upgradeable_upgraded', 'imperial_helm_upgradeable_upgraded',
-                'ranger_hood_upgradeable_upgraded',
-                'staff_of_tomorrow',
-                'feldons_manual', 'the_beast_book', 'book_of_jade', 'igors_grimoire', 'forbidden_grimoire',
-                'ice_amulet', 'hypnosis_amulet', 'vampiric_amulet', 'platinum_amulet', 'necrotic_amulet'
-            ]
+            1: {
+                weapon: [
+                    'woodcutters_axe', 'bloodcleaver_axe', 'hillbiter_axe', 'ironcleaver_axe',
+                    'rune_axe', 'timberfall_axe', 'grovehack_axe', 'stormsplitter_axe',
+                    'bonecutter_axe', 'frostedge_axe', 'emberchop_axe',
+                    'shortsword_sword', 'cutlass_sword', 'gladius_sword', 'falchion_sword',
+                    'longsword_sword', 'broadsword_sword', 'golden_gladius_sword',
+                    'wyrmsbane_sword', 'katana_sword', 'claymore_sword', 'greatsword_sword',
+                    'sylvan_bow', 'sentinels_bow', 'outriders_bow',
+                    'monk_cestus', 'monk_deer_horn_knives', 'monk_katar', 'monk_nunchaku', 'monk_quarterstaff'
+                ],
+                armor: [
+                    'buckler', 'infantry_shield', 'cold_steel_shield',
+                    'basic_helm', 'knight_helm', 'spartan_helm',
+                    'travelers_boots', 'wayfinders_boots', 'highwaymans_boots'
+                ],
+                magical: [
+                    'cloudfire_wand', 'animus_wand', 'glyndas_wand',
+                    'archmages_staff', 'enchanters_staff', 'imperial_mage_staff',
+                    'beetle_charm', 'demonskull_charm', 'hamsa_charm',
+                    'elasi_amulet', 'darkarrow_amulet', 'elemental_amulet'
+                ]
+            },
+            2: {
+                weapon: [
+                    'razorfang_axe', 'stonebreaker_axe', 'mossreaper_axe', 'warcleaver_axe',
+                    'blackroot_axe', 'dawnsplitter_axe', 'duskbane_axe',
+                    'doomreaver_sword', 'nightfall_sword', 'dreadedge_sword', 'sunsteel_sword',
+                    'voidrender_sword', 'warlords_cleaver_sword', 'emberbrand_sword',
+                    'cryonic_bow', 'vitriolic_bow', 'arcane_bow'
+                ],
+                armor: [
+                    'crusaders_shield', 'dawnguard', 'twilight_screen',
+                    'nasal_helm_upgradeable', 'soldier_helm_upgradeable', 'crusader_helm_upgradeable',
+                    'cavalry_helm_upgradeable', 'war_helm_upgradeable', 'coif_helm_upgradeable',
+                    'gladiator_helm_upgradeable', 'battle_mage_helm_upgradeable', 'knight_helm_upgradeable',
+                    'janissary_helm_upgradeable', 'bascinet_upgradeable', 'imperial_helm_upgradeable',
+                    'ranger_hood_upgradeable'
+                ],
+                magical: [
+                    'justicator_wand', 'willowcaster',
+                    'staff_of_espilon', 'staff_of_marduk', 'staff_of_omicron',
+                    'the_watchful_eye', 'moonbird_folio', 'icewing_folio',
+                    'emerald_tablet', 'ruby_tablet',
+                    'warding_amulet', 'bloodvial_amulet', 'enchantress_amulet', 'goldclaw_amulet',
+                    'clerics_amulet', 'queens_amulet'
+                ]
+            },
+            3: {
+                weapon: [
+                    'thunderhewer_axe', 'skullsplitter_axe', 'giantsbane_axe', 'vinecutter_axe',
+                    'obsidian_axe', 'ashwood_axe', 'drakebane_axe',
+                    'frostbite_sword', 'bloodsong_sword', 'shadowfang_sword', 'skymourne_sword',
+                    'opalveil_sword', 'titans_claw_sword', 'entropy_sword',
+                    'merklins_peacekeeper'
+                ],
+                armor: [
+                    'revenants_shield', 'aegis_bulwark',
+                    'juggernaut_helm', 'moonlord_helm', 'witch_knight_helm', 'collosus_helm', 'omega_helm',
+                    'immortal_helm',
+                    'nasal_helm_upgradeable_upgraded', 'soldier_helm_upgradeable_upgraded', 'crusader_helm_upgradeable_upgraded',
+                    'cavalry_helm_upgradeable_upgraded', 'war_helm_upgradeable_upgraded', 'coif_helm_upgradeable_upgraded',
+                    'gladiator_helm_upgradeable_upgraded', 'battle_mage_helm_upgradeable_upgraded', 'knight_helm_upgradeable_upgraded',
+                    'janissary_helm_upgradeable_upgraded', 'bascinet_upgradeable_upgraded', 'imperial_helm_upgradeable_upgraded',
+                    'ranger_hood_upgradeable_upgraded'
+                ],
+                magical: [
+                    'staff_of_tomorrow',
+                    'feldons_manual', 'the_beast_book', 'book_of_jade', 'igors_grimoire', 'forbidden_grimoire',
+                    'ice_amulet', 'hypnosis_amulet', 'vampiric_amulet', 'platinum_amulet', 'necrotic_amulet'
+                ]
+            }
         };
 
-        const fallbackPool = fallbackTierPools[tier] || [];
+        const tierMap = fallbackTierPools[tier] || fallbackTierPools[1];
+        let fallbackPool = [];
+        if (itemCategory && tierMap[itemCategory]) {
+            fallbackPool = tierMap[itemCategory];
+        } else {
+            fallbackPool = [...(tierMap.weapon || []), ...(tierMap.armor || []), ...(tierMap.magical || [])];
+        }
+
         if (!itemRegistry) return fallbackPool.length ? this.pickRandom(fallbackPool) : null;
 
-        const validTypes = ['weapon', 'armor', 'magical'];
+        const validTypes = itemCategory ? [itemCategory] : ['weapon', 'armor', 'magical'];
         const pool = Object.keys(itemRegistry).filter((key) => {
             const item = itemRegistry[key];
             if (!item) return false;
@@ -2567,6 +2634,13 @@ export function BoardManager(){
                     tile.contains = null;
                 }
             }
+            // If tile contains a tier placeholder (e.g. tier_1_weapon, tier_2_weapon, tier_1_armor, tier_1_monster), resolve it
+            const resolvedTileTier = this.resolveTierTile(tile.contains);
+            if (resolvedTileTier) {
+                tile.contains = resolvedTileTier;
+                tile.image = resolvedTileTier.subtype || resolvedTileTier.type;
+            }
+
             // ensure tile.contains is object-shaped (normalizeBoardTiles already attempted this)
             if (typeof tile.contains === 'string') {
                 // defensive fallback: normalize key-like strings into item objects

@@ -12,6 +12,7 @@ describe('Vallgorguina Djinn Monster & Skills Integration', () => {
         expect(djinn.subtype).toBe('eldritch');
         expect(djinn.level).toBe(15);
         expect(djinn.portrait).toBeDefined();
+        expect(djinn.locked).toBe(true);
     });
 
     test('defines all thematic Vallgorguina Djinn skills in the skills matrix', () => {
