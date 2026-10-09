@@ -512,12 +512,20 @@ describe('CardDuel Diagonal Attack Restriction (Limited to Wizard)', () => {
         expect(targets.attacks).not.toContain('2_0');
         expect(targets.attacks).not.toContain('2_3');
 
-        // Movement: can only move forward into row 1 (1_2 is empty forward anchor slot)
-        expect(targets.moves).toContain('1_2');
+        // When enemy at 1_1 blocks forward movement, it cannot move onto enemy
+        expect(targets.moves).not.toContain('1_1');
+
+        // When forward row is clear of enemies:
+        delete instance.state.grid['1_1'];
+        const clearTargets = instance.getValidTargetTiles(giantPygmy);
+
+        // Movement: can only move forward into row 1 (1_1 and 1_2 are the new sub-tiles)
+        expect(clearTargets.moves).toContain('1_1');
+        expect(clearTargets.moves).toContain('1_2');
         // Cannot move sideways or backward
-        expect(targets.moves).not.toContain('2_0');
-        expect(targets.moves).not.toContain('2_3');
-        expect(targets.moves).not.toContain('4_1');
-        expect(targets.moves).not.toContain('4_2');
+        expect(clearTargets.moves).not.toContain('2_0');
+        expect(clearTargets.moves).not.toContain('2_3');
+        expect(clearTargets.moves).not.toContain('4_1');
+        expect(clearTargets.moves).not.toContain('4_2');
     });
 });
