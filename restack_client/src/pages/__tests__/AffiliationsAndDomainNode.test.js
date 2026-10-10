@@ -391,7 +391,9 @@ describe('Affiliations System & Domain Node Territory Conversion', () => {
       expect(dungeonPage.projectileCanvasRef.current.fireProjectile).toHaveBeenCalledWith(
         32,
         31,
-        expect.any(Function)
+        expect.any(Function),
+        expect.anything(),
+        expect.anything()
       );
     });
 

@@ -3208,6 +3208,7 @@
 
         .floating-player,
         .floating-peer-player,
+        .floating-wandering-eye,
         .avatar-radial-menu-overlay,
         .tile {
             transform-style: preserve-3d !important;
@@ -3294,7 +3295,10 @@
                 }
             }
 
-            &.archway-tile .iso-contact-shadow {
+            &.archway-tile .iso-contact-shadow,
+            &.enlarged-structure-tile .iso-contact-shadow,
+            &[data-dungeon-object-type="enlarging"] .iso-contact-shadow,
+            &[data-dungeon-object-type="static"] .iso-contact-shadow {
                 display: none !important;
             }
 
@@ -8567,6 +8571,66 @@
         opacity: 0.4;
     }
 }
+
+/* ── Summoner Expedition Skill: Wandering Eye ── */
+.floating-wandering-eye {
+    position: absolute;
+    pointer-events: none;
+    z-index: 35;
+    transform-style: preserve-3d;
+    will-change: left, top;
+    transition: opacity 0.3s ease-out;
+
+    .wandering-eye-sprite {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        animation: wanderingEyeFloat 2s ease-in-out infinite alternate;
+    }
+
+    .wandering-eye-aura {
+        position: absolute;
+        inset: -6px;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(168, 85, 247, 0.5) 0%, rgba(147, 51, 234, 0.25) 50%, transparent 75%);
+        box-shadow: 0 0 16px rgba(168, 85, 247, 0.85), 0 0 32px rgba(192, 132, 252, 0.5);
+        animation: wanderingEyePulse 1.5s ease-in-out infinite alternate;
+        pointer-events: none;
+    }
+
+    .wandering-eye-image {
+        width: 85%;
+        height: 85%;
+        object-fit: contain;
+        filter: drop-shadow(0 0 10px #a855f7) drop-shadow(0 0 16px #c084fc);
+        pointer-events: none;
+        user-select: none;
+    }
+}
+
+@keyframes wanderingEyeFloat {
+    0% {
+        transform: translateY(-2px);
+    }
+    100% {
+        transform: translateY(4px);
+    }
+}
+
+@keyframes wanderingEyePulse {
+    0% {
+        transform: scale(0.9);
+        opacity: 0.7;
+    }
+    100% {
+        transform: scale(1.2);
+        opacity: 1;
+    }
+}
+
 
 
 

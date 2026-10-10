@@ -21,6 +21,119 @@ export function hashMask(mask) {
 }
 
 /**
+ * Deterministic pseudo-random generator for tile noise
+ */
+function clipNoise(seed) {
+    let n = Math.sin(seed * 12.9898 + 78.233) * 43758.5453123;
+    return n - Math.floor(n);
+}
+
+/**
+ * Returns a CSS polygon clip-path string creating organic, ragged stone edges for floor tiles.
+ * Sides facing void tiles have deep rocky indentations (5-14%), while sides facing floor tiles have subtle stone seam jitters (1-3.5%).
+ */
+export function getOrganicTileClipPath(tileIdx, boardTiles, isVendorCell = false, vendorCellRole = null) {
+    if (typeof tileIdx !== 'number' || tileIdx < 0 || tileIdx >= 225) {
+        return null;
+    }
+
+    const row = Math.floor(tileIdx / 15);
+    const col = tileIdx % 15;
+
+    const topIdx = row > 0 ? (row - 1) * 15 + col : null;
+    const bottomIdx = row < 14 ? (row + 1) * 15 + col : null;
+    const leftIdx = col > 0 ? row * 15 + (col - 1) : null;
+    const rightIdx = col < 14 ? row * 15 + (col + 1) : null;
+
+    const checkIsVoid = (idx) => {
+        if (idx === null) return true; // Edge of board acts as void
+        if (!boardTiles || !boardTiles[idx]) return true;
+        return isTileVoid(boardTiles[idx]);
+    };
+
+    let topVoid = checkIsVoid(topIdx);
+    let bottomVoid = checkIsVoid(bottomIdx);
+    let leftVoid = checkIsVoid(leftIdx);
+    let rightVoid = checkIsVoid(rightIdx);
+
+    // For multi-tile structure quadrants, suppress ragged cuts on internal connected edges
+    if (isVendorCell && vendorCellRole) {
+        if (vendorCellRole === 'anchor' || vendorCellRole === 'top_left') {
+            rightVoid = false;
+            bottomVoid = false;
+        } else if (vendorCellRole === 'top_right') {
+            leftVoid = false;
+            bottomVoid = false;
+        } else if (vendorCellRole === 'bottom_left') {
+            rightVoid = false;
+            topVoid = false;
+        } else if (vendorCellRole === 'bottom_right') {
+            leftVoid = false;
+            topVoid = false;
+        } else if (vendorCellRole === 'center') {
+            topVoid = false; rightVoid = false; bottomVoid = false; leftVoid = false;
+        }
+    }
+
+    const seed = tileIdx * 31 + 47;
+
+    const getDepth = (subSeed, isVoidSide) => {
+        const val = clipNoise(seed + subSeed);
+        if (isVoidSide) {
+            // Deep rocky jagged cut-in into tile
+            return 5 + val * 9; // 5% to 14%
+        }
+        // Subtle stone seam jitter between tiles
+        return 1 + val * 2.5; // 1% to 3.5%
+    };
+
+    // Points around 4 sides of the square:
+    // Top side (Left -> Right)
+    const t0 = getDepth(1, topVoid);
+    const t1 = getDepth(2, topVoid);
+    const t2 = getDepth(3, topVoid);
+    const t3 = getDepth(4, topVoid);
+
+    // Right side (Top -> Bottom)
+    const r0 = getDepth(5, rightVoid);
+    const r1 = getDepth(6, rightVoid);
+    const r2 = getDepth(7, rightVoid);
+    const r3 = getDepth(8, rightVoid);
+
+    // Bottom side (Right -> Left)
+    const b0 = getDepth(9, bottomVoid);
+    const b1 = getDepth(10, bottomVoid);
+    const b2 = getDepth(11, bottomVoid);
+    const b3 = getDepth(12, bottomVoid);
+
+    // Left side (Bottom -> Top)
+    const l0 = getDepth(13, leftVoid);
+    const l1 = getDepth(14, leftVoid);
+    const l2 = getDepth(15, leftVoid);
+    const l3 = getDepth(16, leftVoid);
+
+    return `polygon(` +
+        `${l3.toFixed(1)}% ${t0.toFixed(1)}%, ` +
+        `25% ${t1.toFixed(1)}%, ` +
+        `50% ${t2.toFixed(1)}%, ` +
+        `75% ${t3.toFixed(1)}%, ` +
+        `${(100 - r0).toFixed(1)}% ${t0.toFixed(1)}%, ` +
+        `${(100 - r0).toFixed(1)}% 25%, ` +
+        `${(100 - r1).toFixed(1)}% 50%, ` +
+        `${(100 - r2).toFixed(1)}% 75%, ` +
+        `${(100 - r3).toFixed(1)}% ${(100 - b0).toFixed(1)}%, ` +
+        `75% ${(100 - b0).toFixed(1)}%, ` +
+        `50% ${(100 - b1).toFixed(1)}%, ` +
+        `25% ${(100 - b2).toFixed(1)}%, ` +
+        `${l0.toFixed(1)}% ${(100 - b3).toFixed(1)}%, ` +
+        `${l0.toFixed(1)}% 75%, ` +
+        `${l1.toFixed(1)}% 50%, ` +
+        `${l2.toFixed(1)}% 25%` +
+    `)`;
+}
+
+
+/**
  * Deterministic pseudo-random noise generator (Value Noise 2D with 2 octaves)
  */
 function pseudoRandom(x, y, seed = 1337) {
@@ -56,6 +169,67 @@ export function organicNoise2D(x, y, seed = 1337) {
     return (combined - 0.5) * 2; // [-1, 1]
 }
 
+export function isTileVoid(tile, boardManager) {
+    if (!tile) return true;
+
+    // Explicitly non-void
+    if (tile.isVoid === false) return false;
+
+    // Connecting paths are NEVER void
+    if (boardManager && typeof boardManager.isConnectingPathTile === 'function' && boardManager.isConnectingPathTile(tile)) {
+        return false;
+    }
+
+    const contains = tile.contains;
+    let cType = typeof contains === 'string' ? contains : (contains ? contains.type : null);
+    if (typeof cType === 'string') cType = cType.toLowerCase().replace(/\s+/g, '_');
+
+    let cSub = contains && typeof contains === 'object' ? contains.subtype : null;
+    if (typeof cSub === 'string') cSub = cSub.toLowerCase().replace(/\s+/g, '_');
+
+    // Known non-void contains types/subtypes/buildings
+    if (cType === 'empty_space' || cType === 'obscured_space' || cType === 'connecting_path' || cType === 'passage' || cType === 'path' || cType === 'inscription' ||
+        tile.type === 'empty_space' || tile.type === 'connecting_path' || tile.type === 'passage' || tile.type === 'path' || tile.type === 'inscription') {
+        return false;
+    }
+
+    if (tile.building || tile.isBuilding || (boardManager && typeof boardManager.isImpassableBuildingTile === 'function' && boardManager.isImpassableBuildingTile(tile))) {
+        return false;
+    }
+
+    if (tile.terrain && tile.terrain !== 'void') return false;
+
+    // Check if boardManager.isVoidTile returns true
+    if (boardManager && typeof boardManager.isVoidTile === 'function' && boardManager.isVoidTile(tile)) {
+        return true;
+    }
+
+    // Explicit void markers
+    if (tile.isVoid === true || tile.type === 'void' || cType === 'void' || cType === 'void_fill' || cType === 'voidfill' || cType === 'empty' || cSub === 'void') {
+        return true;
+    }
+
+    // Colors representing void / empty space in DungeonPage
+    const colorStr = String(tile.color || '').toLowerCase().trim();
+    const isBlackColor = colorStr === 'black' || colorStr === '#000000' || colorStr === '#000' || colorStr === 'rgb(0, 0, 0)' || colorStr === 'rgb(0,0,0)';
+
+    // If tile has a valid non-black color or texture image or non-empty contains, it's a floor tile!
+    const hasFloorColor = tile.color && tile.color !== 'null' && tile.color !== 'undefined' && !isBlackColor;
+    const hasFloorTexture = !!(tile.texture || tile.image || tile.floorTexture);
+    const hasFloorContains = contains && cType && cType !== 'empty' && cType !== 'void';
+
+    if (hasFloorColor || hasFloorTexture || hasFloorContains) {
+        return false;
+    }
+
+    // Default: if it's black color or has no floor properties, it is a void tile!
+    if (isBlackColor || (!tile.contains && !tile.building && !tile.terrain && !tile.color)) {
+        return true;
+    }
+
+    return false;
+}
+
 /**
  * Builds 15x15 void mask (1 = void tile, 0 = floor tile)
  */
@@ -68,20 +242,7 @@ export function buildVoidMask(tiles, boardManager) {
         for (let x = 0; x < size; x++) {
             const idx = y * size + x;
             const tile = tiles[idx];
-            if (!tile) {
-                mask[idx] = 1;
-                continue;
-            }
-
-            const isConnecting = boardManager && typeof boardManager.isConnectingPathTile === 'function'
-                ? boardManager.isConnectingPathTile(tile)
-                : false;
-
-            const isVoid = boardManager && typeof boardManager.isVoidTile === 'function'
-                ? boardManager.isVoidTile(tile)
-                : (tile.isVoid === true || tile.contains === 'void' || (tile.contains && tile.contains.type === 'void'));
-
-            mask[idx] = (isVoid && !isConnecting) ? 1 : 0;
+            mask[idx] = isTileVoid(tile, boardManager) ? 1 : 0;
         }
     }
     return mask;

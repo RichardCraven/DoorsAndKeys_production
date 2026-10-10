@@ -54,7 +54,7 @@ import { CButton, CFormSelect, CFormInput, CModal, CModalHeader, CModalTitle, CM
 import * as images from '../utils/images'
 import { resolveFloorTexture } from './dungonBuilderViews/BoardView';
 import VoidOrganicLayer from '../components/VoidOrganicLayer';
-import { getOrganicVoidPath } from '../utils/organic-void';
+import { getOrganicVoidPath, isTileVoid } from '../utils/organic-void';
 import { getRandomInscription } from '../utils/inscriptions-manager';
 import { RITUALS, GLYPHS, GLYPH_SPELL_SLOT_COST, computeGlyphPrepTime, BATTLE_TACTICS, INNER_DISCIPLINES, DISCIPLINE_CATEGORIES, SCRY_OPTIONS } from '../utils/spells-table'
 import { RECIPES } from '../utils/spells-table'
@@ -3004,6 +3004,7 @@ class DungeonPage extends React.Component {
         this._lastDrawTimestamp = 0;
         this._fpsLimit = 30; // cap draw loop to 30fps
         this._breadcrumbs = new Map();
+        this._wanderingEyeRevealedTiles = new Map();
         this._breadcrumbSeq = 0;
         this._monsterSightings = new Map();
         this._wasPoiPanelExpanded = !!((getMeta() || {}).camping);
@@ -3166,6 +3167,7 @@ class DungeonPage extends React.Component {
             , isAvatarDamaged: false
             , healingFloatingIndicators: []
             , activeHealingGround: null
+            , wanderingEye: null
             , peerHealingGrounds: new Map()
             , swingArc: null
             , showPocketDefeatModal: false
@@ -3243,6 +3245,7 @@ class DungeonPage extends React.Component {
             , illuminatedTileId: null
             , popoutResources: (getMeta()?.popoutResources || false)
             , showIsometric: !!(initMeta.showIsometric)
+            , showOrganicEdges: !!(initMeta.showOrganicEdges)
         }
         // Native browser tooltip will be used for death-tracker; no custom tooltip state required.
         // Track timers/intervals created by this component so we can clear on unmount
@@ -5371,6 +5374,9 @@ class DungeonPage extends React.Component {
         if (typeof this.props.boardManager.establishGetBreadcrumbsCallback === 'function') {
             this.props.boardManager.establishGetBreadcrumbsCallback(() => this._breadcrumbs);
         }
+        if (typeof this.props.boardManager.establishGetWanderingEyeRevealsCallback === 'function') {
+            this.props.boardManager.establishGetWanderingEyeRevealsCallback(() => this._wanderingEyeRevealedTiles);
+        }
         this.props.boardManager.establishSaveCrewCallback(() => {
             const meta = getMeta();
             meta.crew = this.props.crewManager.crew;
@@ -5496,6 +5502,8 @@ class DungeonPage extends React.Component {
 
             // Tower Siege debug command — type 'siege' in the browser console
             window.siege = () => this.triggerTowerSiege();
+            window.wanderingEye = () => this.activateWanderingEye();
+            window.wandering_eye = () => this.activateWanderingEye();
             Object.defineProperty(window, 'tower_siege', {
                 get: () => { this.triggerTowerSiege(); return 'Initiating Tower Siege...'; },
                 configurable: true
@@ -7085,6 +7093,18 @@ class DungeonPage extends React.Component {
         });
     };
 
+    toggleOrganicEdges = (forceState = null) => {
+        const next = forceState !== null ? !!forceState : !this.state.showOrganicEdges;
+        const meta = getMeta() || {};
+        meta.showOrganicEdges = next;
+        storeMeta(meta);
+        this.setState({ showOrganicEdges: next }, () => {
+            if (typeof this.displayMessage === 'function') {
+                this.displayMessage(next ? "🌿 Organic Edges: Enabled" : "🌿 Organic Edges: Disabled");
+            }
+        });
+    };
+
     getPocketZoomTransform = () => {
         if (this.state.portalTransitionClass) {
             return undefined;
@@ -7355,7 +7375,14 @@ class DungeonPage extends React.Component {
                     domainTiles.push({ vx, vy });
                 }
 
-                const isRevealed = inUnitVision || inObsPlatformVision || inAnimVision || inFriendlyDomain;
+                let inEyeVision = false;
+                if (this._wanderingEyeRevealedTiles && this._wanderingEyeRevealedTiles.size > 0) {
+                    const eyeNow = Date.now();
+                    const exp = this._wanderingEyeRevealedTiles.get(tileIdx) || this._wanderingEyeRevealedTiles.get(vTileIdx);
+                    if (exp && eyeNow < exp) inEyeVision = true;
+                }
+
+                const isRevealed = inUnitVision || inObsPlatformVision || inAnimVision || inFriendlyDomain || inEyeVision;
                 fogVisibility[vTileIdx] = !!isRevealed;
 
                 const storedColor = mbTile?.color && mbTile.color !== 'null' && mbTile.color !== 'undefined' ? mbTile.color : null;
@@ -12482,6 +12509,8 @@ class DungeonPage extends React.Component {
         try { if (this._foodGoneBadTimer) { clearTimeout(this._foodGoneBadTimer); this._foodGoneBadTimer = null; } } catch (e) { }
         try { if (this._skillFlashTimeout) { clearTimeout(this._skillFlashTimeout); this._skillFlashTimeout = null; } } catch (e) { }
         try { if (this._healingGroundTimer) { clearInterval(this._healingGroundTimer); this._healingGroundTimer = null; } } catch (e) { }
+        try { if (this._wanderingEyeFlightTimer) { clearInterval(this._wanderingEyeFlightTimer); this._wanderingEyeFlightTimer = null; } } catch (e) { }
+        try { if (this._wanderingEyeDecayTimer) { clearInterval(this._wanderingEyeDecayTimer); this._wanderingEyeDecayTimer = null; } } catch (e) { }
         // Backwards compat: clear any direct references as well
         try { if (this.realTimeSpecialActionCheckInterval) { clearInterval(this.realTimeSpecialActionCheckInterval); } } catch (e) { }
         try { if (this.pygmiesInterval) { clearInterval(this.pygmiesInterval); this.pygmiesInterval = null; } } catch (e) { }
@@ -12809,49 +12838,7 @@ class DungeonPage extends React.Component {
                     const minGy = anchorGy;
                     const maxGy = anchorGy + (isNode ? 0 : 1);
 
-                    superboard.miniboards.forEach((tMb, tMbIdx) => {
-                        if (!tMb || !tMb.tiles) return;
-                        const tMbX = (tMbIdx % 3) * 15;
-                        const tMbY = Math.floor(tMbIdx / 3) * 15;
-                        tMb.tiles.forEach((t) => {
-                            if (!t) return;
-                            const gx = tMbX + (t.coordinates ? t.coordinates[0] : (t.id % 15));
-                            const gy = tMbY + (t.coordinates ? t.coordinates[1] : Math.floor(t.id / 15));
-                            if (gx >= minGx && gx <= maxGx && gy >= minGy && gy <= maxGy) {
-                                const ec = (typeof t.contains === 'object' && t.contains) ? t.contains : {};
-                                t.contains = {
-                                    ...ec,
-                                    affiliation: affiliation,
-                                    isHostile: affiliation === 'hostile',
-                                    faction: affiliation,
-                                    growthCycles: currentCycles,
-                                    maxGrowthCycles: 5,
-                                    lastGrowthTime: t.lastGrowthTime || ec.lastGrowthTime || now,
-                                    level: t.level || ec.level || 1,
-                                    id: monolithId,
-                                    activated: true
-                                };
-                                t.affiliation = affiliation;
-                                t.growthCycles = currentCycles;
-                                t.lastGrowthTime = t.lastGrowthTime || ec.lastGrowthTime || now;
-                                t.isHostile = affiliation === 'hostile';
-                                t.activated = true;
-                            }
-
-                            let dx = 0;
-                            if (gx < minGx) dx = minGx - gx;
-                            else if (gx > maxGx) dx = gx - maxGx;
-                            let dy = 0;
-                            if (gy < minGy) dy = minGy - gy;
-                            else if (gy > maxGy) dy = gy - maxGy;
-                            const dist = Math.max(dx, dy);
-                            if (dist <= currentCycles) {
-                                t.territory = affiliation;
-                                t.territoryAffiliation = affiliation;
-                                t.territoryMonolithId = monolithId;
-                            }
-                        });
-                    });
+                    this.convertSuperboardContiguousTerritory(superboard, monolithId, affiliation, anchorGx, anchorGy, isNode);
                 } else if (!isExplicitlyActive) {
                     const ec = (typeof tile.contains === 'object' && tile.contains) ? tile.contains : {};
                     tile.contains = {
@@ -14362,125 +14349,7 @@ class DungeonPage extends React.Component {
                 this.clearMonolithTerritory(superboard, monolithId, affiliation, anchorGx, anchorGy);
                 return;
             }
-
-            const isGeneratorActive = !!(tile.generatorData?.activated || cObj?.generatorData?.activated);
-            const isExplicitlyActive = !!(cObj?.activated || tile.activated || isGeneratorActive || (cObj?.growthCycles > 0) || (tile.growthCycles > 0) || sKey.includes('dark_domain_monolith') || sKey.includes('dark_domain_node') || tile.isHostile || cObj?.isHostile || (cObj?.affiliation && cObj.affiliation !== 'none') || (tile.affiliation && tile.affiliation !== 'none'));
-            if (!isExplicitlyActive) return;
-
-                let affiliation = cObj?.affiliation || tile.affiliation || (isGeneratorActive ? 'player' : null);
-                if (affiliation !== 'neutral' && affiliation !== 'friendly' && affiliation !== 'player' && (tile.isHostile || cObj?.isHostile || cObj?.faction === 'hostile' || sKey.includes('dark_domain_monolith') || sKey.includes('dark_domain_node'))) {
-                    affiliation = 'hostile';
-                }
-                if (!affiliation || affiliation === 'none' || affiliation === 'neutral') return;
-
-                const level = cObj?.level || tile.level || 1;
-                const maxGrowthCycles = level >= 2 ? 10 : 5;
-                let growthCycles = cObj?.growthCycles ?? tile.growthCycles ?? 0;
-                let lastGrowthTime = cObj?.lastGrowthTime || tile.lastGrowthTime || 0;
-
-                if (!lastGrowthTime) {
-                    lastGrowthTime = now;
-                    if (cObj) cObj.lastGrowthTime = now;
-                    tile.lastGrowthTime = now;
-                }
-
-                const shouldGrow = (growthCycles === 0) || (growthCycles < maxGrowthCycles && (now - lastGrowthTime >= 30000));
-
-                if (shouldGrow) {
-                    const nextCycle = growthCycles + 1;
-                    const isNode = sKey.includes('domain_node') || sKey.includes('dark_domain_node');
-                    const anchorGx = (mbIdx % 3) * 15 + (tIdx % 15);
-                    const anchorGy = Math.floor(mbIdx / 3) * 15 + Math.floor(tIdx / 15);
-                    const minGx = anchorGx;
-                    const maxGx = anchorGx + (isNode ? 0 : 1);
-                    const minGy = anchorGy;
-                    const maxGy = anchorGy + (isNode ? 0 : 1);
-
-                    const monolithId = cObj?.id || tile.id || `monolith_${anchorGx}_${anchorGy}`;
-
-                    superboard.miniboards.forEach((targetMb, targetMbIdx) => {
-                        if (!targetMb || !targetMb.tiles) return;
-                        const mbX = (targetMbIdx % 3) * 15;
-                        const mbY = Math.floor(targetMbIdx / 3) * 15;
-
-                        targetMb.tiles.forEach((targetTile) => {
-                            if (!targetTile) return;
-                            const gx = mbX + (targetTile.coordinates ? targetTile.coordinates[0] : (targetTile.id % 15));
-                            const gy = mbY + (targetTile.coordinates ? targetTile.coordinates[1] : Math.floor(targetTile.id / 15));
-
-                            let dx = 0;
-                            if (gx < minGx) dx = minGx - gx;
-                            else if (gx > maxGx) dx = gx - maxGx;
-
-                            let dy = 0;
-                            if (gy < minGy) dy = minGy - gy;
-                            else if (gy > maxGy) dy = gy - maxGy;
-
-                            const dist = Math.max(dx, dy);
-                            if (dist <= nextCycle) {
-                                const wasClaimed = targetTile.territory === affiliation;
-                                targetTile.territory = affiliation;
-                                targetTile.territoryAffiliation = affiliation;
-                                targetTile.territoryMonolithId = monolithId;
-                                if (!wasClaimed) {
-                                    targetTile.newlyClaimed = true;
-                                    targetTile.claimDelayMs = Math.max(0, dist - 1) * 150;
-                                }
-                            }
-                        });
-                    });
-
-                    // Sync updated growth state across all 4 cells of this specific monolith
-                    superboard.miniboards.forEach((targetMb, targetMbIdx) => {
-                        if (!targetMb || !targetMb.tiles) return;
-                        const mbX = (targetMbIdx % 3) * 15;
-                        const mbY = Math.floor(targetMbIdx / 3) * 15;
-                        targetMb.tiles.forEach((t) => {
-                            if (!t) return;
-                            const tgx = mbX + (t.coordinates ? t.coordinates[0] : (t.id % 15));
-                            const tgy = mbY + (t.coordinates ? t.coordinates[1] : Math.floor(t.id / 15));
-                            if (tgx >= minGx && tgx <= maxGx && tgy >= minGy && tgy <= maxGy) {
-                                const existingC = (typeof t.contains === 'object' && t.contains) ? t.contains : {};
-                                t.contains = {
-                                    ...existingC,
-                                    affiliation: affiliation,
-                                    isHostile: affiliation === 'hostile',
-                                    faction: affiliation,
-                                    growthCycles: nextCycle,
-                                    maxGrowthCycles: maxGrowthCycles,
-                                    lastGrowthTime: now,
-                                    level: level,
-                                    id: monolithId,
-                                    activated: true
-                                };
-                                t.affiliation = affiliation;
-                                t.isHostile = affiliation === 'hostile';
-                                t.growthCycles = nextCycle;
-                                t.lastGrowthTime = now;
-                            }
-                        });
-                    });
-
-                    this.updateSuperboardViewport();
-                    setTimeout(() => {
-                        if (superboard && superboard.miniboards) {
-                            superboard.miniboards.forEach(mb => {
-                                if (mb && mb.tiles) {
-                                    mb.tiles.forEach(t => {
-                                        if (t) t.newlyClaimed = false;
-                                    });
-                                }
-                            });
-                        }
-                        this.updateSuperboardViewport();
-                    }, 2000);
-
-                    const affTitle = affiliation.toUpperCase();
-                    this.invalidateSuperboardStructureCache();
-                    this.displayMessage(`✦ Domain Monolith expanded ${affTitle} territory (Ring ${nextCycle}/${maxGrowthCycles})!`);
-                    this.checkPocketDimensionVictory();
-                }
-            });
+        });
 
         this.tickPocketResourceGenerators(superboard);
         this.tickClaimableBuildings(superboard);
@@ -14673,132 +14542,66 @@ class DungeonPage extends React.Component {
         return clearedCount;
     };
 
-    activateSuperboardDomainMonolith = (superboard, monolith, affiliation = 'hostile') => {
-        if (!superboard || !monolith) return;
-        const now = Date.now();
-        const { anchorGx, anchorGy } = monolith;
-        const sKey = String(monolith.key || monolith.subtype || monolith.type || monolith.containsSubtype || monolith.tile?.contains?.subtype || monolith.cObj?.subtype || monolith.cObj?.key || monolith.tile?.contains?.key || monolith.tile?.building || '').toLowerCase();
-        const isNode = sKey.includes('domain_node') || sKey.includes('dark_domain_node') || sKey.includes('node');
+    convertSuperboardContiguousTerritory = (superboard, monolithId, affiliation, anchorGx, anchorGy, isNode = false) => {
+        if (!superboard || !Array.isArray(superboard.miniboards) || anchorGx === null || anchorGy === null) return;
         const minGx = anchorGx;
         const maxGx = anchorGx + (isNode ? 0 : 1);
         const minGy = anchorGy;
         const maxGy = anchorGy + (isNode ? 0 : 1);
-        const monolithId = monolith.id || `monolith_${anchorGx}_${anchorGy}`;
 
-        // 0. Fully clear out any territory that this monolith had generated previously across the superboard
-        const possibleIds = new Set([
-            monolithId,
-            monolith.id,
-            `monolith_${anchorGx}_${anchorGy}`,
-            monolith.cObj?.id,
-            monolith.tile?.id ? `monolith_${monolith.tile.id}` : null
-        ].filter(Boolean));
+        const queue = [];
+        const visited = new Set();
 
+        // 1. Mark monolith footprint tiles (only the building footprint itself: 1x1 for node, 2x2 for monolith)
         superboard.miniboards.forEach((mb, mbIdx) => {
             if (!mb || !mb.tiles) return;
             const mbX = (mbIdx % 3) * 15;
             const mbY = Math.floor(mbIdx / 3) * 15;
             mb.tiles.forEach((t, tIdx) => {
                 if (!t) return;
-                const gx = mbX + (tIdx % 15);
-                const gy = mbY + Math.floor(tIdx / 15);
+                const gx = mbX + (t.coordinates ? t.coordinates[0] : (tIdx % 15));
+                const gy = mbY + (t.coordinates ? t.coordinates[1] : Math.floor(tIdx / 15));
 
-                let dx = 0;
-                if (gx < minGx) dx = minGx - gx;
-                else if (gx > maxGx) dx = gx - maxGx;
-
-                let dy = 0;
-                if (gy < minGy) dy = minGy - gy;
-                else if (gy > maxGy) dy = gy - maxGy;
-
-                const dist = Math.max(dx, dy);
-
-                const isTaggedWithMonolith = possibleIds.has(t.territoryMonolithId) ||
-                    (t.contains && typeof t.contains === 'object' && possibleIds.has(t.contains.territoryMonolithId));
-                const isOldTerritory = t.territory && t.territory !== affiliation;
-                const isOldTerritoryInRadius = dist <= 12 && isOldTerritory;
-
-                if (isTaggedWithMonolith || isOldTerritoryInRadius) {
-                    delete t.territory;
-                    delete t.territoryAffiliation;
-                    delete t.territoryMonolithId;
-                    delete t.growthCycles;
-                    delete t.lastGrowthTime;
-                    delete t.newlyClaimed;
-                    delete t.isHostile;
-                    const isMonolithFootprint = (gx >= minGx && gx <= maxGx && gy >= minGy && gy <= maxGy);
-                    if (!isMonolithFootprint) {
-                        delete t.affiliation;
-                        delete t.generatorData;
-                    }
-
-                    if (t.contains && typeof t.contains === 'object') {
-                        delete t.contains.territory;
-                        delete t.contains.territoryAffiliation;
-                        delete t.contains.territoryMonolithId;
-                        delete t.contains.growthCycles;
-                        delete t.contains.lastGrowthTime;
-                        delete t.contains.isHostile;
-                        if (!isMonolithFootprint && (!t.contains.placedBy || t.contains.placedBy !== 'player')) {
-                            delete t.contains.affiliation;
-                            delete t.contains.generatorData;
-                            delete t.contains.faction;
-                        }
-                    }
-                }
-            });
-        });
-
-        // 1. Update all cells of the 2x2 monolith
-        superboard.miniboards.forEach((mb, mbIdx) => {
-            if (!mb || !mb.tiles) return;
-            const mbX = (mbIdx % 3) * 15;
-            const mbY = Math.floor(mbIdx / 3) * 15;
-            mb.tiles.forEach((t, tIdx) => {
-                if (!t) return;
-                const gx = mbX + (tIdx % 15);
-                const gy = mbY + Math.floor(tIdx / 15);
-                if (gx >= minGx && gx <= maxGx && gy >= minGy && gy <= maxGy) {
+                const isFootprint = (gx >= minGx && gx <= maxGx && gy >= minGy && gy <= maxGy);
+                if (isFootprint) {
                     const existingC = (typeof t.contains === 'object' && t.contains) ? t.contains : {};
                     t.contains = {
                         ...existingC,
                         affiliation: affiliation,
                         isHostile: (affiliation === 'hostile'),
                         faction: affiliation,
-                        growthCycles: 1,
-                        maxGrowthCycles: 5,
-                        lastGrowthTime: now,
-                        level: 1,
                         id: monolithId,
-                        activated: true,
-                        territory: affiliation,
-                        territoryAffiliation: affiliation,
-                        territoryMonolithId: monolithId,
-                        newlyClaimed: true,
-                        claimDelayMs: 0
+                        activated: true
                     };
                     t.affiliation = affiliation;
-                    t.growthCycles = 1;
-                    t.lastGrowthTime = now;
+                    t.activated = true;
                     t.isHostile = (affiliation === 'hostile');
+
                     t.territory = affiliation;
                     t.territoryAffiliation = affiliation;
                     t.territoryMonolithId = monolithId;
-                    t.newlyClaimed = true;
-                    t.claimDelayMs = 0;
+                    if (t.contains && typeof t.contains === 'object') {
+                        t.contains.territory = affiliation;
+                        t.contains.territoryAffiliation = affiliation;
+                        t.contains.territoryMonolithId = monolithId;
+                    }
+
+                    const key = `${gx}_${gy}`;
+                    visited.add(key);
+                    queue.push({ gx, gy });
                 }
             });
         });
 
-        // 2. Claim footprint + Ring 1 as territory immediately
+        // 2. Also check if immediate adjacent tiles (dist <= 1) have existing territory to seed flood fill
         superboard.miniboards.forEach((mb, mbIdx) => {
             if (!mb || !mb.tiles) return;
             const mbX = (mbIdx % 3) * 15;
             const mbY = Math.floor(mbIdx / 3) * 15;
             mb.tiles.forEach((t, tIdx) => {
                 if (!t) return;
-                const gx = mbX + (tIdx % 15);
-                const gy = mbY + Math.floor(tIdx / 15);
+                const gx = mbX + (t.coordinates ? t.coordinates[0] : (tIdx % 15));
+                const gy = mbY + (t.coordinates ? t.coordinates[1] : Math.floor(tIdx / 15));
 
                 let dx = 0;
                 if (gx < minGx) dx = minGx - gx;
@@ -14810,38 +14613,82 @@ class DungeonPage extends React.Component {
 
                 const dist = Math.max(dx, dy);
                 if (dist <= 1) {
-                    t.territory = affiliation;
-                    t.territoryAffiliation = affiliation;
-                    t.territoryMonolithId = monolithId;
-                    t.newlyClaimed = true;
-                    t.claimDelayMs = dist * 150;
-                    t.lastGrowthTime = now;
-                    if (t.contains && typeof t.contains === 'object') {
-                        t.contains.territory = affiliation;
-                        t.contains.territoryAffiliation = affiliation;
-                        t.contains.territoryMonolithId = monolithId;
-                        t.contains.newlyClaimed = true;
-                        t.contains.claimDelayMs = dist * 150;
-                        t.contains.lastGrowthTime = now;
+                    const key = `${gx}_${gy}`;
+                    const hasTerritory = !!(t.territory || t.territoryAffiliation || t.contains?.territory || t.contains?.territoryAffiliation);
+                    if (hasTerritory) {
+                        t.territory = affiliation;
+                        t.territoryAffiliation = affiliation;
+                        t.territoryMonolithId = monolithId;
+                        if (t.contains && typeof t.contains === 'object') {
+                            t.contains.territory = affiliation;
+                            t.contains.territoryAffiliation = affiliation;
+                            t.contains.territoryMonolithId = monolithId;
+                        }
+                        if (!visited.has(key)) {
+                            visited.add(key);
+                            queue.push({ gx, gy });
+                        }
                     }
                 }
             });
         });
 
+        // 2. Flood fill contiguous existing domain/territory tiles on the superboard
+
+        const getTileAt = (gx, gy) => {
+            if (gx < 0 || gx >= 45 || gy < 0 || gy >= 45) return null;
+            const mbIdx = Math.floor(gy / 15) * 3 + Math.floor(gx / 15);
+            const tIdx = (gy % 15) * 15 + (gx % 15);
+            return superboard.miniboards[mbIdx]?.tiles?.[tIdx] || null;
+        };
+
+        while (queue.length > 0) {
+            const { gx, gy } = queue.shift();
+
+            for (let dy = -1; dy <= 1; dy++) {
+                for (let dx = -1; dx <= 1; dx++) {
+                    if (dx === 0 && dy === 0) continue;
+                    const ngx = gx + dx;
+                    const ngy = gy + dy;
+                    const nKey = `${ngx}_${ngy}`;
+                    if (visited.has(nKey)) continue;
+
+                    const tile = getTileAt(ngx, ngy);
+                    if (!tile) continue;
+
+                    const isVoid = tile.isVoid === true || tile.contains === 'void' || (tile.contains && typeof tile.contains === 'object' && (tile.contains.type === 'void' || tile.contains.isVoid));
+                    if (isVoid || tile.color === 'black' || tile.color === '#000000' || tile.color === '#000') continue;
+
+                    const hasTerritory = !!(tile.territory || tile.territoryAffiliation || tile.contains?.territory || tile.contains?.territoryAffiliation);
+                    if (hasTerritory) {
+                        visited.add(nKey);
+                        queue.push({ gx: ngx, gy: ngy });
+
+                        tile.territory = affiliation;
+                        tile.territoryAffiliation = affiliation;
+                        tile.territoryMonolithId = monolithId;
+                        if (tile.contains && typeof tile.contains === 'object') {
+                            tile.contains.territory = affiliation;
+                            tile.contains.territoryAffiliation = affiliation;
+                            tile.contains.territoryMonolithId = monolithId;
+                        }
+                    }
+                }
+            }
+        }
+    };
+
+    activateSuperboardDomainMonolith = (superboard, monolith, affiliation = 'hostile') => {
+        if (!superboard || !monolith) return;
+        const { anchorGx, anchorGy } = monolith;
+        const sKey = String(monolith.key || monolith.subtype || monolith.type || monolith.containsSubtype || monolith.tile?.contains?.subtype || monolith.cObj?.subtype || monolith.cObj?.key || monolith.tile?.contains?.key || monolith.tile?.building || '').toLowerCase();
+        const isNode = sKey.includes('domain_node') || sKey.includes('dark_domain_node') || sKey.includes('node');
+        const monolithId = monolith.id || `monolith_${anchorGx}_${anchorGy}`;
+
+        this.convertSuperboardContiguousTerritory(superboard, monolithId, affiliation, anchorGx, anchorGy, isNode);
+
         this.updateSuperboardViewport();
         this.checkPocketDimensionVictory();
-        setTimeout(() => {
-            if (superboard && superboard.miniboards) {
-                superboard.miniboards.forEach(mb => {
-                    if (mb && mb.tiles) {
-                        mb.tiles.forEach(t => {
-                            if (t) t.newlyClaimed = false;
-                        });
-                    }
-                });
-            }
-            this.updateSuperboardViewport();
-        }, 2000);
     };
 
     isSuperboardCoordVisibleToUser = (gx, gy, targetTile) => {
@@ -18999,7 +18846,7 @@ class DungeonPage extends React.Component {
                                     bm.removePygmyTile(targetTile.id, () => this.setState({ tiles: [...bm.tiles] }));
                                     this.displayMessage('🏹 Your Outpost eliminated an enemy unit in your territory!');
                                 }
-                            });
+                            }, 'fireball', { isOutpost: true });
                         }
                     }
                     return;
@@ -19015,7 +18862,7 @@ class DungeonPage extends React.Component {
                         if (this.projectileCanvasRef && this.projectileCanvasRef.current) {
                             this.projectileCanvasRef.current.fireProjectile(outpost.id, playerTileIdx, () => {
                                 this.handleProjectileHitPlayer(firedTargetTileIdx);
-                            }, 'fireball', { aimedAtPlayer: true });
+                            }, 'fireball', { aimedAtPlayer: true, isOutpost: true });
                         }
                         return;
                     }
@@ -19040,7 +18887,7 @@ class DungeonPage extends React.Component {
                                 if (typeof bm.removePygmyTile === 'function' && bm.getContainsType(targetTile.contains) === 'pygmies') {
                                     bm.removePygmyTile(targetTile.id, () => this.setState({ tiles: [...bm.tiles] }));
                                 }
-                            });
+                            }, 'fireball', { isOutpost: true });
                         }
                         return;
                     }
@@ -19056,7 +18903,7 @@ class DungeonPage extends React.Component {
                     if (this.projectileCanvasRef && this.projectileCanvasRef.current) {
                         this.projectileCanvasRef.current.fireProjectile(outpost.id, playerTileIdx, () => {
                             this.handleProjectileHitPlayer(firedTargetTileIdx);
-                        }, 'fireball', { aimedAtPlayer: true });
+                        }, 'fireball', { aimedAtPlayer: true, isOutpost: true });
                     }
                 }
             });
@@ -31945,8 +31792,213 @@ class DungeonPage extends React.Component {
             return;
         }
 
+        if (skillKey === 'wandering_eye') {
+            this.activateWanderingEye();
+            return;
+        }
+
         this.displayMessage(`⚡ ${memberName} triggered Expedition Skill Slot ${slotIdx + 1}!`);
     }
+
+    activateWanderingEye = () => {
+        const bm = this.props.boardManager;
+        if (!bm) {
+            this.displayMessage("👁️ Wandering Eye: Board manager not available.");
+            return;
+        }
+
+        const playerLoc = (bm.playerTile && bm.playerTile.location) ? bm.playerTile.location : [7, 7];
+        const [startRow, startCol] = playerLoc;
+        const now = Date.now();
+        const eyeDurationMs = 5000;
+        const revealLingerMs = 20000;
+        const eyeExpiresAt = now + eyeDurationMs;
+        const tileSize = this.state.tileSize || 48;
+
+        this.displayMessage("👁️ Summoner conjured a Wandering Eye! Scouting the dungeon for 5 seconds...");
+
+        // Generate diverse flight waypoints across the 15x15 board starting from player location.
+        // It passes through gates and monsters as if they weren't even there!
+        const waypoints = [
+            { r: startRow, c: startCol }
+        ];
+
+        const candidates = [
+            { r: 2 + Math.floor(Math.random() * 3), c: 2 + Math.floor(Math.random() * 3) },
+            { r: 2 + Math.floor(Math.random() * 3), c: 10 + Math.floor(Math.random() * 3) },
+            { r: 10 + Math.floor(Math.random() * 3), c: 10 + Math.floor(Math.random() * 3) },
+            { r: 10 + Math.floor(Math.random() * 3), c: 2 + Math.floor(Math.random() * 3) },
+            { r: 6 + Math.floor(Math.random() * 3), c: 6 + Math.floor(Math.random() * 3) }
+        ];
+
+        let currentPt = waypoints[0];
+        const remaining = [...candidates];
+        while (remaining.length > 0) {
+            remaining.sort((a, b) => {
+                const distA = Math.hypot(a.r - currentPt.r, a.c - currentPt.c);
+                const distB = Math.hypot(b.r - currentPt.r, b.c - currentPt.c);
+                return distB - distA;
+            });
+            const next = remaining.shift();
+            waypoints.push(next);
+            currentPt = next;
+        }
+
+        waypoints.push({
+            r: Math.max(1, Math.min(13, 14 - startRow)),
+            c: Math.max(1, Math.min(13, 14 - startCol))
+        });
+
+        if (!this._wanderingEyeRevealedTiles) {
+            this._wanderingEyeRevealedTiles = new Map();
+        }
+
+        const eyeId = 'eye_' + now + '_' + Math.random().toString(36).substr(2, 5);
+
+        const revealTilesAt = (curRow, curCol, currentTimestamp) => {
+            const centerR = Math.round(curRow);
+            const centerC = Math.round(curCol);
+            const bIdx = (bm.playerTile?.boardIndex != null) ? bm.playerTile.boardIndex : ((bm.currentBoard?.id != null) ? bm.currentBoard.id : 0);
+            const lvlId = bm.currentLevel?.id ?? 0;
+            const orient = bm.currentOrientation ?? 'front';
+            let newlyRevealed = false;
+
+            // Vision radius 2 (5x5 square around eyeball)
+            for (let dr = -2; dr <= 2; dr++) {
+                for (let dc = -2; dc <= 2; dc++) {
+                    const r = centerR + dr;
+                    const c = centerC + dc;
+                    if (r >= 0 && r < 15 && c >= 0 && c < 15) {
+                        const tileId = r * 15 + c;
+                        const tile = bm.tiles ? bm.tiles[tileId] : null;
+                        if (!tile || (typeof bm.isVoidTile === 'function' && bm.isVoidTile(tile))) {
+                            continue;
+                        }
+
+                        const tileExpiresAt = currentTimestamp + revealLingerMs;
+                        const key = `${lvlId}:${orient}:${bIdx}:${tileId}`;
+
+                        const prevExp = this._wanderingEyeRevealedTiles.get(tileId) || 0;
+                        if (!prevExp || tileExpiresAt > prevExp) {
+                            this._wanderingEyeRevealedTiles.set(tileId, tileExpiresAt);
+                            this._wanderingEyeRevealedTiles.set(key, tileExpiresAt);
+                            newlyRevealed = true;
+                        }
+                    }
+                }
+            }
+
+            if (newlyRevealed) {
+                if (typeof bm.handleFogOfWar === 'function') {
+                    bm.handleFogOfWar(bm.playerTile, { skipRefresh: false });
+                }
+                if (typeof this.refreshTiles === 'function') {
+                    this.refreshTiles();
+                }
+            }
+        };
+
+        if (this._wanderingEyeFlightTimer) {
+            clearInterval(this._wanderingEyeFlightTimer);
+            this._wanderingEyeFlightTimer = null;
+        }
+
+        const initialX = (startCol + 0.5) * tileSize;
+        const initialY = (startRow + 0.5) * tileSize;
+        this.setState({
+            wanderingEye: {
+                id: eyeId,
+                x: initialX,
+                y: initialY,
+                row: startRow,
+                col: startCol,
+                active: true,
+                expiresAt: eyeExpiresAt
+            }
+        });
+
+        revealTilesAt(startRow, startCol, now);
+
+        const frameInterval = 30;
+        let flightElapsed = 0;
+        this._wanderingEyeFlightTimer = setInterval(() => {
+            flightElapsed += frameInterval;
+            const tNow = Date.now();
+            const elapsed = Math.max(flightElapsed, tNow - now);
+
+            if (elapsed >= eyeDurationMs) {
+                if (this._wanderingEyeFlightTimer) {
+                    clearInterval(this._wanderingEyeFlightTimer);
+                    this._wanderingEyeFlightTimer = null;
+                }
+                this.setState({ wanderingEye: null });
+                return;
+            }
+
+            const progress = Math.max(0, Math.min(1, elapsed / eyeDurationMs));
+            const numSegments = waypoints.length - 1;
+            const scaled = progress * numSegments;
+            const segIdx = Math.min(Math.floor(scaled), numSegments - 1);
+            const u = scaled - segIdx;
+            const easeU = u * u * (3 - 2 * u);
+
+            const pA = waypoints[segIdx];
+            const pB = waypoints[segIdx + 1];
+
+            const curR = pA.r + (pB.r - pA.r) * easeU;
+            const curC = pA.c + (pB.c - pA.c) * easeU;
+
+            const curTileSize = this.state.tileSize || 48;
+            const curX = (curC + 0.5) * curTileSize;
+            const curY = (curR + 0.5) * curTileSize;
+
+            this.setState({
+                wanderingEye: {
+                    id: eyeId,
+                    x: curX,
+                    y: curY,
+                    row: curR,
+                    col: curC,
+                    active: true,
+                    expiresAt: eyeExpiresAt
+                }
+            });
+
+            revealTilesAt(curR, curC, tNow);
+        }, frameInterval);
+
+        if (!this._wanderingEyeDecayTimer) {
+            this._wanderingEyeDecayTimer = setInterval(() => {
+                const decayNow = Date.now();
+                let prunedAny = false;
+
+                if (this._wanderingEyeRevealedTiles && this._wanderingEyeRevealedTiles.size > 0) {
+                    for (const [key, exp] of this._wanderingEyeRevealedTiles.entries()) {
+                        if (decayNow >= exp) {
+                            this._wanderingEyeRevealedTiles.delete(key);
+                            prunedAny = true;
+                        }
+                    }
+                }
+
+                if (prunedAny) {
+                    if (typeof bm.handleFogOfWar === 'function') {
+                        bm.handleFogOfWar(bm.playerTile, { skipRefresh: false });
+                    }
+                    if (typeof this.refreshTiles === 'function') {
+                        this.refreshTiles();
+                    }
+                }
+
+                if ((!this._wanderingEyeRevealedTiles || this._wanderingEyeRevealedTiles.size === 0) && !this.state.wanderingEye) {
+                    if (this._wanderingEyeDecayTimer) {
+                        clearInterval(this._wanderingEyeDecayTimer);
+                        this._wanderingEyeDecayTimer = null;
+                    }
+                }
+            }, 500);
+        }
+    };
 
     activateHealingGround = () => {
         const bm = this.props.boardManager;
@@ -32433,6 +32485,34 @@ class DungeonPage extends React.Component {
                         >
                             <span style={{ fontSize: '12px' }}>📐</span>
                             <span>{this.state.showIsometric ? 'Isometric: ON' : 'Isometric: OFF'}</span>
+                        </button>
+                    )}
+                    {!this.state.inSuperboard && !this.state.isInPocketDimension && (
+                        <button
+                            className={`hud-timer-item organic-edges-toggle-btn ${this.state.showOrganicEdges ? 'active' : ''}`}
+                            onClick={() => this.toggleOrganicEdges()}
+                            data-testid="organic-edges-toggle-btn"
+                            title="Toggle Organic Void Edges"
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 6,
+                                background: this.state.showOrganicEdges ? 'rgba(74, 222, 128, 0.22)' : 'rgba(25, 20, 35, 0.85)',
+                                border: this.state.showOrganicEdges ? '1px solid #4ade80' : '1px solid rgba(255, 255, 255, 0.25)',
+                                borderRadius: '12px',
+                                padding: '2px 9px',
+                                cursor: 'pointer',
+                                pointerEvents: 'auto',
+                                color: this.state.showOrganicEdges ? '#86efac' : '#e2e8f0',
+                                fontSize: '11px',
+                                fontWeight: 700,
+                                boxShadow: this.state.showOrganicEdges ? '0 0 10px rgba(74, 222, 128, 0.5)' : 'none',
+                                transition: 'all 0.2s ease',
+                                userSelect: 'none'
+                            }}
+                        >
+                            <span style={{ fontSize: '12px' }}>🌿</span>
+                            <span>{this.state.showOrganicEdges ? 'Organic Edges: ON' : 'Organic Edges: OFF'}</span>
                         </button>
                     )}
                 </div>
@@ -36438,8 +36518,6 @@ class DungeonPage extends React.Component {
         const targetMonolithId = targetTile.territoryMonolithId || targetTile.contains?.territoryMonolithId || targetTile.id || targetTile.contains?.id || `monolith_${targetTile.id}`;
         const targetRow = Math.floor(targetTile.id / 15);
         const targetCol = targetTile.id % 15;
-        const domainRadius = Math.max(2, targetTile.growthCycles || targetTile.contains?.growthCycles || 2);
-
         const allBoardTiles = (bm?.currentBoard && bm.currentBoard.tiles) ? bm.currentBoard.tiles : (bm?.tiles || []);
         allBoardTiles.forEach((t, idx) => {
             if (!t) return;
@@ -36447,17 +36525,6 @@ class DungeonPage extends React.Component {
             const tMonoId = t.territoryMonolithId || (typeof t.contains === 'object' ? t.contains?.territoryMonolithId : null);
             if (tMonoId && (tMonoId === targetMonolithId || String(tMonoId) === String(targetTile.id) || String(tMonoId) === `monolith_${targetTile.id}`)) {
                 contiguousTileIds.add(tId);
-            }
-            const tr = Math.floor(tId / 15);
-            const tc = tId % 15;
-            const dist = Math.max(Math.abs(tr - targetRow), Math.abs(tc - targetCol));
-            if (dist <= domainRadius && !(typeof bm.isVoidTile === 'function' && bm.isVoidTile(t)) && t.color !== 'black') {
-                const tClan = (typeof t.territory === 'object' ? t.territory?.clan || t.territory?.affiliation : t.territory) ||
-                              (typeof t.contains?.territory === 'object' ? t.contains?.territory?.clan || t.contains?.territory?.affiliation : t.contains?.territory);
-                const tClanStr = String(tClan || '').toLowerCase();
-                if (!tClan || tClanStr.includes(clan) || tClanStr.includes('hostile') || tClanStr.includes('enemy')) {
-                    contiguousTileIds.add(tId);
-                }
             }
         });
 
@@ -37165,69 +37232,7 @@ class DungeonPage extends React.Component {
         const monolithId = (anchorTile.contains && typeof anchorTile.contains === 'object' && anchorTile.contains.id) ? anchorTile.contains.id : `monolith_${anchorGx}_${anchorGy}`;
 
         superboardsToUpdate.forEach(superboard => {
-            if (!superboard || !superboard.miniboards) return;
-            superboard.miniboards.forEach((targetMb, targetMbIdx) => {
-                if (!targetMb || !targetMb.tiles) return;
-                const mbX = (targetMbIdx % 3) * 15;
-                const mbY = Math.floor(targetMbIdx / 3) * 15;
-
-                targetMb.tiles.forEach((targetTile, targetTidx) => {
-                    if (!targetTile) return;
-                    const gx = mbX + (targetTidx % 15);
-                    const gy = mbY + Math.floor(targetTidx / 15);
-
-                    if (gx >= minGx && gx <= maxGx && gy >= minGy && gy <= maxGy) {
-                        const existingC = typeof targetTile.contains === 'object' ? targetTile.contains : {};
-                        targetTile.contains = {
-                            ...existingC,
-                            affiliation: affiliation,
-                            growthCycles: cycle,
-                            lastGrowthTime: Date.now(),
-                            id: monolithId,
-                            activated: true,
-                            territory: affiliation,
-                            territoryAffiliation: affiliation,
-                            territoryMonolithId: monolithId,
-                            newlyClaimed: true,
-                            claimDelayMs: 0
-                        };
-                        targetTile.affiliation = affiliation;
-                        targetTile.growthCycles = cycle;
-                        targetTile.activated = true;
-                        targetTile.lastGrowthTime = Date.now();
-                        targetTile.territory = affiliation;
-                        targetTile.territoryAffiliation = affiliation;
-                        targetTile.territoryMonolithId = monolithId;
-                        targetTile.newlyClaimed = true;
-                        targetTile.claimDelayMs = 0;
-                        return;
-                    }
-
-                    let dx = 0;
-                    if (gx < minGx) dx = minGx - gx;
-                    else if (gx > maxGx) dx = gx - maxGx;
-
-                    let dy = 0;
-                    if (gy < minGy) dy = minGy - gy;
-                    else if (gy > maxGy) dy = gy - maxGy;
-
-                    const dist = Math.max(dx, dy);
-                    if (dist <= cycle) {
-                        targetTile.territory = affiliation;
-                        targetTile.territoryAffiliation = affiliation;
-                        targetTile.territoryMonolithId = monolithId;
-                        targetTile.newlyClaimed = true;
-                        targetTile.claimDelayMs = dist * 150;
-                        if (targetTile.contains && typeof targetTile.contains === 'object') {
-                            targetTile.contains.territory = affiliation;
-                            targetTile.contains.territoryAffiliation = affiliation;
-                            targetTile.contains.territoryMonolithId = monolithId;
-                            targetTile.contains.newlyClaimed = true;
-                            targetTile.contains.claimDelayMs = dist * 150;
-                        }
-                    }
-                });
-            });
+            this.convertSuperboardContiguousTerritory(superboard, monolithId, affiliation, anchorGx, anchorGy, isNode);
         });
 
         this.updateSuperboardViewport(true);
@@ -43319,7 +43324,7 @@ class DungeonPage extends React.Component {
                                         }}
                                     >
                                     {/* front-skirt removed */}
-                                    <VoidOrganicLayer tiles={this.state.tiles} active={!this.state.inSuperboard && !this.state.isInPocketDimension} boardManager={this.props.boardManager} isIsoView={isIsoView} />
+                                    <VoidOrganicLayer tiles={this.state.tiles} enabled={!!this.state.showOrganicEdges} active={!this.state.inSuperboard && !this.state.isInPocketDimension} boardManager={this.props.boardManager} isIsoView={isIsoView} />
                             {this.state.tiles && (() => {
                                 const touchTile = this.state.mobileTouchTileId !== null ? this.state.tiles[this.state.mobileTouchTileId] : null;
                                 let activeTouchAnchorId = this.state.mobileTouchTileId;
@@ -43470,9 +43475,7 @@ class DungeonPage extends React.Component {
                                         playerImgKey = 'avatar';
                                     }
 
-                                    const isVoidTile = (bm && typeof bm.isVoidTile === 'function')
-                                        ? bm.isVoidTile(tile)
-                                        : (tile.isVoid === true || (tile.contains === 'void' || (tile.contains && tile.contains.type === 'void')));
+                                    const isVoidTile = isTileVoid(tile, bm);
                                     const defaultEmptyColor = (this.state.inSuperboard && !isVoidTile)
                                         ? (this.state.superboardType === 'dark' ? 'rgba(25, 20, 45, 0.75)' : 'rgba(15, 15, 20, 0.55)')
                                         : 'black';
@@ -43655,6 +43658,7 @@ class DungeonPage extends React.Component {
                                         superboard={this.state.dungeon?.superboards?.[this.state.superboardType] || this.props.boardManager?.dungeon?.superboards?.[this.state.superboardType]}
                                         inSuperboard={!!(this.state.inSuperboard || this.state.isInPocketDimension)}
                                         isVoid={isVoidTile}
+                                        showOrganicEdges={!!this.state.showOrganicEdges}
                                         terrain={tile.terrain}
                                         color={safeColor}
                                         baseColor={tile.baseColor}
@@ -43745,6 +43749,7 @@ class DungeonPage extends React.Component {
                                         contains={tile.contains}
                                         boardTiles={this.state.tiles}
                                         inSuperboard={this.state.inSuperboard}
+                                        showOrganicEdges={!!this.state.showOrganicEdges}
                                         terrain={tile.terrain}
                                         color={(tile.color && tile.color !== 'null' && tile.color !== 'undefined' && tile.color !== 'black' && !String(tile.color).includes('ff0000')) ? tile.color : 'transparent'}
                                         borders={(this.state.tiles && this.state.tiles[i] && (this.state.tiles[i].color === 'black' || this.state.tiles[i].isVoid || this.state.tiles[i].color === '#000000' || this.state.tiles[i].color === '#000')) ? null : tile.borders}
@@ -43964,6 +43969,32 @@ class DungeonPage extends React.Component {
                                 </div>
                             );
                         })}
+
+                        {/* Summoner Expedition Skill: Floating Wandering Eye */}
+                        {this.state.wanderingEye && (
+                            <div
+                                className="floating-wandering-eye"
+                                style={{
+                                    position: 'absolute',
+                                    left: `${this.state.wanderingEye.x}px`,
+                                    top: `${this.state.wanderingEye.y}px`,
+                                    width: `${this.state.tileSize || 48}px`,
+                                    height: `${this.state.tileSize || 48}px`,
+                                    pointerEvents: 'none',
+                                    zIndex: 35,
+                                    transform: 'translate(-50%, -50%)',
+                                }}
+                            >
+                                <div className="wandering-eye-sprite iso-upright-sprite">
+                                    <div className="wandering-eye-aura" />
+                                    <img
+                                        src={images.wandering_eye_summoner || images.wandering_eye}
+                                        alt="Wandering Eye"
+                                        className="wandering-eye-image"
+                                    />
+                                </div>
+                            </div>
+                        )}
 
                         {/* Floating player overlay element - positioned absolutely within board wrapper */}
                         {this.state.playerFloatVisible && !this.state.activeConstruction && (() => {
@@ -44826,6 +44857,8 @@ class DungeonPage extends React.Component {
                             ref={this.projectileCanvasRef}
                             boardSize={this.state.boardSize}
                             tileSize={this.state.tileSize}
+                            isIsoView={isIsoView}
+                            tiles={this.state.tiles}
                             playerTileIdx={(() => {
                                 if (this.state.inSuperboard && this.state.superboardPlayerPos) {
                                     const { superboardViewMinX = 0, superboardViewMinY = 0 } = this.state;

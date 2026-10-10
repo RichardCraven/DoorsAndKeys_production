@@ -92,7 +92,7 @@ describe('Dungeon Object Approach Behaviors: Floating, Enlarging, and Static', (
     });
 
     describe('2. Enlarging Objects (hut, archway, archaic tunnel endpoint)', () => {
-        test('hut enlarges rooted to ground when approached: scale(2) from bottom center, zIndex 300, NOT floating', () => {
+        test('hut does NOT enlarge when approached (adjacent)', () => {
             const { container } = render(
                 <Tile
                     id={10}
@@ -101,6 +101,32 @@ describe('Dungeon Object Approach Behaviors: Floating, Enlarging, and Static', (
                     contains={{ type: 'structure', subtype: 'hut' }}
                     isPlayerAdjacent={true}
                     isPlayerOnTile={false}
+                />
+            );
+
+            const tileRoot = container.querySelector('.tile');
+            expect(tileRoot).not.toBeNull();
+            expect(tileRoot.getAttribute('data-dungeon-object-type')).toBe('enlarging');
+            expect(tileRoot).not.toHaveClass('enlarged-structure-tile');
+
+            const portrait = container.querySelector('.portrait');
+            expect(portrait).not.toBeNull();
+            expect(portrait.style.transform).not.toContain('scale(2');
+
+            // Contact shadow must NOT be rendered
+            const shadow = container.querySelector('.iso-contact-shadow');
+            expect(shadow).toBeNull();
+        });
+
+        test('hut enlarges rooted to ground when user moves directly on top of that tile: scale(2) from bottom center, zIndex 300', () => {
+            const { container } = render(
+                <Tile
+                    id={10}
+                    building="hut"
+                    image="hut"
+                    contains={{ type: 'structure', subtype: 'hut' }}
+                    isPlayerAdjacent={false}
+                    isPlayerOnTile={true}
                 />
             );
 
@@ -123,14 +149,12 @@ describe('Dungeon Object Approach Behaviors: Floating, Enlarging, and Static', (
             expect(portrait.style.transformOrigin).toBe('bottom center');
             expect(portrait.style.zIndex).toBe('300');
 
-            // Contact shadow must NOT be hovering/pulsing
+            // Buildings that are enlarging do not need to show a shadow rendered
             const shadow = container.querySelector('.iso-contact-shadow');
-            if (shadow) {
-                expect(shadow).not.toHaveClass('pickup-shadow-hovering');
-            }
+            expect(shadow).toBeNull();
         });
 
-        test('hut does NOT enlarge when player is not approaching', () => {
+        test('hut does NOT enlarge when player is not approaching or on tile', () => {
             const { container } = render(
                 <Tile
                     id={11}
@@ -247,13 +271,12 @@ describe('Dungeon Object Approach Behaviors: Floating, Enlarging, and Static', (
                 expect(portrait.style.transform).not.toContain('scale(2');
             }
 
+            // Static buildings do not need to show a shadow rendered
             const shadow = container.querySelector('.iso-contact-shadow');
-            if (shadow) {
-                expect(shadow).not.toHaveClass('pickup-shadow-hovering');
-            }
+            expect(shadow).toBeNull();
         });
 
-        test('tower does NOT enlarge or float when approached by player', () => {
+        test('tower does NOT enlarge, float, or render a shadow when approached by player', () => {
             const { container } = render(
                 <Tile
                     id={35}
@@ -277,9 +300,13 @@ describe('Dungeon Object Approach Behaviors: Floating, Enlarging, and Static', (
             if (portrait) {
                 expect(portrait.style.transform).not.toContain('scale(2');
             }
+
+            // Static buildings do not need to show a shadow rendered
+            const shadow = container.querySelector('.iso-contact-shadow');
+            expect(shadow).toBeNull();
         });
 
-        test('vendor does NOT enlarge or float when approached by player', () => {
+        test('vendor does NOT enlarge, float, or render a shadow when approached by player', () => {
             const { container } = render(
                 <Tile
                     id={40}
@@ -306,6 +333,10 @@ describe('Dungeon Object Approach Behaviors: Floating, Enlarging, and Static', (
             if (portrait) {
                 expect(portrait.style.transform).not.toContain('scale(2');
             }
+
+            // Static buildings do not need to show a shadow rendered
+            const shadow = container.querySelector('.iso-contact-shadow');
+            expect(shadow).toBeNull();
         });
     });
 });

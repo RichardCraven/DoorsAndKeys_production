@@ -1,6 +1,7 @@
 import React from 'react';
 import * as images from '../utils/images'
 import { getTreeLayersForDensity, getMountainLayersForDensity } from '../utils/autotile-utils';
+import { getOrganicTileClipPath } from '../utils/organic-void';
 import { getMeta, getUserId } from '../utils/session-handler';
 import { MonsterManager } from '../utils/monster-manager';
 
@@ -284,91 +285,7 @@ const checkIsDomainPerfectSquare = (anchorIdx, boardTiles, growthCycles, expecte
     return true;
 };
 
-function DomainMonolithTimerBadge({ lastGrowthTime, growthCycles, maxGrowthCycles, is2x2, strokeColor, badgeGlow, isMax }) {
-    const [now, setNow] = React.useState(Date.now());
 
-    React.useEffect(() => {
-        if (isMax) return;
-        const intervalId = setInterval(() => {
-            setNow(Date.now());
-        }, 1000);
-        return () => clearInterval(intervalId);
-    }, [isMax, lastGrowthTime]);
-
-    const elapsed = Math.max(0, now - (lastGrowthTime || now));
-    const interval = 30000;
-    const remainingMs = Math.max(0, interval - elapsed);
-    const remainingSec = Math.ceil(remainingMs / 1000);
-    if (remainingSec <= 0 && !isMax) return null;
-    const progress = isMax ? 1 : Math.min(1, Math.max(0, elapsed / interval));
-
-    const radius = 13;
-    const circumference = 2 * Math.PI * radius; // ~81.68
-    const strokeDashoffset = circumference * (1 - progress);
-
-    return (
-        <div
-            className="domain-monolith-timer-badge"
-            title={isMax ? `Domain Expansion: MAX (${growthCycles}/${maxGrowthCycles})` : `Next Domain Expansion in ${remainingSec}s (${growthCycles}/${maxGrowthCycles})`}
-            style={{
-                position: 'absolute',
-                top: '4px',
-                right: is2x2 ? '-92%' : '4px',
-                width: '34px',
-                height: '34px',
-                borderRadius: '50%',
-                background: 'radial-gradient(circle, rgba(15, 23, 42, 0.95) 0%, rgba(10, 15, 30, 0.9) 100%)',
-                border: `1.5px solid ${strokeColor}`,
-                boxShadow: `0 2px 10px rgba(0, 0, 0, 0.8), 0 0 12px ${badgeGlow}`,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                zIndex: 22,
-                pointerEvents: 'none',
-                userSelect: 'none'
-            }}
-        >
-            <svg width="34" height="34" viewBox="0 0 34 34" style={{ position: 'absolute', top: 0, left: 0 }}>
-                <circle
-                    cx="17"
-                    cy="17"
-                    r={radius}
-                    fill="none"
-                    stroke="rgba(255, 255, 255, 0.12)"
-                    strokeWidth="2.5"
-                />
-                <circle
-                    cx="17"
-                    cy="17"
-                    r={radius}
-                    fill="none"
-                    stroke={strokeColor}
-                    strokeWidth="2.5"
-                    strokeDasharray={circumference}
-                    strokeDashoffset={strokeDashoffset}
-                    strokeLinecap="round"
-                    transform="rotate(-90 17 17)"
-                    style={{
-                        transition: 'stroke-dashoffset 0.8s ease-in-out'
-                    }}
-                />
-            </svg>
-            <div style={{
-                position: 'relative',
-                zIndex: 2,
-                fontSize: isMax ? '9px' : '10.5px',
-                fontWeight: 800,
-                fontFamily: '"Cinzel", "Segoe UI", sans-serif',
-                color: isMax ? '#facc15' : '#f0f9ff',
-                textShadow: `0 0 6px ${badgeGlow}`,
-                letterSpacing: isMax ? '0.5px' : '0px',
-                lineHeight: 1
-            }}>
-                {isMax ? 'MAX' : `${remainingSec}s`}
-            </div>
-        </div>
-    );
-}
 
 function ActiveGeneratorBadge({ resource, rate, cycleIntervalSec, lastTickTime, activatedAt, is2x2, strokeColor, badgeGlow, isAutomated }) {
     const [now, setNow] = React.useState(Date.now());
@@ -1591,24 +1508,32 @@ function Tile(props) {
             String(currentContains.image || '').toLowerCase().includes('archway')
         ))
     );
+    let pIdx = props.playerIdx;
+    if (pIdx === null || pIdx === undefined) {
+        const bTiles = Array.isArray(props.boardTiles) ? props.boardTiles : (Array.isArray(boardTilesForContains) ? boardTilesForContains : null);
+        if (bTiles) {
+            const pTile = bTiles.find(t => t && (t.isPlayerTile || t.playerTile || t.isPlayerOnTile || (t.location && Array.isArray(t.location))));
+            if (pTile) {
+                pIdx = (pTile.id !== undefined) ? pTile.id : bTiles.indexOf(pTile);
+            }
+        }
+    }
+    const cId = props.id !== undefined && props.id !== null ? props.id : props.index;
+
+    const isPlayerDirectlyOnTile = !!(
+        props.isPlayerOnTile ||
+        props.isPlayerTile ||
+        (pIdx !== null && pIdx !== undefined && cId !== null && cId !== undefined && pIdx === cId) ||
+        (props.contains && (props.contains.type === 'avatar' || props.contains.type === 'camp')) ||
+        (containsObj && (containsObj.type === 'avatar' || containsObj.type === 'camp'))
+    );
+
     const isPlayerApproaching = !!(
         props.isPlayerAdjacent ||
-        props.isPlayerOnTile ||
+        isPlayerDirectlyOnTile ||
         props.isPeerOnTile ||
         (() => {
-            let pIdx = props.playerIdx;
-            if (pIdx === null || pIdx === undefined) {
-                const bTiles = Array.isArray(props.boardTiles) ? props.boardTiles : (Array.isArray(boardTilesForContains) ? boardTilesForContains : null);
-                if (bTiles) {
-                    const pTile = bTiles.find(t => t && (t.isPlayerTile || t.playerTile || t.isPlayerOnTile || (t.location && Array.isArray(t.location))));
-                    if (pTile) {
-                        pIdx = (pTile.id !== undefined) ? pTile.id : bTiles.indexOf(pTile);
-                    }
-                }
-            }
-            if (pIdx === null || pIdx === undefined) return false;
-            const cId = props.id !== undefined && props.id !== null ? props.id : props.index;
-            if (cId === null || cId === undefined) return false;
+            if (pIdx === null || pIdx === undefined || cId === null || cId === undefined) return false;
             const pRow = Math.floor(pIdx / 15);
             const pCol = pIdx % 15;
             const tRow = Math.floor(cId / 15);
@@ -1621,6 +1546,7 @@ function Tile(props) {
     // Dungeon Object Approach Classification:
     // 1. floating: items that can be picked up (gold, food, chest, treasure, items, keys, materials)
     // 2. enlarging: certain passages and buildings (hut, archway, archaic tunnel endpoint)
+    //    - Note: Hut only enlarges when the user moves directly on top of that tile (not when approached)
     // 3. static: everything else (gate, tower, vendors, doors, monoliths, etc.)
     const isHut = !isMonsterOrPygmyTile && (
         sKey.includes('hut') ||
@@ -1645,17 +1571,6 @@ function Tile(props) {
 
     const isArchaicEndpointApproached = isArchaicEndpoint && (() => {
         if (isOccupied || isPlayerApproaching) return true;
-        let pIdx = props.playerIdx;
-        if (pIdx === null || pIdx === undefined) {
-            const bTiles = Array.isArray(props.boardTiles) ? props.boardTiles : (Array.isArray(boardTilesForContains) ? boardTilesForContains : null);
-            if (bTiles) {
-                const pTile = bTiles.find(t => t && (t.isPlayerTile || t.playerTile || t.isPlayerOnTile || (t.location && Array.isArray(t.location))));
-                if (pTile) {
-                    pIdx = (pTile.id !== undefined) ? pTile.id : bTiles.indexOf(pTile);
-                }
-            }
-        }
-        const cId = props.id !== undefined && props.id !== null ? props.id : props.index;
         if (pIdx !== null && pIdx !== undefined && cId !== null && cId !== undefined) {
             const pRow = Math.floor(pIdx / 15);
             const pCol = pIdx % 15;
@@ -1670,10 +1585,11 @@ function Tile(props) {
         return false;
     })();
 
+    const isHutEnlarged = isHut && isPlayerDirectlyOnTile;
     const isEnlargingObject = !isMonsterOrPygmyTile && (isHut || isArchTile || isArchaicEndpoint);
     const isArchEnlarged = isArchTile && (isOccupied || isPlayerApproaching || !!props.isEnlarged || !!containsObj?.isEnlarged || !!currentContains?.isEnlarged);
     const isEnlargeableStructure = isEnlargingObject;
-    const isEnlargedStructureActive = ((isHut || isArchTile) && (isOccupied || isPlayerApproaching)) || isArchaicEndpointApproached || isArchEnlarged;
+    const isEnlargedStructureActive = isHutEnlarged || (isArchTile && (isOccupied || isPlayerApproaching)) || isArchaicEndpointApproached || isArchEnlarged;
     const isUnderConstruction = (props.contains && typeof props.contains.subtype === 'string' && props.contains.subtype.includes('_under_construction')) ||
                                 (currentContains && typeof currentContains.subtype === 'string' && currentContains.subtype.includes('_under_construction'));
 
@@ -1959,7 +1875,8 @@ function Tile(props) {
                 (props.type === 'palette-tile' && props.hovered ? '2px solid red' : 'none'))))))),
             borderRight: isRevealedBySpiritSight ? '1px solid rgba(0, 243, 255, 0.8)' : (isBoardGridTile ? 'none' : (vctBorder ? undefined : (vendorBorderless || ((isDarkColor || color === 'black' || isBlackRenderedTile(currentContains, currentTileColor)) ? 'none' : ((props.borders && props.borders.right) ? props.borders.right : 'none'))))),
             borderTop: isRevealedBySpiritSight ? '1px solid rgba(0, 243, 255, 0.8)' : (isBoardGridTile ? 'none' : (vctBorder ? undefined : (vendorBorderless || ((isDarkColor || color === 'black' || isBlackRenderedTile(currentContains, currentTileColor)) ? 'none' : ((props.borders && props.borders.top) ? props.borders.top : 'none'))))),
-            borderBottom: isRevealedBySpiritSight ? '1px solid rgba(0, 243, 255, 0.8)' : (isBoardGridTile ? 'none' : (vctBorder ? undefined : (vendorBorderless || ((isDarkColor || color === 'black' || isBlackRenderedTile(currentContains, currentTileColor)) ? 'none' : ((props.borders && props.borders.bottom) ? props.borders.bottom : 'none')))))
+            borderBottom: isRevealedBySpiritSight ? '1px solid rgba(0, 243, 255, 0.8)' : (isBoardGridTile ? 'none' : (vctBorder ? undefined : (vendorBorderless || ((isDarkColor || color === 'black' || isBlackRenderedTile(currentContains, currentTileColor)) ? 'none' : ((props.borders && props.borders.bottom) ? props.borders.bottom : 'none'))))),
+            clipPath: (props.showOrganicEdges && !isBlackTile && !props.inSuperboard && isBoardGridTile && !isPaletteTile && typeof cId === 'number') ? getOrganicTileClipPath(cId, props.boardTiles || boardTilesForContains, isVendorCell, vendorCellRole) : undefined
             }}
             onMouseEnter={() => {
                 beginDelayedHoverLabel();
@@ -2320,62 +2237,7 @@ function Tile(props) {
                 );
             })()}
 
-            {/* Pocket Dimension Domain Monolith Expansion Countdown Radial Badge */}
-            {(() => {
-                if (!props.inSuperboard) return null;
-                if (color === 'black') return null;
 
-                const cObj = props.contains && typeof props.contains === 'object' ? props.contains : null;
-                const containsSubtype = cObj?.subtype || cObj?.key || cObj?.building || (typeof props.contains === 'string' ? props.contains : null);
-                const sKey = String(containsSubtype || props.building || cObj?.type || props.image || '').toLowerCase();
-
-                const isDomainMonolith = sKey.includes('domain_monolith') || sKey.includes('dark_domain_monolith') || sKey.includes('domain_node') || sKey.includes('dark_domain_node') || (sKey.includes('monolith') && !sKey.includes('shrine') && !sKey.includes('fractured_monolith'));
-                if (!isDomainMonolith) return null;
-
-                const isVendorCell = !isPaletteTile && !isSingleTile && (
-                    (cObj && (cObj.isMultiTile || cObj.isLarge || isVendorType(cObj.type) || isVendorType(cObj.subtype) || isVendorType(cObj.building) || isVendorType(cObj.key) || isVendorType(cObj.name))) ||
-                    props.isLarge || props.isMultiTile || !!(cObj && cObj.vendorCell) || !!props.vendorCell
-                );
-                const vRole = getVendorCellRole();
-                // Only render once on the anchor tile of the monolith (or single tile if not multi)
-                if (isVendorCell && vRole && vRole !== 'anchor') return null;
-
-                const rawAff = cObj?.affiliation || props.affiliation || props.territoryAffiliation || cObj?.territoryAffiliation || props.territory || cObj?.territory;
-                const isNeutralOrNone = !rawAff || rawAff === 'neutral' || rawAff === 'none';
-
-                const isDestroyed = (cObj && (cObj.hp <= 0 || !!cObj.destroyedAt)) || (props.hp <= 0 || !!props.destroyedAt) || (props.contains && typeof props.contains === 'object' && (props.contains.hp <= 0 || !!props.contains.destroyedAt)) || isNeutralOrNone;
-                if (isDestroyed) return null;
-
-                const isHostileMonolith = (rawAff === 'hostile' || rawAff === 'enemy' || props.isHostile || cObj?.isHostile || cObj?.faction === 'hostile') || (sKey.includes('dark_domain_monolith') || sKey.includes('dark_domain_node'));
-                const isActivated = !isNeutralOrNone && !!(cObj?.activated || props.activated || (cObj?.growthCycles > 0) || (props.growthCycles > 0) || (isHostileMonolith && rawAff !== 'neutral'));
-                if (!isActivated) return null;
-
-                const affiliation = (isHostileMonolith && rawAff !== 'neutral') ? 'hostile' : (rawAff && rawAff !== 'none' ? rawAff : 'friendly');
-                const level = cObj?.level || props.level || 1;
-                const maxGrowthCycles = cObj?.maxGrowthCycles || props.maxGrowthCycles || (level >= 2 ? 10 : 5);
-                const growthCycles = cObj?.growthCycles ?? props.growthCycles ?? 1;
-                const lastGrowthTime = cObj?.lastGrowthTime || props.lastGrowthTime || Date.now();
-
-                const isMax = growthCycles >= maxGrowthCycles;
-                const is2x2 = !sKey.includes('node') && (isVendorCell || sKey.includes('domain_monolith') || sKey.includes('dark_domain_monolith') || (sKey.includes('monolith') && !sKey.includes('shrine')) || sKey.includes('cultivation_vat') || sKey.includes('dust_collector') || sKey.includes('larder') || sKey.includes('sawmill') || sKey.includes('lumber_mill') || sKey.includes('ore_mine') || sKey.includes('slate_mine') || sKey.includes('fungal_nursery') || sKey.includes('generator') || sKey.includes('mine'));
-
-                const isPlayer = !isHostileMonolith && (String(affiliation).toLowerCase().includes('player') || String(affiliation).toLowerCase().includes('friendly') || String(affiliation).toLowerCase().includes('crew'));
-                const badgeGlow = isPlayer ? 'rgba(56, 189, 248, 0.6)' : 'rgba(239, 68, 68, 0.6)';
-                const strokeColor = isMax ? '#facc15' : (isPlayer ? '#38bdf8' : '#f87171');
-
-                return (
-                    <DomainMonolithTimerBadge
-                        key={`monolith_badge_${growthCycles}_${lastGrowthTime}`}
-                        lastGrowthTime={lastGrowthTime}
-                        growthCycles={growthCycles}
-                        maxGrowthCycles={maxGrowthCycles}
-                        is2x2={is2x2}
-                        strokeColor={strokeColor}
-                        badgeGlow={badgeGlow}
-                        isMax={isMax}
-                    />
-                );
-            })()}
 
             {/* Active Generator Ownership & Production Cycle Badge (Pocket Dimension only) */}
             {(() => {
@@ -3171,10 +3033,10 @@ function Tile(props) {
 
                 return (
                     <>
-                        {!isArchTile && (
+                        {isPickupObject && (
                             <div
-                                className={`iso-contact-shadow ${isPickupObject ? (isPlayerApproaching ? 'pickup-shadow-hovering' : 'pickup-shadow-grounded') : ''}`}
-                                data-testid={isPickupObject ? (isPlayerApproaching ? 'iso-pickup-contact-shadow-hovering' : 'iso-pickup-contact-shadow-grounded') : 'iso-contact-shadow'}
+                                className={`iso-contact-shadow ${isPlayerApproaching ? 'pickup-shadow-hovering' : 'pickup-shadow-grounded'}`}
+                                data-testid={isPlayerApproaching ? 'iso-pickup-contact-shadow-hovering' : 'iso-pickup-contact-shadow-grounded'}
                             />
                         )}
                         <div
@@ -3199,7 +3061,7 @@ function Tile(props) {
                                  bottom: (isRiftEmbers && !isPaletteTile) ? '-100%' : 0,
                                  backgroundImage: toCssUrl(resolvedPortraitUrl),
                                  backgroundSize: isRiftEmbers ? (isPaletteTile ? 'contain' : '100% 100%') : ((isVendorCell || is2x2StructureSelf) ? (is3x3Structure ? '300% 300%' : '200% 200%') : ((isItemCell || isPaletteTile) ? 'contain' : '100% 100%')),
-                                 backgroundPosition: isArchTile ? 'center bottom' : (isRiftEmbers ? 'center' : ((isVendorCell || is2x2StructureSelf) ? vendorBackgroundPosition : ((isItemCell || isPaletteTile) ? 'center' : 'inherit'))),
+                                 backgroundPosition: (isArchTile || isStructureTile || isHut) ? 'center bottom' : (isRiftEmbers ? 'center' : ((isVendorCell || is2x2StructureSelf) ? vendorBackgroundPosition : ((isItemCell || isPaletteTile) ? 'center' : 'center bottom'))),
                                  backgroundRepeat: 'no-repeat',
                                  zIndex: (isArchEnlarged || isEnlargedStructureActive) ? 300 : (isDimensionDebrisOrLitter ? 120 : ((isVendorCell || is2x2StructureSelf) ? 40 : (isLocusActiveOrAdjacent ? 35 : (isObsPlatform || isStructureTile || isUnderConstruction || isEncompassedByFriendlyDomain ? 30 : portraitZIndex)))),
                                  opacity: ((color === 'black' || isDarkColor) || props.isFadingOut) ? 0 : 1,
@@ -3217,7 +3079,7 @@ function Tile(props) {
                                          case 'bottom_center': return '50% 0%';
                                          default: return 'center center';
                                      }
-                                 })() : ((isArchTile || isEnlargedStructureActive || isUnderConstruction || isObsPlatform || isLocusActiveOrAdjacent) ? 'bottom center' : 'center center'))),
+                                 })() : ((isArchTile || isEnlargedStructureActive || isUnderConstruction || isObsPlatform || isLocusActiveOrAdjacent || isStructureTile || isHut) ? 'bottom center' : 'bottom center'))),
                                  transition: 'opacity 0.35s ease-in-out, transform 0.3s ease-in-out',
                                  pointerEvents: 'none'
                             }} />

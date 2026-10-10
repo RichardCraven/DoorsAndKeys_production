@@ -54,26 +54,6 @@ const VoidOrganicLayerComponent = ({
                 fill="#000000"
                 fillRule="evenodd"
             />
-
-            {/* Dark warm stone rim stroke */}
-            <path
-                d={pathD}
-                fill="none"
-                stroke="rgba(42, 32, 20, 0.85)"
-                strokeWidth="0.09"
-                strokeLinejoin="round"
-                strokeLinecap="round"
-            />
-
-            {/* Subtle inner gold/stone edge highlight */}
-            <path
-                d={pathD}
-                fill="none"
-                stroke="rgba(212, 168, 68, 0.22)"
-                strokeWidth="0.03"
-                strokeLinejoin="round"
-                strokeLinecap="round"
-            />
         </svg>
     );
 };

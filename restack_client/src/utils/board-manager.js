@@ -158,6 +158,10 @@ export function BoardManager(){
     this.establishGetBreadcrumbsCallback = (callback) => {
         this.getBreadcrumbs = callback;
     }
+    this.wanderingEyeRevealedTiles = new Map();
+    this.establishGetWanderingEyeRevealsCallback = (callback) => {
+        this.getWanderingEyeReveals = callback;
+    }
     this.establishSaveCrewCallback = (callback) => {
         this.saveCrew = callback;
     }
@@ -4810,6 +4814,10 @@ export function BoardManager(){
         const isDebugMode = !!(this.debugMode || (typeof window !== 'undefined' && window.debugMode === true));
         const breadcrumbsMap = (hasBreadcrumbsPassive && typeof this.getBreadcrumbs === 'function') ? this.getBreadcrumbs() : null;
         const breadcrumbNow = Date.now();
+        const eyeRevealsMap = (typeof this.getWanderingEyeReveals === 'function')
+            ? this.getWanderingEyeReveals()
+            : this.wanderingEyeRevealedTiles;
+        const eyeNow = Date.now();
 
         this.tiles.forEach((e) => {
             try {
@@ -4840,6 +4848,20 @@ export function BoardManager(){
                     const entry = breadcrumbsMap.get(key);
                     if (entry && (breadcrumbNow - entry.ts <= 20000)) {
                         inBreadcrumbPassiveReveal = true;
+                    }
+                }
+
+                let inWanderingEyeReveal = false;
+                if (eyeRevealsMap) {
+                    const bIdx = (this.playerTile?.boardIndex != null) ? this.playerTile.boardIndex : ((this.currentBoard?.id != null) ? this.currentBoard.id : 0);
+                    const lvlId = this.currentLevel?.id ?? 0;
+                    const orient = this.currentOrientation ?? 'front';
+                    const key = `${lvlId}:${orient}:${bIdx}:${e.id}`;
+                    const exp = (eyeRevealsMap instanceof Map
+                        ? (eyeRevealsMap.get(key) ?? eyeRevealsMap.get(e.id))
+                        : (eyeRevealsMap[key] ?? eyeRevealsMap[e.id]));
+                    if (exp && eyeNow < exp) {
+                        inWanderingEyeReveal = true;
                     }
                 }
                 
@@ -4879,7 +4901,7 @@ export function BoardManager(){
                 });
 
                 const isVoid = this.isVoidTile(e);
-                const isRevealed = inMonolithTerritory || inLanternTerritory || inObsPlatformVision || revealByDebugPygmies || inScoutedArea || inRatRevealArea || (manhattan <= fogRadius && visibleTileIds.has(e.id)) || inBreadcrumbPassiveReveal;
+                const isRevealed = inMonolithTerritory || inLanternTerritory || inObsPlatformVision || revealByDebugPygmies || inScoutedArea || inRatRevealArea || (manhattan <= fogRadius && visibleTileIds.has(e.id)) || inBreadcrumbPassiveReveal || inWanderingEyeReveal;
 
                 if (isRevealed && !isVoid) {
 
@@ -4909,7 +4931,7 @@ export function BoardManager(){
                     e.image = this.getImageForContains(e.contains, e);
                     e.borders = this.normalizeFogBorders(persistedBorders);
 
-                    if ((inObsPlatformVision && !this.inSuperboard) || (observerPlatforms.length > 0 && !this.inSuperboard) || inMonolithTerritory) {
+                    if ((inObsPlatformVision && !this.inSuperboard) || (observerPlatforms.length > 0 && !this.inSuperboard) || inMonolithTerritory || inWanderingEyeReveal) {
                         e.partialObscured = false;
                     } else if (inBreadcrumbPassiveReveal && !(revealByDebugPygmies || inScoutedArea || inRatRevealArea || (manhattan <= fogRadius && visibleTileIds.has(e.id)))) {
                         e.partialObscured = true;
@@ -5027,6 +5049,24 @@ export function BoardManager(){
                 }
 
                 if (tile.id === destinationTile.id) {
+                    tile.partialObscured = false;
+                    return;
+                }
+
+                let isEyeRevealed = false;
+                if (eyeRevealsMap) {
+                    const bIdx = (this.playerTile?.boardIndex != null) ? this.playerTile.boardIndex : ((this.currentBoard?.id != null) ? this.currentBoard.id : 0);
+                    const lvlId = this.currentLevel?.id ?? 0;
+                    const orient = this.currentOrientation ?? 'front';
+                    const key = `${lvlId}:${orient}:${bIdx}:${tile.id}`;
+                    const exp = (eyeRevealsMap instanceof Map
+                        ? (eyeRevealsMap.get(key) ?? eyeRevealsMap.get(tile.id))
+                        : (eyeRevealsMap[key] ?? eyeRevealsMap[tile.id]));
+                    if (exp && eyeNow < exp) {
+                        isEyeRevealed = true;
+                    }
+                }
+                if (isEyeRevealed) {
                     tile.partialObscured = false;
                     return;
                 }
