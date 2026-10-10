@@ -3073,6 +3073,8 @@ class DungeonPage extends React.Component {
             showInventoryPopup: false,
             isInventoryExpanded: false,
             activeInventoryItem: null,
+            flyingGoldCoins: [],
+            goldTrackerImpact: false,
             keysLocked: false,
             isSneaking: false,
             portalTransitionClass: '',
@@ -12570,6 +12572,9 @@ class DungeonPage extends React.Component {
             const getTileClan = (tId) => {
                 const tile = bm.tiles[tId] || (bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[tId]);
                 if (!tile) return null;
+                if (typeof bm.isVoidTile === 'function' && bm.isVoidTile(tile)) return null;
+                if (tile.color === 'black' || tile.color === '#000000' || tile.color === '#000') return null;
+
                 let raw = tile.territory || (typeof tile.contains === 'object' ? tile.contains?.territory : null);
                 if (!raw && bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[tId]) {
                     raw = bm.currentBoard.tiles[tId].territory || (typeof bm.currentBoard.tiles[tId].contains === 'object' ? bm.currentBoard.tiles[tId].contains?.territory : null);
@@ -12577,21 +12582,24 @@ class DungeonPage extends React.Component {
                 // If the tile itself does not have a territory tag, check adjacent tiles for territory clan
                 if (!raw) {
                     const row = Math.floor(tId / 15), col = tId % 15;
-                    const neighbors = [];
-                    if (row > 0 && !bm.isPassageWallBlockingBetween(tId, (row - 1) * 15 + col, { ignoreBuilding: true })) neighbors.push((row - 1) * 15 + col);
-                    if (row < 14 && !bm.isPassageWallBlockingBetween(tId, (row + 1) * 15 + col, { ignoreBuilding: true })) neighbors.push((row + 1) * 15 + col);
-                    if (col > 0 && !bm.isPassageWallBlockingBetween(tId, row * 15 + (col - 1), { ignoreBuilding: true })) neighbors.push(row * 15 + (col - 1));
-                    if (col < 14 && !bm.isPassageWallBlockingBetween(tId, row * 15 + (col + 1), { ignoreBuilding: true })) neighbors.push(row * 15 + (col + 1));
-                    for (const nId of neighbors) {
-                        const nTile = bm.tiles[nId] || (bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[nId]);
-                        if (nTile) {
-                            const nRaw = nTile.territory || (typeof nTile.contains === 'object' ? nTile.contains?.territory : null);
-                            if (nRaw) { raw = nRaw; break; }
+                    for (let dr = -1; dr <= 1; dr++) {
+                        for (let dc = -1; dc <= 1; dc++) {
+                            if (dr === 0 && dc === 0) continue;
+                            const nr = row + dr, nc = col + dc;
+                            if (nr >= 0 && nr < 15 && nc >= 0 && nc < 15) {
+                                const nId = nr * 15 + nc;
+                                const nTile = bm.tiles[nId] || (bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[nId]);
+                                if (nTile && !(typeof bm.isVoidTile === 'function' && bm.isVoidTile(nTile)) && nTile.color !== 'black') {
+                                    const nRaw = nTile.territory || (typeof nTile.contains === 'object' ? nTile.contains?.territory : null);
+                                    if (nRaw) { raw = nRaw; break; }
+                                }
+                            }
                         }
+                        if (raw) break;
                     }
                 }
                 if (!raw) return null;
-                const str = typeof raw === 'object' ? raw.clan || raw.type : String(raw);
+                const str = typeof raw === 'object' ? raw.clan || raw.type || raw.affiliation : String(raw);
                 if (!str) return null;
                 const lower = str.toLowerCase();
                 if (lower.includes('mox')) return 'mox';
@@ -12602,6 +12610,7 @@ class DungeonPage extends React.Component {
                 if (lower.includes('mud')) return 'mud';
                 if (lower.includes('shadow')) return 'shadow';
                 if (lower.includes('paradox')) return 'paradox';
+                if (lower.includes('friendly') || lower.includes('player') || lower.includes('crew')) return 'player';
                 return lower.replace(/_clan$/i, '');
             };
 
@@ -12619,15 +12628,23 @@ class DungeonPage extends React.Component {
                     const row = Math.floor(curr / 15);
                     const col = curr % 15;
                     const neighbors = [];
-                    if (row > 0 && !bm.isPassageWallBlockingBetween(curr, (row - 1) * 15 + col, { ignoreBuilding: true })) neighbors.push((row - 1) * 15 + col);
-                    if (row < 14 && !bm.isPassageWallBlockingBetween(curr, (row + 1) * 15 + col, { ignoreBuilding: true })) neighbors.push((row + 1) * 15 + col);
-                    if (col > 0 && !bm.isPassageWallBlockingBetween(curr, row * 15 + (col - 1), { ignoreBuilding: true })) neighbors.push(row * 15 + (col - 1));
-                    if (col < 14 && !bm.isPassageWallBlockingBetween(curr, row * 15 + (col + 1), { ignoreBuilding: true })) neighbors.push(row * 15 + (col + 1));
+                    for (let dr = -1; dr <= 1; dr++) {
+                        for (let dc = -1; dc <= 1; dc++) {
+                            if (dr === 0 && dc === 0) continue;
+                            const nr = row + dr;
+                            const nc = col + dc;
+                            if (nr >= 0 && nr < 15 && nc >= 0 && nc < 15) {
+                                neighbors.push(nr * 15 + nc);
+                            }
+                        }
+                    }
 
                     for (const n of neighbors) {
-                        if (!visited.has(n) && getTileClan(n) === targetClan) {
+                        if (!visited.has(n)) {
                             visited.add(n);
-                            queue.push(n);
+                            if (getTileClan(n) === targetClan) {
+                                queue.push(n);
+                            }
                         }
                     }
                 }
@@ -18923,20 +18940,23 @@ class DungeonPage extends React.Component {
                 if (!rawClan && bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[outpost.id]) {
                     rawClan = bm.currentBoard.tiles[outpost.id].territory || bm.currentBoard.tiles[outpost.id].contains?.territory;
                 }
-                // If not directly on outpost tile, check 4 orthogonal neighbor tiles for territory clan
+                // If not directly on outpost tile, check neighbor tiles for territory clan
                 if (!rawClan) {
                     const rowO = Math.floor(outpost.id / 15), colO = outpost.id % 15;
-                    const neighbors = [];
-                    if (rowO > 0 && !bm.isPassageWallBlockingBetween(outpost.id, (rowO - 1) * 15 + colO, { ignoreBuilding: true })) neighbors.push((rowO - 1) * 15 + colO);
-                    if (rowO < 14 && !bm.isPassageWallBlockingBetween(outpost.id, (rowO + 1) * 15 + colO, { ignoreBuilding: true })) neighbors.push((rowO + 1) * 15 + colO);
-                    if (colO > 0 && !bm.isPassageWallBlockingBetween(outpost.id, rowO * 15 + (colO - 1), { ignoreBuilding: true })) neighbors.push(rowO * 15 + (colO - 1));
-                    if (colO < 14 && !bm.isPassageWallBlockingBetween(outpost.id, rowO * 15 + (colO + 1), { ignoreBuilding: true })) neighbors.push(rowO * 15 + (colO + 1));
-                    for (const nId of neighbors) {
-                        const nTile = bm.tiles[nId] || (bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[nId]);
-                        if (nTile) {
-                            const nRaw = nTile.territory || (typeof nTile.contains === 'object' ? nTile.contains?.territory : null);
-                            if (nRaw) { rawClan = nRaw; break; }
+                    for (let dr = -1; dr <= 1; dr++) {
+                        for (let dc = -1; dc <= 1; dc++) {
+                            if (dr === 0 && dc === 0) continue;
+                            const nr = rowO + dr, nc = colO + dc;
+                            if (nr >= 0 && nr < 15 && nc >= 0 && nc < 15) {
+                                const nId = nr * 15 + nc;
+                                const nTile = bm.tiles[nId] || (bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[nId]);
+                                if (nTile) {
+                                    const nRaw = nTile.territory || (typeof nTile.contains === 'object' ? nTile.contains?.territory : null);
+                                    if (nRaw) { rawClan = nRaw; break; }
+                                }
+                            }
                         }
+                        if (rawClan) break;
                     }
                 }
                 const rawClanStr = typeof rawClan === 'object' ? rawClan.clan || rawClan.type : (rawClan ? String(rawClan) : null);
@@ -21325,7 +21345,7 @@ class DungeonPage extends React.Component {
                                 {food}/{foodLimit}
                             </span>
                         </div>
-                        <div className="topbar-resource-item" title="Gold">
+                        <div className={`topbar-resource-item ${this.state.goldTrackerImpact ? 'gold-tracker-impact' : ''}`} data-resource-tracker="gold" title="Gold">
                             <span className="res-icon">🪙</span>
                             <span className="res-val" style={{ color: '#ffd700' }}>
                                 {incomeRates.gold > 0 && <span className="res-income">+{incomeRates.gold}</span>}
@@ -21554,7 +21574,7 @@ class DungeonPage extends React.Component {
                                         </div>
                                         {!resourcesCollapsed && (
                                             <div className="ql-submenu-content">
-                                                <div className="ql-row">
+                                                <div className={`ql-row ${this.state.goldTrackerImpact ? 'gold-tracker-impact' : ''}`} data-resource-tracker="gold" id="resource-tracker-gold">
                                                     <span className="ql-label"><span className="gold-emoji" role="img" aria-label="gold coin">🪙</span> Gold</span>
                                                     <span className="ql-value" style={{ color: '#ffd700' }}>
                                                         {incomeRates.gold > 0 && <span style={{ color: '#2ecc71', marginRight: '6px', fontWeight: 'bold' }}>+{incomeRates.gold}</span>}
@@ -24912,7 +24932,9 @@ class DungeonPage extends React.Component {
             return;
         }
 
-        this.props.inventoryManager.addCurrency(data)
+        if (this.props.inventoryManager && typeof this.props.inventoryManager.addCurrency === 'function') {
+            this.props.inventoryManager.addCurrency(data);
+        }
 
         if (type === 'food') {
             const meta = getMeta() || {};
@@ -24948,10 +24970,17 @@ class DungeonPage extends React.Component {
             this.activatePocketChemicalLantern();
         }
 
-        this.forceUpdate();
+        try {
+            if (this.updater && typeof this.updater.isMounted === 'function') {
+                if (this.updater.isMounted(this)) this.forceUpdate();
+            } else {
+                this.forceUpdate();
+            }
+        } catch (e) { }
 
 
-        if (this.props.boardManager && (this.props.boardManager.chestPickupInProgress || this.props.boardManager.treasurePickupInProgress)) {
+        const isChestOrTreasure = !!(this.props.boardManager && (this.props.boardManager.chestPickupInProgress || this.props.boardManager.treasurePickupInProgress));
+        if (isChestOrTreasure) {
             let iconKey = 'gold';
             if (data.type === 'shimmering_dust' || data.type === 'shimmering dust') {
                 iconKey = 'magic_moon_1';
@@ -24961,11 +24990,139 @@ class DungeonPage extends React.Component {
             this.triggerLootRadialArc({
                 type: 'currency',
                 id: data.type + '_' + Math.random(),
-                icon: iconKey === 'gold' ? images.getRandomGoldIcon() : (images[iconKey] || images['gold'] || null),
+                icon: iconKey === 'gold' ? (typeof images.getRandomGoldIcon === 'function' ? images.getRandomGoldIcon() : (images?.gold || null)) : (images[iconKey] || images['gold'] || null),
                 name: `${data.amount} ${type}`
             }, tile);
+        } else if (data.type === 'gold' && data.amount > 0 && tile) {
+            const goldIcon = (images && typeof images.getRandomGoldIcon === 'function')
+                ? images.getRandomGoldIcon()
+                : (images?.gold || null);
+            this.triggerLootRadialArc({
+                type: 'currency',
+                id: 'gold_' + Math.random(),
+                icon: goldIcon,
+                emoji: '🪙',
+                name: `+${data.amount} Gold`
+            }, tile);
+        }
+
+        // When gold is collected, after the pickup icon is rendered, trigger the flying gold coins animation to the resources panel
+        if (data.type === 'gold' && data.amount > 0) {
+            this._setTimeout(() => {
+                this.triggerFlyingGoldAnimation(tile, data.amount);
+            }, 450);
         }
     }
+
+    triggerFlyingGoldAnimation = (tile = null, amount = 0) => {
+        try {
+            // 1. Starting position (coordinates in viewport)
+            let startX = window.innerWidth / 2;
+            let startY = window.innerHeight / 2;
+
+            // Use the rendered loot icon if present
+            const lootItemEl = document.querySelector('.chest-loot-item') || document.querySelector('.chest-loot-overlay');
+            if (lootItemEl) {
+                const rect = lootItemEl.getBoundingClientRect();
+                startX = rect.left + rect.width / 2;
+                startY = rect.top + rect.height / 2;
+            } else if (tile && tile.id !== undefined && tile.id !== null) {
+                const tileEl = document.querySelector(`.tile[data-tile-id="${tile.id}"]`);
+                if (tileEl) {
+                    const rect = tileEl.getBoundingClientRect();
+                    startX = rect.left + rect.width / 2;
+                    startY = rect.top + rect.height / 2;
+                } else if (this.playerFloatRef?.current) {
+                    const rect = this.playerFloatRef.current.getBoundingClientRect();
+                    startX = rect.left + rect.width / 2;
+                    startY = rect.top + rect.height / 2;
+                }
+            } else if (this.playerFloatRef?.current) {
+                const rect = this.playerFloatRef.current.getBoundingClientRect();
+                startX = rect.left + rect.width / 2;
+                startY = rect.top + rect.height / 2;
+            }
+
+            // 2. Target position (Gold tracker in resources panel or topbar)
+            const targetCandidates = [
+                document.querySelector('.topbar-resource-item[data-resource-tracker="gold"]'),
+                document.querySelector('.ql-row[data-resource-tracker="gold"]'),
+                document.querySelector('#resource-tracker-gold'),
+                document.querySelector('[data-resource-tracker="gold"]'),
+                document.querySelector('.gold-emoji'),
+                document.querySelector('.section-status_summary'),
+                document.querySelector('.inventory-gold')
+            ].filter(Boolean);
+
+            let targetEl = targetCandidates.find(el => {
+                const r = el.getBoundingClientRect();
+                return (r.width > 0 && r.height > 0) || (el.offsetWidth > 0 && el.offsetHeight > 0);
+            }) || targetCandidates[0];
+
+            let targetX = window.innerWidth - 75;
+            let targetY = 90;
+            if (targetEl) {
+                const tRect = targetEl.getBoundingClientRect();
+                targetX = tRect.left + tRect.width / 2;
+                targetY = tRect.top + tRect.height / 2;
+            }
+
+            // 3. Spawn particles
+            const count = Math.min(8, Math.max(4, Math.floor(Math.log2((amount || 10) + 1)) + 2));
+            const particles = [];
+            const baseId = Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+
+            const goldIcon = (images && typeof images.getRandomGoldIcon === 'function')
+                ? images.getRandomGoldIcon()
+                : (images?.gold || null);
+            let resolvedIconUrl = typeof goldIcon === 'string' ? goldIcon : (goldIcon?.default || '');
+            if (resolvedIconUrl && typeof resolvedIconUrl === 'object') {
+                resolvedIconUrl = resolvedIconUrl.default || '';
+            }
+
+            for (let i = 0; i < count; i++) {
+                const angle = (Math.PI * 2 * i) / count;
+                const spread = 20 + Math.random() * 25;
+                const curveOffsetX = Math.cos(angle) * spread;
+                const curveOffsetY = Math.sin(angle) * spread - (25 + Math.random() * 20);
+
+                particles.push({
+                    id: `${baseId}_${i}`,
+                    startX: Math.round(startX),
+                    startY: Math.round(startY),
+                    targetX: Math.round(targetX),
+                    targetY: Math.round(targetY),
+                    curveOffsetX: Math.round(curveOffsetX),
+                    curveOffsetY: Math.round(curveOffsetY),
+                    delay: i * 65,
+                    duration: 650 + Math.round(Math.random() * 120),
+                    iconUrl: resolvedIconUrl
+                });
+            }
+
+            this.setState(prev => ({
+                flyingGoldCoins: [...(prev.flyingGoldCoins || []), ...particles]
+            }));
+
+            // Impact effect at the resource tracker when the coins arrive
+            const totalFlightTime = (count - 1) * 65 + 720;
+            this._setTimeout(() => {
+                this.setState({ goldTrackerImpact: true });
+                this._setTimeout(() => {
+                    this.setState({ goldTrackerImpact: false });
+                }, 450);
+            }, totalFlightTime - 120);
+
+            // Clean up particles
+            this._setTimeout(() => {
+                this.setState(prev => ({
+                    flyingGoldCoins: (prev.flyingGoldCoins || []).filter(p => !p.id.startsWith(baseId))
+                }));
+            }, totalFlightTime + 300);
+        } catch (e) {
+            console.error('Error triggering flying gold animation:', e);
+        }
+    };
     getResourceIncomeRates = () => {
         const rates = {
             food: 0,
@@ -36243,20 +36400,23 @@ class DungeonPage extends React.Component {
         }
         if (!rawClan && bm?.tiles) {
             const row = Math.floor(targetTile.id / 15), col = targetTile.id % 15;
-            const neighbors = [];
-            if (row > 0) neighbors.push((row - 1) * 15 + col);
-            if (row < 14) neighbors.push((row + 1) * 15 + col);
-            if (col > 0) neighbors.push(row * 15 + (col - 1));
-            if (col < 14) neighbors.push(row * 15 + (col + 1));
-            for (const nId of neighbors) {
-                const nTile = bm.tiles[nId] || (bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[nId]);
-                if (nTile && (nTile.territory || nTile.contains?.territory)) {
-                    rawClan = nTile.territory || nTile.contains?.territory;
-                    break;
+            for (let dr = -1; dr <= 1; dr++) {
+                for (let dc = -1; dc <= 1; dc++) {
+                    if (dr === 0 && dc === 0) continue;
+                    const nr = row + dr, nc = col + dc;
+                    if (nr >= 0 && nr < 15 && nc >= 0 && nc < 15) {
+                        const nId = nr * 15 + nc;
+                        const nTile = bm.tiles[nId] || (bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[nId]);
+                        if (nTile && (nTile.territory || nTile.contains?.territory)) {
+                            rawClan = nTile.territory || nTile.contains?.territory;
+                            break;
+                        }
+                    }
                 }
+                if (rawClan) break;
             }
         }
-        const rawClanStr = typeof rawClan === 'object' ? rawClan.clan || rawClan.type : (rawClan ? String(rawClan) : null);
+        const rawClanStr = typeof rawClan === 'object' ? rawClan.clan || rawClan.type || rawClan.affiliation : (rawClan ? String(rawClan) : null);
         const clan = rawClanStr ? (
             rawClanStr.toLowerCase().includes('mox') ? 'mox' :
                 rawClanStr.toLowerCase().includes('benthic') ? 'benthic' :
@@ -36267,15 +36427,50 @@ class DungeonPage extends React.Component {
                                     rawClanStr.toLowerCase().includes('shadow') ? 'shadow' :
                                         rawClanStr.toLowerCase().includes('paradox') ? 'paradox' :
                                             rawClanStr.toLowerCase().replace(/_clan$/i, '')
-        ) : 'cave';
+        ) : 'benthic';
 
         const contiguousTileIds = this.getContiguousTerritoryTileIds(targetTile.id, clan);
         contiguousTileIds.add(targetTile.id);
+
+        // Include any tiles assigned to this domain node by ID or within immediate domain radius
+        const targetMonolithId = targetTile.territoryMonolithId || targetTile.contains?.territoryMonolithId || targetTile.id || targetTile.contains?.id || `monolith_${targetTile.id}`;
+        const targetRow = Math.floor(targetTile.id / 15);
+        const targetCol = targetTile.id % 15;
+        const domainRadius = Math.max(2, targetTile.growthCycles || targetTile.contains?.growthCycles || 2);
+
+        const allBoardTiles = (bm?.currentBoard && bm.currentBoard.tiles) ? bm.currentBoard.tiles : (bm?.tiles || []);
+        allBoardTiles.forEach((t, idx) => {
+            if (!t) return;
+            const tId = t.id !== undefined ? t.id : idx;
+            const tMonoId = t.territoryMonolithId || (typeof t.contains === 'object' ? t.contains?.territoryMonolithId : null);
+            if (tMonoId && (tMonoId === targetMonolithId || String(tMonoId) === String(targetTile.id) || String(tMonoId) === `monolith_${targetTile.id}`)) {
+                contiguousTileIds.add(tId);
+            }
+            const tr = Math.floor(tId / 15);
+            const tc = tId % 15;
+            const dist = Math.max(Math.abs(tr - targetRow), Math.abs(tc - targetCol));
+            if (dist <= domainRadius && !(typeof bm.isVoidTile === 'function' && bm.isVoidTile(t)) && t.color !== 'black') {
+                const tClan = (typeof t.territory === 'object' ? t.territory?.clan || t.territory?.affiliation : t.territory) ||
+                              (typeof t.contains?.territory === 'object' ? t.contains?.territory?.clan || t.contains?.territory?.affiliation : t.contains?.territory);
+                const tClanStr = String(tClan || '').toLowerCase();
+                if (!tClan || tClanStr.includes(clan) || tClanStr.includes('hostile') || tClanStr.includes('enemy')) {
+                    contiguousTileIds.add(tId);
+                }
+            }
+        });
+
+        // Also flood-fill outward from each discovered seed in contiguousTileIds
+        const seeds = Array.from(contiguousTileIds);
+        seeds.forEach(sId => {
+            const connected = this.getContiguousTerritoryTileIds(sId, clan);
+            connected.forEach(cId => contiguousTileIds.add(cId));
+        });
 
         // Update target domain node
         targetTile.affiliation = targetAffiliation;
         targetTile.territory = targetAffiliation;
         targetTile.territoryAffiliation = targetAffiliation;
+        targetTile.territoryMonolithId = targetTile.id;
         targetTile.ownedByPlayer = true;
         targetTile.placedBy = 'player';
         targetTile.activated = true;
@@ -36283,6 +36478,7 @@ class DungeonPage extends React.Component {
             targetTile.contains.affiliation = targetAffiliation;
             targetTile.contains.territory = targetAffiliation;
             targetTile.contains.territoryAffiliation = targetAffiliation;
+            targetTile.contains.territoryMonolithId = targetTile.id;
             targetTile.contains.ownedByPlayer = true;
             targetTile.contains.placedBy = 'player';
             targetTile.contains.activated = true;
@@ -36302,27 +36498,34 @@ class DungeonPage extends React.Component {
                 t.territory = targetAffiliation;
                 t.affiliation = targetAffiliation;
                 t.territoryAffiliation = targetAffiliation;
+                t.territoryMonolithId = targetTile.id;
                 if (bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[tId]) {
                     bm.currentBoard.tiles[tId].territory = targetAffiliation;
                     bm.currentBoard.tiles[tId].affiliation = targetAffiliation;
                     bm.currentBoard.tiles[tId].territoryAffiliation = targetAffiliation;
+                    bm.currentBoard.tiles[tId].territoryMonolithId = targetTile.id;
                 }
                 if (t.contains && typeof t.contains === 'object') {
                     t.contains.territory = targetAffiliation;
                     t.contains.affiliation = targetAffiliation;
                     t.contains.territoryAffiliation = targetAffiliation;
+                    t.contains.territoryMonolithId = targetTile.id;
                     if (bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[tId]?.contains && typeof bm.currentBoard.tiles[tId].contains === 'object') {
                         bm.currentBoard.tiles[tId].contains.territory = targetAffiliation;
                         bm.currentBoard.tiles[tId].contains.affiliation = targetAffiliation;
                         bm.currentBoard.tiles[tId].contains.territoryAffiliation = targetAffiliation;
+                        bm.currentBoard.tiles[tId].contains.territoryMonolithId = targetTile.id;
                     }
                 }
 
-                // Check if this tile has an outpost: align it with the player!
+                // Check if this tile has an outpost or other military structure: align it with the player!
                 const bldg = t.building || (typeof t.contains === 'object' ? t.contains?.building || t.contains?.subtype : null) || '';
                 const img = String(t.image || '').toLowerCase();
-                const isOutpost = String(bldg).includes('outpost') || img.includes('outpost');
-                if (isOutpost) {
+                const isMilitaryStructure = String(bldg).includes('outpost') || img.includes('outpost') ||
+                    String(bldg).includes('earthen_fort') || img.includes('earthen_fort') ||
+                    String(bldg).includes('war_camp') || img.includes('war_camp') ||
+                    String(bldg).includes('war_fort') || img.includes('war_fort');
+                if (isMilitaryStructure) {
                     t.affiliation = targetAffiliation;
                     t.ownedByPlayer = true;
                     t.placedBy = 'player';
@@ -36361,6 +36564,35 @@ class DungeonPage extends React.Component {
                 }
             }
         });
+
+        // Synchronize with bm.dungeon if present
+        if (bm.dungeon && Array.isArray(bm.dungeon.levels)) {
+            bm.dungeon.levels.forEach(lvl => {
+                ['front', 'back'].forEach(planeKey => {
+                    const plane = lvl && lvl[planeKey];
+                    if (plane && Array.isArray(plane.miniboards)) {
+                        plane.miniboards.forEach(b => {
+                            if (b && b.id === bm.currentBoard?.id && b.tiles) {
+                                contiguousTileIds.forEach(tId => {
+                                    if (b.tiles[tId]) {
+                                        b.tiles[tId].territory = targetAffiliation;
+                                        b.tiles[tId].affiliation = targetAffiliation;
+                                        b.tiles[tId].territoryAffiliation = targetAffiliation;
+                                        b.tiles[tId].territoryMonolithId = targetTile.id;
+                                        if (b.tiles[tId].contains && typeof b.tiles[tId].contains === 'object') {
+                                            b.tiles[tId].contains.territory = targetAffiliation;
+                                            b.tiles[tId].contains.affiliation = targetAffiliation;
+                                            b.tiles[tId].contains.territoryAffiliation = targetAffiliation;
+                                            b.tiles[tId].contains.territoryMonolithId = targetTile.id;
+                                        }
+                                    }
+                                });
+                            }
+                        });
+                    }
+                });
+            });
+        }
 
         // Persist to meta
         try {
@@ -37053,6 +37285,10 @@ class DungeonPage extends React.Component {
         }
 
         if (def.key.includes('domain_node')) {
+            if (isInPocketDimension) {
+                this.startMonolithActivation(tile);
+                return;
+            }
             const meta = typeof getMeta === 'function' ? (getMeta() || {}) : {};
             const userAffiliation = meta.affiliation || 'mox';
             const nodeAff = tile.affiliation || tile.contains?.affiliation || gData.affiliation || (tile.generatorData && tile.generatorData.affiliation) || tile.territory || tile.contains?.territory;
@@ -44456,6 +44692,33 @@ class DungeonPage extends React.Component {
                         </div>
                     </div>
 
+                        {/* Flying Gold Coins Animation Overlay */}
+                        {this.state.flyingGoldCoins && this.state.flyingGoldCoins.length > 0 && (
+                            <div className="flying-gold-container" data-testid="flying-gold-container">
+                                {this.state.flyingGoldCoins.map(coin => (
+                                    <div
+                                        key={coin.id}
+                                        className="flying-gold-particle"
+                                        style={{
+                                            backgroundImage: coin.iconUrl ? `url("${coin.iconUrl}")` : 'none',
+                                            backgroundSize: 'contain',
+                                            backgroundRepeat: 'no-repeat',
+                                            backgroundPosition: 'center',
+                                            '--gold-start-x': `${coin.startX}px`,
+                                            '--gold-start-y': `${coin.startY}px`,
+                                            '--gold-mid-x': `${coin.startX + coin.curveOffsetX}px`,
+                                            '--gold-mid-y': `${coin.startY + coin.curveOffsetY}px`,
+                                            '--gold-target-x': `${coin.targetX}px`,
+                                            '--gold-target-y': `${coin.targetY}px`,
+                                            animation: `flyingGoldArc ${coin.duration}ms cubic-bezier(0.25, 0.9, 0.35, 1) ${coin.delay}ms forwards`
+                                        }}
+                                    >
+                                        {!coin.iconUrl && <span style={{ fontSize: '20px' }}>🪙</span>}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
                         {/* Floating 'Locked' Chest Indicator Badge */}
                         {this.state.lockedChestNotice && (
                             <div
@@ -44831,7 +45094,7 @@ class DungeonPage extends React.Component {
                                     onClick={() => this.setState({ showDungeonInscriptionModal: false })}
                                     style={{
                                         padding: '8px 20px',
-                                        borderRadius: '20px',
+                                        borderRadius: '8px',
                                         border: '1px solid rgba(255, 255, 255, 0.2)',
                                         background: 'rgba(255, 255, 255, 0.06)',
                                         color: '#ccc',
@@ -44851,7 +45114,7 @@ class DungeonPage extends React.Component {
                                     onClick={() => this.setState({ dungeonInscriptionTextInput: getRandomInscription() })}
                                     style={{
                                         padding: '8px 20px',
-                                        borderRadius: '20px',
+                                        borderRadius: '8px',
                                         border: '1px solid rgba(229, 181, 79, 0.4)',
                                         background: 'rgba(229, 181, 79, 0.12)',
                                         color: '#e5b54f',
@@ -44871,7 +45134,7 @@ class DungeonPage extends React.Component {
                                     onClick={this.confirmDungeonInscription}
                                     style={{
                                         padding: '8px 20px',
-                                        borderRadius: '20px',
+                                        borderRadius: '8px',
                                         border: 'none',
                                         background: 'linear-gradient(135deg, rgba(201, 132, 10, 0.35) 0%, rgba(249, 177, 21, 0.5) 100%)',
                                         outline: '1px solid rgba(249, 177, 21, 0.6)',

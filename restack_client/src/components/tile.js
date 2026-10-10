@@ -1485,6 +1485,7 @@ function Tile(props) {
                 }
                 const key = props.image.trim().toLowerCase().replace(/[\s-]+/g, '_');
                 if (['portal', 'teleporter', 'dungeon_portal'].includes(key)) return images.dungeon_portal;
+                if (key === 'chest' && (images.wooden_chest || images.gold_chest)) return images.wooden_chest || images.gold_chest;
                 if (images[key]) return images[key];
                 if (images[`buildable_${key}`]) return images[`buildable_${key}`];
                 if (images[`${key}_portrait`]) return images[`${key}_portrait`];
@@ -1501,6 +1502,7 @@ function Tile(props) {
             if (typeof props.contains === 'string') {
                 const key = props.contains.trim().toLowerCase().replace(/[\s-]+/g, '_');
                 if (['portal', 'teleporter', 'dungeon_portal'].includes(key)) return images.dungeon_portal;
+                if (key === 'chest' && (images.wooden_chest || images.gold_chest)) return images.wooden_chest || images.gold_chest;
                 if (images[key]) return images[key];
                 if (images[`buildable_${key}`]) return images[`buildable_${key}`];
                 if (images[`${key}_portrait`]) return images[`${key}_portrait`];
@@ -1520,6 +1522,7 @@ function Tile(props) {
                     const key = sub.trim().toLowerCase().replace(/[\s-]+/g, '_');
                     if (key === 'worker_pygmy' || key === 'pocket_worker_pygmy' || key === 'cave_individual') return images.cave_individual;
                     if (['portal', 'teleporter', 'dungeon_portal'].includes(key)) return images.dungeon_portal;
+                    if (key === 'chest' && (images.wooden_chest || images.gold_chest)) return images.wooden_chest || images.gold_chest;
                     if (images[key]) return images[key];
                     if (images[`buildable_${key}`]) return images[`buildable_${key}`];
                     if (images[`${key}_portrait`]) return images[`${key}_portrait`];
@@ -1828,6 +1831,34 @@ function Tile(props) {
         (props.image === 'automaton' || props.imageOverride === 'automaton')
     );
 
+    const isPickupObject = !isLitterCell && !isDimensionDebrisOrLitter && !isArchTile && !isSpawnPoint && !isStructureTile && !isMonsterOrPygmyTile && (
+        isItemCell ||
+        isKeyTile ||
+        props.type === 'gold' || props.type === 'food' || props.type === 'treasure' || props.type === 'item' || props.type === 'chest' ||
+        props.contains === 'gold' || props.contains === 'food' || props.contains === 'treasure' || props.contains === 'chest' ||
+        currentContains === 'gold' || currentContains === 'food' || currentContains === 'treasure' || currentContains === 'chest' ||
+        (containsObj && ['gold', 'food', 'treasure', 'item', 'key', 'materials', 'chest'].includes(containsObj.type)) ||
+        sKey.includes('gold') || sKey.includes('food') || sKey.includes('treasure') || sKey.includes('chest') ||
+        imageString.includes('food') || imageString.includes('gold') || imageString.includes('treasure') || imageString.includes('chest') ||
+        ['gold', 'food', 'treasure', 'key', 'item', 'chest'].includes(props.optionType)
+    );
+
+    const isPlayerApproaching = !!(
+        props.isPlayerAdjacent ||
+        props.isPlayerOnTile ||
+        (() => {
+            const pIdx = props.playerIdx !== undefined && props.playerIdx !== null ? props.playerIdx : null;
+            if (pIdx === null) return false;
+            const cId = props.id !== undefined && props.id !== null ? props.id : props.index;
+            if (cId === null || cId === undefined) return false;
+            const pRow = Math.floor(pIdx / 15);
+            const pCol = pIdx % 15;
+            const tRow = Math.floor(cId / 15);
+            const tCol = cId % 15;
+            return Math.abs(pRow - tRow) <= 1 && Math.abs(pCol - tCol) <= 1;
+        })()
+    );
+
     return (
         <div 
             data-portal-id={props['data-portal-id']}
@@ -1907,7 +1938,7 @@ function Tile(props) {
                 }
             }}
             onDragStart={(e) => e.preventDefault()}
-            className={`tile ${props.className || ''} ${props.type || ''} ${isArchTile ? 'archway-tile' : ''} ${isArchEnlarged ? 'enlarged-arch-tile' : ''} ${(isArchEnlarged || isEnlargedStructureActive || (isSpawnPoint && isOccupied)) ? 'enlarged-structure-tile' : ''} ${isAggroAttacking ? 'aggro-attack-lunge' : (isBumpingAttack ? 'pygmy-bump-hit' : (isBumpedBack ? 'pygmy-bump-absorb' : (isGliding ? 'pygmy-glide' : (isSpawnFlashing ? 'pygmy-spawn-flash' : ''))))} ${isDimensionDebrisOrLitter ? 'foreground-zindex' : ''}`.trim()}
+            className={`tile ${props.className || ''} ${props.type || ''} ${isArchTile ? 'archway-tile' : ''} ${isArchEnlarged ? 'enlarged-arch-tile' : ''} ${(isArchEnlarged || isEnlargedStructureActive || (isSpawnPoint && isOccupied)) ? 'enlarged-structure-tile' : ''} ${isPickupObject ? (isPlayerApproaching ? 'pickup-tile-hovering' : 'pickup-tile-grounded') : ''} ${isAggroAttacking ? 'aggro-attack-lunge' : (isBumpingAttack ? 'pygmy-bump-hit' : (isBumpedBack ? 'pygmy-bump-absorb' : (isGliding ? 'pygmy-glide' : (isSpawnFlashing ? 'pygmy-spawn-flash' : ''))))} ${isDimensionDebrisOrLitter ? 'foreground-zindex' : ''}`.trim()}
             data-tile-id={props.index}
         >
            {props.isMobileTouchHover && (
@@ -3078,10 +3109,16 @@ function Tile(props) {
 
                 return (
                     <>
-                        {!isArchTile && <div className="iso-contact-shadow" />}
+                        {!isArchTile && (
+                            <div
+                                className={`iso-contact-shadow ${isPickupObject ? (isPlayerApproaching ? 'pickup-shadow-hovering' : 'pickup-shadow-grounded') : ''}`}
+                                data-testid={isPickupObject ? (isPlayerApproaching ? 'iso-pickup-contact-shadow-hovering' : 'iso-pickup-contact-shadow-grounded') : 'iso-contact-shadow'}
+                            />
+                        )}
                         <div
                             key={activeRecoil ? activeRecoil.key : 'recoil-rest'}
-                            className={`iso-upright-sprite ${isArchTile ? 'iso-archway-sprite' : ''} unit-damaged-recoil-wrapper${activeRecoil ? ` damaged-jerk-${activeRecoil.direction}` : ''}`}
+                            className={`iso-upright-sprite ${isArchTile ? 'iso-archway-sprite' : ''} ${isPickupObject ? (isPlayerApproaching ? 'iso-pickup-sprite hovering' : 'iso-pickup-sprite grounded') : ''} unit-damaged-recoil-wrapper${activeRecoil ? ` damaged-jerk-${activeRecoil.direction}` : ''}`}
+                            data-testid={isPickupObject ? (isPlayerApproaching ? 'pickup-sprite-hovering' : 'pickup-sprite-grounded') : undefined}
                             style={{
                                 position: 'absolute',
                                 top: 0,
