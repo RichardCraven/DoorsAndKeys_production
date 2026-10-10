@@ -53,6 +53,8 @@ import CIcon from '@coreui/icons-react';
 import { CButton, CFormSelect, CFormInput, CModal, CModalHeader, CModalTitle, CModalBody, CModalFooter } from '@coreui/react';
 import * as images from '../utils/images'
 import { resolveFloorTexture } from './dungonBuilderViews/BoardView';
+import VoidOrganicLayer from '../components/VoidOrganicLayer';
+import { getOrganicVoidPath } from '../utils/organic-void';
 import { getRandomInscription } from '../utils/inscriptions-manager';
 import { RITUALS, GLYPHS, GLYPH_SPELL_SLOT_COST, computeGlyphPrepTime, BATTLE_TACTICS, INNER_DISCIPLINES, DISCIPLINE_CATEGORIES, SCRY_OPTIONS } from '../utils/spells-table'
 import { RECIPES } from '../utils/spells-table'
@@ -43317,6 +43319,7 @@ class DungeonPage extends React.Component {
                                         }}
                                     >
                                     {/* front-skirt removed */}
+                                    <VoidOrganicLayer tiles={this.state.tiles} active={!this.state.inSuperboard && !this.state.isInPocketDimension} boardManager={this.props.boardManager} isIsoView={isIsoView} />
                             {this.state.tiles && (() => {
                                 const touchTile = this.state.mobileTouchTileId !== null ? this.state.tiles[this.state.mobileTouchTileId] : null;
                                 let activeTouchAnchorId = this.state.mobileTouchTileId;
@@ -43474,8 +43477,9 @@ class DungeonPage extends React.Component {
                                         ? (this.state.superboardType === 'dark' ? 'rgba(25, 20, 45, 0.75)' : 'rgba(15, 15, 20, 0.55)')
                                         : 'black';
                                     const isExistingOpaqueTan = tile.color === '#6b6057' || tile.color === 'rgb(107, 96, 87)';
+                                    const useOrganicVoid = !this.state.inSuperboard && !this.state.isInPocketDimension;
                                     const rawColor = isVoidTile
-                                        ? 'black'
+                                        ? (useOrganicVoid ? 'transparent' : 'black')
                                         : (tile.color && tile.color !== 'null' && tile.color !== 'undefined' && (!this.state.inSuperboard || (tile.color !== 'black' && tile.color !== '#000000' && tile.color !== '#000' && !isExistingOpaqueTan))
                                             ? tile.color
                                             : (this.state.inSuperboard ? defaultEmptyColor : 'black'));
