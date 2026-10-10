@@ -4143,6 +4143,315 @@ export default function CombatGrid(props) {
             );
         }
 
+        if (anim.type === 'void_touch_slash' && anim.srcPx && anim.tgtPx) {
+            const dx = anim.tgtPx.x - anim.srcPx.x;
+            const dy = anim.tgtPx.y - anim.srcPx.y;
+            const length = Math.sqrt(dx * dx + dy * dy);
+            const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+            return (
+                <div key={key} style={{
+                    position: 'absolute',
+                    left: `${anim.srcPx.x}px`,
+                    top: `${anim.srcPx.y}px`,
+                    width: `${length}px`,
+                    height: '14px',
+                    transformOrigin: '0% 50%',
+                    transform: `rotate(${angle}deg)`,
+                    background: 'linear-gradient(90deg, rgba(147, 51, 234, 0.95), rgba(168, 85, 247, 0.95), rgba(88, 28, 135, 0.8))',
+                    boxShadow: '0 0 25px #9333ea, 0 0 45px #a855f7',
+                    borderRadius: '8px',
+                    pointerEvents: 'none',
+                    zIndex: 4200,
+                    animation: 'scaleUpFadeOut 0.55s ease-out forwards'
+                }} />
+            );
+        }
+
+        if (anim.type === 'void_touch_hit' && anim.tgtPx) {
+            return (
+                <div key={key} style={{
+                    position: 'absolute',
+                    left: `${anim.tgtPx.x}px`,
+                    top: `${anim.tgtPx.y}px`,
+                    width: '110px',
+                    height: '110px',
+                    transform: 'translate(-50%, -50%)',
+                    background: 'radial-gradient(circle, rgba(233, 213, 255, 1) 0%, rgba(147, 51, 234, 0.85) 40%, rgba(58, 12, 100, 0.7) 70%, transparent 100%)',
+                    boxShadow: '0 0 30px #9333ea, 0 0 60px #581c87',
+                    borderRadius: '50%',
+                    pointerEvents: 'none',
+                    zIndex: 4300,
+                    animation: 'scaleUpFadeOut 0.6s cubic-bezier(0.15, 0.85, 0.35, 1) forwards'
+                }}>
+                    {[...Array(6)].map((_, i) => {
+                        const a = (i * 60) * Math.PI / 180;
+                        return (
+                            <div key={i} style={{
+                                position: 'absolute',
+                                top: '50%', left: '50%',
+                                width: '6px', height: '6px',
+                                borderRadius: '50%',
+                                backgroundColor: '#c084fc',
+                                boxShadow: '0 0 10px #c084fc',
+                                transform: `translate(-50%, -50%) translate(${Math.cos(a) * 35}px, ${Math.sin(a) * 35}px)`,
+                                animation: 'scaleUpFadeOut 0.5s ease-out forwards'
+                            }} />
+                        );
+                    })}
+                </div>
+            );
+        }
+
+        if (anim.type === 'death_grasp_projectile' && anim.srcPx && anim.tgtPx) {
+            const dx = anim.tgtPx.x - anim.srcPx.x;
+            const dy = anim.tgtPx.y - anim.srcPx.y;
+            return (
+                <div key={key} style={{
+                    position: 'absolute',
+                    left: `${anim.srcPx.x}px`,
+                    top: `${anim.srcPx.y}px`,
+                    width: '36px', height: '36px',
+                    transform: 'translate(-50%, -50%)',
+                    pointerEvents: 'none',
+                    zIndex: 4800,
+                    '--proj-dx': `${dx}px`,
+                    '--proj-dy': `${dy}px`,
+                    animation: `madnessProjFly ${anim.duration || 650}ms cubic-bezier(0.4, 0, 0.6, 1) forwards`,
+                }}>
+                    <div style={{
+                        position: 'absolute', inset: '10%',
+                        borderRadius: '50%',
+                        background: 'radial-gradient(circle, #e9d5ff 0%, #a855f7 50%, #3b0764 100%)',
+                        boxShadow: '0 0 20px #a855f7, 0 0 40px #581c87',
+                    }} />
+                    <div style={{
+                        position: 'absolute', inset: '-20%',
+                        borderRadius: '50%',
+                        border: '2px dashed #c084fc',
+                        animation: 'geomSpinClockwise 0.5s linear infinite'
+                    }} />
+                </div>
+            );
+        }
+
+        if (anim.type === 'death_grasp_crush' && anim.tgtPx) {
+            return (
+                <div key={key} style={{
+                    position: 'absolute',
+                    left: `${anim.tgtPx.x}px`,
+                    top: `${anim.tgtPx.y}px`,
+                    width: '130px',
+                    height: '130px',
+                    transform: 'translate(-50%, -50%)',
+                    pointerEvents: 'none',
+                    zIndex: 4700,
+                }}>
+                    <div style={{
+                        position: 'absolute', inset: '0%',
+                        border: '3px solid #a855f7',
+                        borderRadius: '50%',
+                        boxShadow: '0 0 35px #a855f7, inset 0 0 25px #581c87',
+                        animation: 'madnessCastRingIn 0.8s ease-out forwards',
+                    }} />
+                    <div style={{
+                        position: 'absolute', inset: '15%',
+                        background: 'radial-gradient(circle, rgba(233, 213, 255, 0.9) 0%, rgba(168, 85, 247, 0.7) 50%, transparent 100%)',
+                        borderRadius: '50%',
+                        animation: 'scaleUpFadeOut 0.8s ease-out forwards',
+                    }} />
+                </div>
+            );
+        }
+
+        if (anim.type === 'soul_rend_beam' && anim.srcPx && anim.tgtPx) {
+            return (
+                <React.Fragment key={key}>
+                    <div style={{
+                        position: 'absolute',
+                        left: `${anim.srcPx.x}px`,
+                        top: `${anim.srcPx.y}px`,
+                        width: `${anim.length}px`,
+                        height: '10px',
+                        transformOrigin: '0% 50%',
+                        transform: `rotate(${anim.angle}deg)`,
+                        background: 'linear-gradient(90deg, rgba(236,72,153,0.95), rgba(168,85,247,0.95), rgba(192,132,252,0.95))',
+                        boxShadow: '0 0 25px #ec4899, 0 0 45px #a855f7',
+                        borderRadius: '6px',
+                        pointerEvents: 'none',
+                        zIndex: 4400,
+                        animation: 'scaleUpFadeOut 0.9s ease-out forwards'
+                    }} />
+                </React.Fragment>
+            );
+        }
+
+        if (anim.type === 'soul_rend_siphon' && anim.srcPx && anim.tgtPx) {
+            return (
+                <div key={key} style={{
+                    position: 'absolute',
+                    left: `${anim.srcPx.x}px`,
+                    top: `${anim.srcPx.y}px`,
+                    width: '100%', height: '100%',
+                    pointerEvents: 'none',
+                    zIndex: 4450
+                }}>
+                    {[...Array(6)].map((_, i) => (
+                        <div key={i} style={{
+                            position: 'absolute',
+                            left: `${anim.tgtPx.x}px`,
+                            top: `${anim.tgtPx.y}px`,
+                            width: '10px',
+                            height: '10px',
+                            borderRadius: '50%',
+                            background: '#f472b6',
+                            boxShadow: '0 0 12px #f472b6, 0 0 20px #c084fc',
+                            '--proj-dx': `${anim.srcPx.x - anim.tgtPx.x}px`,
+                            '--proj-dy': `${anim.srcPx.y - anim.tgtPx.y}px`,
+                            animation: `madnessProjFly 0.9s cubic-bezier(0.2, 0.8, 0.4, 1) ${i * 0.1}s forwards`
+                        }} />
+                    ))}
+                </div>
+            );
+        }
+
+        if (anim.type === 'spectral_step_anim' && anim.srcPx) {
+            return (
+                <div key={key} style={{
+                    position: 'absolute',
+                    left: `${anim.srcPx.x}px`,
+                    top: `${anim.srcPx.y}px`,
+                    width: '120px',
+                    height: '120px',
+                    transform: 'translate(-50%, -50%)',
+                    pointerEvents: 'none',
+                    zIndex: 4350
+                }}>
+                    <div style={{
+                        position: 'absolute', inset: 0,
+                        borderRadius: '50%',
+                        background: 'radial-gradient(circle, rgba(192, 132, 252, 0.8) 0%, rgba(88, 28, 135, 0.4) 60%, transparent 100%)',
+                        boxShadow: '0 0 30px #c084fc, inset 0 0 20px #a855f7',
+                        animation: 'scaleUpFadeOut 1.0s cubic-bezier(0.15, 0.85, 0.35, 1) forwards'
+                    }} />
+                    <div style={{
+                        position: 'absolute', inset: '10%',
+                        borderRadius: '50%',
+                        border: '2px dashed #f472b6',
+                        animation: 'geomSpinCounter 0.8s linear infinite'
+                    }} />
+                </div>
+            );
+        }
+
+        if (anim.type === 'abyssal_chains_shot' && anim.srcPx && anim.tgtPx) {
+            return (
+                <div key={key} style={{
+                    position: 'absolute',
+                    left: `${anim.srcPx.x}px`,
+                    top: `${anim.srcPx.y}px`,
+                    width: `${anim.length}px`,
+                    height: '12px',
+                    transformOrigin: '0% 50%',
+                    transform: `rotate(${anim.angle}deg)`,
+                    background: 'repeating-linear-gradient(90deg, #6b21a8 0px, #c084fc 6px, #3b0764 12px)',
+                    boxShadow: '0 0 20px #9333ea, 0 0 35px #3b0764',
+                    borderRadius: '6px',
+                    pointerEvents: 'none',
+                    zIndex: 4400,
+                    animation: 'scaleUpFadeOut 0.7s ease-out forwards'
+                }} />
+            );
+        }
+
+        if (anim.type === 'abyssal_chains_shackles' && anim.tgtPx) {
+            return (
+                <div key={key} style={{
+                    position: 'absolute',
+                    left: `${anim.tgtPx.x}px`,
+                    top: `${anim.tgtPx.y}px`,
+                    width: '110px',
+                    height: '110px',
+                    transform: 'translate(-50%, -50%)',
+                    pointerEvents: 'none',
+                    zIndex: 4600
+                }}>
+                    <div style={{
+                        position: 'absolute', inset: '0',
+                        border: '4px double #c084fc',
+                        borderRadius: '16px',
+                        boxShadow: '0 0 25px #9333ea, inset 0 0 15px #6b21a8',
+                        animation: 'madnessCastRingIn 1.2s ease-out forwards'
+                    }} />
+                    <div style={{
+                        position: 'absolute', inset: '20%',
+                        border: '2px dashed #a855f7',
+                        borderRadius: '50%',
+                        animation: 'geomSpinClockwise 1.5s linear infinite'
+                    }} />
+                </div>
+            );
+        }
+
+        if (anim.type === 'dark_apotheosis_pillar' && anim.srcPx) {
+            return (
+                <React.Fragment key={key}>
+                    <div style={{
+                        position: 'absolute',
+                        left: `${anim.srcPx.x}px`,
+                        top: `${anim.srcPx.y}px`,
+                        width: '160px',
+                        height: '600px',
+                        transform: 'translate(-50%, -80%)',
+                        background: 'linear-gradient(to top, rgba(147, 51, 234, 0.95), rgba(88, 28, 135, 0.7), transparent)',
+                        boxShadow: '0 0 50px #9333ea, 0 0 100px #581c87',
+                        borderRadius: '80px',
+                        pointerEvents: 'none',
+                        zIndex: 4900,
+                        animation: 'scaleUpFadeOut 1.6s cubic-bezier(0.15, 0.85, 0.35, 1) forwards'
+                    }} />
+                </React.Fragment>
+            );
+        }
+
+        if (anim.type === 'dark_apotheosis_nova' && anim.srcPx) {
+            return (
+                <div key={key} style={{
+                    position: 'absolute',
+                    left: `${anim.srcPx.x}px`,
+                    top: `${anim.srcPx.y}px`,
+                    width: '350px',
+                    height: '350px',
+                    transform: 'translate(-50%, -50%)',
+                    border: '4px solid #c084fc',
+                    background: 'radial-gradient(circle, rgba(168, 85, 247, 0.4) 0%, rgba(59, 7, 100, 0.2) 60%, transparent 100%)',
+                    boxShadow: '0 0 60px #9333ea, inset 0 0 40px #a855f7',
+                    borderRadius: '50%',
+                    pointerEvents: 'none',
+                    zIndex: 4850,
+                    animation: 'scaleUpFadeOut 1.8s cubic-bezier(0.1, 0.8, 0.3, 1) forwards'
+                }} />
+            );
+        }
+
+        if (anim.type === 'dark_apotheosis_burst' && anim.tgtPx) {
+            return (
+                <div key={key} style={{
+                    position: 'absolute',
+                    left: `${anim.tgtPx.x}px`,
+                    top: `${anim.tgtPx.y}px`,
+                    width: '120px',
+                    height: '120px',
+                    transform: 'translate(-50%, -50%)',
+                    background: 'radial-gradient(circle, #f472b6 0%, #a855f7 50%, transparent 100%)',
+                    boxShadow: '0 0 35px #f472b6, 0 0 70px #9333ea',
+                    borderRadius: '50%',
+                    pointerEvents: 'none',
+                    zIndex: 4800,
+                    animation: 'scaleUpFadeOut 1.0s ease-out forwards'
+                }} />
+            );
+        }
+
         if (anim.type === 'madness_success_overlay' && anim.tgtPx) {
             const imgUrl = images.hashmallim_madness?.default || images.hashmallim_madness;
             const size = anim.isTargetLarge ? TILE_SIZE * 2.8 : TILE_SIZE * 1.8;

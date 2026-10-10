@@ -764,6 +764,9 @@ export default function LandingPage(props) {
       return false;
     }
   })
+  const [showIsometric, setShowIsometric] = useState(() => {
+    try { return !!(getMeta() || {}).showIsometric; } catch (e) { return false; }
+  })
 
   const [navToIntro, setNavToIntro] = useState(false)
 
@@ -1040,6 +1043,15 @@ export default function LandingPage(props) {
     try {
       const meta = getMeta() || {};
       meta.skipIntro = checked;
+      storeMeta(meta);
+    } catch (e) { }
+  }
+
+  const toggleShowIsometric = (checked) => {
+    setShowIsometric(checked);
+    try {
+      const meta = getMeta() || {};
+      meta.showIsometric = checked;
       storeMeta(meta);
     } catch (e) { }
   }
@@ -2343,6 +2355,14 @@ export default function LandingPage(props) {
                   <span>Skip cinematic introduction</span>
                 </label>
               )}
+              <label className="skip-intro-label" id="show-isometric-toggle">
+                <input
+                  type="checkbox"
+                  checked={showIsometric}
+                  onChange={(e) => toggleShowIsometric(e.target.checked)}
+                />
+                <span>Isometric board view (beta)</span>
+              </label>
             </div>
 
             {/* Leave space for future dungeon graphic/previews */}

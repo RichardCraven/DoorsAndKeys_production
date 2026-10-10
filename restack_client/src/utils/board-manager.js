@@ -388,8 +388,8 @@ export function BoardManager(){
         const img = tile.image || tile.contains?.image;
         const sKey = String(containsSubtype || bldg || img || containsType || (tile.contains && typeof tile.contains === 'object' ? (tile.contains.key || tile.contains.name || tile.contains.type) : '') || '').toLowerCase();
 
-        // 'hut', 'buildable_hut', and 'healing_circle' are EXPLICITLY passable
-        if (sKey.includes('hut') || sKey.includes('healing_circle')) {
+        // 'hut', 'buildable_hut', 'healing_circle', and 'archaic' structures/tiles are EXPLICITLY passable
+        if (sKey.includes('hut') || sKey.includes('healing_circle') || sKey.includes('archaic')) {
             return false;
         }
 
@@ -420,7 +420,7 @@ export function BoardManager(){
                 const aImg = aTile.image || aTile.contains?.image;
                 const aKey = String(aContainsSub || aBldg || aImg || aContainsType || '').toLowerCase();
                 const vendorKeys = ['fungal_nursery', 'alchemist', 'merchant', 'dream_den'];
-                if (!vendorKeys.some(k => aKey.includes(k)) && !aKey.includes('hut') && !aKey.includes('healing_circle')) {
+                if (!vendorKeys.some(k => aKey.includes(k)) && !aKey.includes('hut') && !aKey.includes('healing_circle') && !aKey.includes('archaic')) {
                     const aIsDestroyed = aTile.contains && typeof aTile.contains === 'object' && (aTile.contains.hp <= 0 || !!aTile.contains.destroyedAt);
                     if (!aIsDestroyed) return true;
                 }
@@ -441,7 +441,7 @@ export function BoardManager(){
                         const aBldg = aTile.building || aTile.contains?.building;
                         const aImg = aTile.image || aTile.contains?.image;
                         const aKey = String(aContainsSub || aBldg || aImg || aContainsType || '').toLowerCase();
-                        if (aKey.includes('hut') || aKey.includes('healing_circle')) continue;
+                        if (aKey.includes('hut') || aKey.includes('healing_circle') || aKey.includes('archaic')) continue;
 
                         const aIsDestroyed = aTile.contains && typeof aTile.contains === 'object' && (aTile.contains.hp <= 0 || !!aTile.contains.destroyedAt);
                         if (aIsDestroyed) continue;
@@ -452,7 +452,7 @@ export function BoardManager(){
                             'ore_mine', 'slate_mine', 'sawmill', 'lumber_mill', 'larder', 'dust_collector',
                             'cultivation_vat', 'domain_monolith', 'dark_domain_monolith', 'war_camp', 'war_fort',
                             'fungal_nursery', 'alchemist', 'merchant', 'dream_den', 'dream den',
-                            'rift_embers', 'pocket_litter_rift_embers', 'archaic_tunnel', 'pocket_litter_archaic_tunnel'
+                            'rift_embers', 'pocket_litter_rift_embers'
                         ];
                         const is2x2 = multi2x2.some(k => aKey.includes(k)) || aTile.isLarge || aTile.contains?.isLarge || aTile.isMultiTile || aTile.contains?.isMultiTile;
                         const aIsMulti = !!(is2x2 || (aRole === 'anchor') || aGroup);
@@ -504,8 +504,8 @@ export function BoardManager(){
             return false;
         }
 
-        // 'hut', 'buildable_hut', and 'healing_circle' are EXPLICITLY passable
-        if (sKey.includes('hut') || sKey.includes('healing_circle')) {
+        // 'hut', 'buildable_hut', 'healing_circle', and 'archaic' are EXPLICITLY passable
+        if (sKey.includes('hut') || sKey.includes('healing_circle') || sKey.includes('archaic')) {
             return false;
         }
 
@@ -514,7 +514,6 @@ export function BoardManager(){
             tile.isDimensionLitter || tile.isPocketLitter || (tile.contains && typeof tile.contains === 'object' && (tile.contains.isDimensionLitter || tile.contains.isPocketLitter)) ||
             sKey.includes('pocket_litter') || sKey.includes('mana_crystals') || sKey.includes('ruined_arch') ||
             sKey.includes('broken_wagon') || sKey.includes('fractured_monolith') || sKey.includes('forge_remnants') || sKey.includes('rift_embers') ||
-            sKey.includes('archaic_tunnel') || sKey.includes('archaic tunnel') ||
             sKey.includes('astral_obelisk') || sKey.includes('ancient_reliquary') || sKey.includes('celestial_geode');
         if (isDimensionLitter) {
             return true;
@@ -608,6 +607,10 @@ export function BoardManager(){
         }
 
         const combinedStr = `${cType} ${cSub} ${vGroup} ${anchorSub} ${anchorGroup}`;
+
+        if (combinedStr.includes('archaic')) {
+            return { isVendor: false, vendorType: null };
+        }
 
         const vendorKeys = ['alchemist', 'fungal_nursery', 'dream_den', 'dream den', 'merchant', 'vendor'];
         const isVendor = vendorKeys.some(k => combinedStr.includes(k)) || !!vCell || vAnchorId !== null || !!vGroup;
@@ -3026,6 +3029,33 @@ export function BoardManager(){
                 return null; // Passable when holding Shift
             }
         }
+
+        const sSubtype = String(subtype || destinationTile.building || destinationTile.image || '').toLowerCase();
+        const sType = String(type || '').toLowerCase();
+        const sImg = String(destinationTile.image || '').toLowerCase();
+        const isArchaicEndpoint = (
+            sSubtype.includes('archaic_tunnel') || sSubtype.includes('archaic tunnel') ||
+            sType.includes('archaic_tunnel') || sType.includes('archaic tunnel') ||
+            sImg.includes('archaic_tunnel')
+        ) && !sImg.includes('archaic_tunnel_tile') && !sSubtype.includes('archaic_tunnel_tile') && !!(
+            destinationTile.vendorGroupId ||
+            destinationTile.contains?.vendorGroupId ||
+            destinationTile.vendorCell ||
+            destinationTile.contains?.vendorCell ||
+            sSubtype.includes('endpoint') ||
+            sType.includes('endpoint')
+        );
+        if (isArchaicEndpoint) {
+            const isDisabled = (
+                destinationTile.contains?.state === 'disabled' ||
+                destinationTile.state === 'disabled' ||
+                destinationTile.disabled === true ||
+                destinationTile.contains?.disabled === true
+            );
+            if (!isDisabled) {
+                return 'archaic_tunnel_endpoint';
+            }
+        }
         
         const gateType = this.getGateTypeFromTile(destinationTile);
         
@@ -3577,6 +3607,179 @@ export function BoardManager(){
         this.initializeTilesFromMap(this.playerTile.boardIndex, this.getIndexFromCoordinates([this.playerTile.location[0], this.playerTile.location[1]]))
         this.broadcastLevelChange(this.currentLevel.id)
     }
+    this.handlePassingThroughArchaicTunnel = (destinationTile) => {
+        if (!destinationTile) return;
+        const currentBoardTiles = this.tiles || (this.currentBoard && this.currentBoard.tiles);
+        if (!currentBoardTiles || !Array.isArray(currentBoardTiles)) return;
+
+        const fromTileId = destinationTile.id;
+        const fromGroupId = destinationTile.vendorGroupId || destinationTile.contains?.vendorGroupId;
+
+        // 1. Collect all tiles belonging to the source ATE
+        const fromEndpointTileIds = [];
+        currentBoardTiles.forEach(t => {
+            if (!t) return;
+            const tGroup = t.vendorGroupId || t.contains?.vendorGroupId;
+            if (fromGroupId && tGroup === fromGroupId) {
+                fromEndpointTileIds.push(t.id);
+            }
+        });
+        if (fromEndpointTileIds.length === 0) {
+            fromEndpointTileIds.push(fromTileId);
+        }
+
+        // Helper to identify an archaic endpoint tile
+        const isArchaicEndpointTile = (t) => {
+            if (!t) return false;
+            const sub = String(t.contains?.subtype || t.subtype || t.contains?.key || t.building || '').toLowerCase();
+            const type = String(t.contains?.type || t.type || '').toLowerCase();
+            const img = String(t.image || t.contains?.image || '').toLowerCase();
+            if (img.includes('archaic_tunnel_tile') || sub.includes('archaic_tunnel_tile') || type.includes('archaic_tunnel_tile')) {
+                return false;
+            }
+            const isArchaic = sub.includes('archaic_tunnel') || sub.includes('archaic tunnel') || type.includes('archaic_tunnel') || type.includes('archaic tunnel') || img.includes('archaic_tunnel');
+            const hasGroup = !!(t.vendorGroupId || t.contains?.vendorGroupId || t.vendorCell || t.contains?.vendorCell);
+            return isArchaic && (hasGroup || sub.includes('endpoint') || type.includes('endpoint'));
+        };
+
+        // Helper to identify an archaic tunnel path tile (the 1x1 floor tiles)
+        const isArchaicPathTile = (t) => {
+            if (!t) return false;
+            if (fromEndpointTileIds.includes(t.id)) return false;
+            if (isArchaicEndpointTile(t)) return false;
+            const sub = String(t.contains?.subtype || t.subtype || t.contains?.key || '').toLowerCase();
+            const type = String(t.contains?.type || t.type || '').toLowerCase();
+            const img = String(t.image || t.contains?.image || '').toLowerCase();
+            return sub === 'archaic_tunnel' || type === 'archaic_tunnel' || img === 'archaic_tunnel_tile' || img.includes('archaic_tunnel_tile');
+        };
+
+        // 2. Find target ATE tiles (the OTHER ATE)
+        const targetEndpointTiles = currentBoardTiles.filter(t => {
+            if (!t || fromEndpointTileIds.includes(t.id)) return false;
+            const tGroup = t.vendorGroupId || t.contains?.vendorGroupId;
+            if (fromGroupId && tGroup && tGroup === fromGroupId) return false;
+            return isArchaicEndpointTile(t);
+        });
+
+        if (targetEndpointTiles.length === 0) {
+            if (this.messaging) this.messaging('The archaic tunnel hums, but no other connected endpoint is found.');
+            return;
+        }
+
+        const targetEndpointTileIds = targetEndpointTiles.map(t => t.id);
+
+        // 3. BFS Pathfinding through connecting archaic tunnel path tiles to the destination ATE
+        const queue = [];
+        const visited = new Set();
+        const parentMap = new Map();
+
+        // Seed with all tiles belonging to the source ATE
+        fromEndpointTileIds.forEach(id => {
+            queue.push(id);
+            visited.add(id);
+        });
+
+        let targetReachedId = null;
+
+        while (queue.length > 0) {
+            const currId = queue.shift();
+            if (targetEndpointTileIds.includes(currId)) {
+                targetReachedId = currId;
+                break;
+            }
+
+            const currRow = Math.floor(currId / 15);
+            const currCol = currId % 15;
+            const neighbors = [
+                { r: currRow - 1, c: currCol },
+                { r: currRow + 1, c: currCol },
+                { r: currRow, c: currCol - 1 },
+                { r: currRow, c: currCol + 1 }
+            ];
+
+            for (const { r, c } of neighbors) {
+                if (r < 0 || r >= 15 || c < 0 || c >= 15) continue;
+                const nId = r * 15 + c;
+                if (visited.has(nId)) continue;
+
+                const nTile = currentBoardTiles[nId];
+                if (!nTile) continue;
+
+                const isTarget = targetEndpointTileIds.includes(nId);
+                const isPath = isArchaicPathTile(nTile);
+
+                if (isTarget || isPath) {
+                    visited.add(nId);
+                    parentMap.set(nId, currId);
+                    queue.push(nId);
+                }
+            }
+        }
+
+        if (targetReachedId === null) {
+            if (this.messaging) this.messaging('The archaic tunnel pathway is incomplete. Archaic tunnel tiles must link the two endpoints.');
+            return;
+        }
+
+        // Reconstruct the path from source to target
+        const fullPath = [];
+        let curr = targetReachedId;
+        while (curr !== undefined && curr !== null) {
+            fullPath.unshift(curr);
+            curr = parentMap.get(curr);
+        }
+
+        // Exclude the starting ATE tile, keep all transit steps
+        const steps = fullPath.slice(1);
+        if (steps.length === 0) return;
+
+        // 4. Lock movement during transit and animate player step by step
+        this.isTraversingTunnel = true;
+        let stepIdx = 0;
+        const stepDelay = 90;
+
+        if (this.messaging) this.messaging('🌀 Stepping through the archaic tunnel...');
+
+        const runStep = () => {
+            if (stepIdx >= steps.length) {
+                this.isTraversingTunnel = false;
+                if (this.messaging) this.messaging('Emerging from the archaic tunnel endpoint.');
+                const finalIdx = steps[steps.length - 1];
+                const finalTile = this.tiles[finalIdx] || currentBoardTiles[finalIdx];
+                if (finalTile) {
+                    this.handleFogOfWar(finalTile);
+                }
+                this.checkAdjacency();
+                if (this.refreshTiles) this.refreshTiles();
+                return;
+            }
+
+            const currentStepTileId = steps[stepIdx];
+            const nextCoords = this.getCoordinatesFromIndex(currentStepTileId);
+
+            this.tiles.forEach(t => { if (t) t.playerTile = false; });
+            this.playerTile.location = [nextCoords[0], nextCoords[1]];
+            this.placePlayer(this.playerTile.location);
+
+            const stepTile = this.tiles[currentStepTileId] || currentBoardTiles[currentStepTileId];
+            if (stepTile) {
+                this.handleFogOfWar(stepTile, { skipRefresh: true });
+            }
+
+            if (typeof this.updateFloatingPlayerPosition === 'function') {
+                this.updateFloatingPlayerPosition(this.playerTile.location);
+            }
+
+            if (this.refreshTiles) {
+                this.refreshTiles();
+            }
+
+            stepIdx++;
+            setTimeout(runStep, stepDelay);
+        };
+
+        setTimeout(runStep, stepDelay);
+    }
     this.checkAdjacency = (reachableOverride = null) => {
         // Clear any previous overlay indicators
         if (this._activeEdgeIndicators) {
@@ -3775,6 +3978,7 @@ export function BoardManager(){
         }
     }
     this.move = (destinationCoords, direction, options = {}) => {
+        if (this.isTraversingTunnel) return;
         const occupiedPeer = this.isPeerTileOccupied(destinationCoords);
         if (occupiedPeer) {
             try {
@@ -3909,6 +4113,9 @@ export function BoardManager(){
         if(interaction === 'way_down'){
             this.handlePassingThroughWayDown();
             return; // level change rebuilds tiles/terrain; skip the rest of move()
+        }
+        if (interaction === 'archaic_tunnel_endpoint') {
+            this.handlePassingThroughArchaicTunnel(destinationTile);
         }
         // If the destination contained a monster, initiate the encounter AFTER
         // the player has been moved onto the tile so the UI/game state shows

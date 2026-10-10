@@ -549,11 +549,176 @@ export class AnimationManagerRedux {
       case 'petrifying_gaze':
         this._petrifyGaze(sourceCoords, targetCoords, sourceUnitId);
         break;
+      case 'void_touch':
+        this._voidTouch(sourceCoords, targetCoords, sourceUnitId);
+        break;
+      case 'death_grasp':
+        this._deathGrasp(sourceCoords, targetCoords, sourceUnitId);
+        break;
+      case 'soul_rend':
+        this._soulRend(sourceCoords, targetCoords, sourceUnitId);
+        break;
+      case 'spectral_step':
+        this._spectralStep(sourceCoords, sourceUnitId);
+        break;
+      case 'abyssal_chains':
+        this._abyssalChains(sourceCoords, targetCoords, sourceUnitId);
+        break;
+      case 'dark_apotheosis':
+        this._darkApotheosis(sourceCoords, targetCoords, sourceUnitId);
+        break;
       default:
         // Generic melee hit for unknown abilities
         this._genericHit(sourceCoords, targetCoords);
         break;
     }
+  }
+
+  _voidTouch(src, tgt, sourceUnitId = null) {
+    const srcPx = this._px(src);
+    const tgtPx = this._getImpactTargetPx(tgt);
+    const dx = tgtPx.x - srcPx.x;
+    const dy = tgtPx.y - srcPx.y;
+    const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+
+    this._emit({
+      type: 'void_touch_slash',
+      srcPx,
+      tgtPx,
+      angle,
+      duration: 550,
+      sourceUnitId,
+    });
+
+    this._delay(() => {
+      this._emit({
+        type: 'void_touch_hit',
+        tgtPx,
+        duration: 600,
+        sourceUnitId,
+      });
+    }, 200);
+  }
+
+  _deathGrasp(src, tgt, sourceUnitId = null) {
+    const srcPx = this._px(src);
+    const tgtPx = this._getImpactTargetPx(tgt);
+    const dx = tgtPx.x - srcPx.x;
+    const dy = tgtPx.y - srcPx.y;
+    const length = Math.sqrt(dx * dx + dy * dy);
+    const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+
+    this._emit({
+      type: 'death_grasp_projectile',
+      srcPx,
+      tgtPx,
+      length,
+      angle,
+      duration: 650,
+      sourceUnitId,
+    });
+
+    this._delay(() => {
+      this._emit({
+        type: 'death_grasp_crush',
+        tgtPx,
+        duration: 800,
+        sourceUnitId,
+      });
+    }, 450);
+  }
+
+  _soulRend(src, tgt, sourceUnitId = null) {
+    const srcPx = this._px(src);
+    const tgtPx = this._getImpactTargetPx(tgt);
+    const dx = tgtPx.x - srcPx.x;
+    const dy = tgtPx.y - srcPx.y;
+    const length = Math.sqrt(dx * dx + dy * dy);
+    const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+
+    this._emit({
+      type: 'soul_rend_beam',
+      srcPx,
+      tgtPx,
+      length,
+      angle,
+      duration: 900,
+      sourceUnitId,
+    });
+
+    this._emit({
+      type: 'soul_rend_siphon',
+      srcPx,
+      tgtPx,
+      duration: 1100,
+      sourceUnitId,
+    });
+  }
+
+  _spectralStep(src, sourceUnitId = null) {
+    const srcPx = this._px(src);
+    this._emit({
+      type: 'spectral_step_anim',
+      srcPx,
+      duration: 1000,
+      sourceUnitId,
+    });
+  }
+
+  _abyssalChains(src, tgt, sourceUnitId = null) {
+    const srcPx = this._px(src);
+    const tgtPx = this._getImpactTargetPx(tgt);
+    const dx = tgtPx.x - srcPx.x;
+    const dy = tgtPx.y - srcPx.y;
+    const length = Math.sqrt(dx * dx + dy * dy);
+    const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+
+    this._emit({
+      type: 'abyssal_chains_shot',
+      srcPx,
+      tgtPx,
+      length,
+      angle,
+      duration: 700,
+      sourceUnitId,
+    });
+
+    this._delay(() => {
+      this._emit({
+        type: 'abyssal_chains_shackles',
+        tgtPx,
+        duration: 1200,
+        sourceUnitId,
+      });
+    }, 450);
+  }
+
+  _darkApotheosis(src, tgt, sourceUnitId = null) {
+    const srcPx = this._px(src);
+    const tgtPx = this._getImpactTargetPx(tgt || src);
+
+    this._emit({
+      type: 'dark_apotheosis_pillar',
+      srcPx,
+      duration: 1600,
+      sourceUnitId,
+    });
+
+    this._emit({
+      type: 'dark_apotheosis_nova',
+      srcPx,
+      duration: 1800,
+      sourceUnitId,
+    });
+
+    this._delay(() => {
+      this._emit({
+        type: 'dark_apotheosis_burst',
+        tgtPx,
+        duration: 1000,
+        sourceUnitId,
+      });
+    }, 400);
   }
 
   _snakeStrike(src, tgt, sourceUnitId = null) {

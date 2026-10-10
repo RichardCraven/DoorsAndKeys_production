@@ -1082,6 +1082,7 @@ import archaic_tunnel_active from '../assets/gemini_images/archaic_tunnel_active
 import archaic_tunnel_vortex from '../assets/gemini_images/archaic_tunnel_vortex.png';
 import archaic_tunnel_side_dormant from '../assets/gemini_images/archaic_tunnel_side_dormant.png';
 import archaic_tunnel_side_active from '../assets/gemini_images/archaic_tunnel_side_active.png';
+import archaic_tunnel_tile from '../assets/gemini_images/archaic_tunnel_tile.png';
 import chemical_lantern from '../assets/gemini_images/chemical_lantern.png';
 import territorial_lantern from '../assets/gemini_images/territorial_lantern.png';
 import spoiled_rations from '../assets/gemini_images/spoiled_rations.png';
@@ -3036,6 +3037,8 @@ export {
     archaic_tunnel_vortex,
     archaic_tunnel_side_dormant,
     archaic_tunnel_side_active,
+    archaic_tunnel_tile,
+    archaic_tunnel as archaic_tunnel_endpoint,
     archaic_tunnel as pocket_litter_archaic_tunnel,
     archaic_tunnel as pocket_archaic_tunnel,
     chemical_lantern,

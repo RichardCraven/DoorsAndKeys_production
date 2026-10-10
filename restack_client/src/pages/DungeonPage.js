@@ -3161,6 +3161,8 @@ class DungeonPage extends React.Component {
             , showPygmiesAttackPopup: false
             , isAvatarDamaged: false
             , healingFloatingIndicators: []
+            , activeHealingGround: null
+            , peerHealingGrounds: new Map()
             , swingArc: null
             , showPocketDefeatModal: false
             , showPocketVictoryModal: false
@@ -3236,6 +3238,7 @@ class DungeonPage extends React.Component {
             , metaPanelConfigVersion: 0
             , illuminatedTileId: null
             , popoutResources: (getMeta()?.popoutResources || false)
+            , showIsometric: !!(initMeta.showIsometric)
         }
         // Native browser tooltip will be used for death-tracker; no custom tooltip state required.
         // Track timers/intervals created by this component so we can clear on unmount
@@ -4172,6 +4175,11 @@ class DungeonPage extends React.Component {
             socketHandler.on('pvp:challenge_error', this.handlePvPChallengeError);
             socketHandler.on('pvp:battle_start', this.handlePvPBattleStart);
 
+            socketHandler.off('dungeon:healing_ground_spawn', this.handlePeerHealingGroundSpawn);
+            socketHandler.off('dungeon:healing_ground_tick', this.handlePeerHealingGroundTick);
+            socketHandler.on('dungeon:healing_ground_spawn', this.handlePeerHealingGroundSpawn);
+            socketHandler.on('dungeon:healing_ground_tick', this.handlePeerHealingGroundTick);
+
             socketHandler.joinDungeon(dungeonId, userId, username, location, crewSummary, dungeonName);
         } catch (e) {
             console.warn('[DungeonSockets] initDungeonSockets failed', e);
@@ -4190,6 +4198,8 @@ class DungeonPage extends React.Component {
             socketHandler.off('dungeon:player_left', this.handlePeerPlayerLeft);
             socketHandler.off('dungeon:player_moved', this.handlePeerPlayerMoved);
             socketHandler.off('dungeon:tile_updated', this.handleTileUpdated);
+            socketHandler.off('dungeon:healing_ground_spawn', this.handlePeerHealingGroundSpawn);
+            socketHandler.off('dungeon:healing_ground_tick', this.handlePeerHealingGroundTick);
             socketHandler.off('pvp:challenge_received', this.handlePvPChallengeReceived);
             socketHandler.off('pvp:challenge_declined', this.handlePvPChallengeDeclined);
             socketHandler.off('pvp:challenge_error', this.handlePvPChallengeError);
@@ -7057,6 +7067,18 @@ class DungeonPage extends React.Component {
         if (this.state.inSuperboard) {
             this.displayMessage(nextState ? '🔍 Camera: Zoomed In (1.5x)' : '🔍 Camera: Zoomed Out (1.0x)');
         }
+    };
+
+    toggleIsometricView = (forceState = null) => {
+        const next = forceState !== null ? !!forceState : !this.state.showIsometric;
+        const meta = getMeta() || {};
+        meta.showIsometric = next;
+        storeMeta(meta);
+        this.setState({ showIsometric: next }, () => {
+            if (typeof this.displayMessage === 'function') {
+                this.displayMessage(next ? "📐 Isometric 2.5D Board View: Enabled" : "📐 Top-Down Board View: Restored");
+            }
+        });
     };
 
     getPocketZoomTransform = () => {
@@ -12455,6 +12477,7 @@ class DungeonPage extends React.Component {
         try { if (Array.isArray(this._intervals)) { this._intervals.forEach(i => clearInterval(i)); this._intervals = []; } } catch (e) { }
         try { if (this._foodGoneBadTimer) { clearTimeout(this._foodGoneBadTimer); this._foodGoneBadTimer = null; } } catch (e) { }
         try { if (this._skillFlashTimeout) { clearTimeout(this._skillFlashTimeout); this._skillFlashTimeout = null; } } catch (e) { }
+        try { if (this._healingGroundTimer) { clearInterval(this._healingGroundTimer); this._healingGroundTimer = null; } } catch (e) { }
         // Backwards compat: clear any direct references as well
         try { if (this.realTimeSpecialActionCheckInterval) { clearInterval(this.realTimeSpecialActionCheckInterval); } } catch (e) { }
         try { if (this.pygmiesInterval) { clearInterval(this.pygmiesInterval); this.pygmiesInterval = null; } } catch (e) { }
@@ -27971,8 +27994,17 @@ class DungeonPage extends React.Component {
                     return;
                 }
             }
+            // Shift+V — Toggle 2.5D Isometric Board View
+            if ((maybeKey === 'v' || maybeKey === 'V') && (event.shiftKey || this._shiftDown) && !this.state.inMonsterBattle && !isInPocketDimension && !event.metaKey && !event.ctrlKey) {
+                const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
+                if (activeTag !== 'input' && activeTag !== 'textarea') {
+                    event.preventDefault();
+                    this.toggleIsometricView();
+                    return;
+                }
+            }
             // 'v' or 'V' — Play a practice card duel (Card Scrimmage)
-            if ((maybeKey === 'v' || maybeKey === 'V') && !this.state.inMonsterBattle && !isInPocketDimension && !event.metaKey && !event.ctrlKey) {
+            if ((maybeKey === 'v' || maybeKey === 'V') && !event.shiftKey && !this._shiftDown && !this.state.inMonsterBattle && !isInPocketDimension && !event.metaKey && !event.ctrlKey) {
                 const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
                 if (activeTag !== 'input' && activeTag !== 'textarea') {
                     event.preventDefault();
@@ -31749,8 +31781,275 @@ class DungeonPage extends React.Component {
             return;
         }
 
+        if (skillKey === 'healing_ground') {
+            this.activateHealingGround();
+            return;
+        }
+
         this.displayMessage(`⚡ ${memberName} triggered Expedition Skill Slot ${slotIdx + 1}!`);
     }
+
+    activateHealingGround = () => {
+        const bm = this.props.boardManager;
+        const playerLoc = (bm && bm.playerTile && bm.playerTile.location) ? bm.playerTile.location : [7, 7];
+        const [centerRow, centerCol] = playerLoc;
+        const now = Date.now();
+        const durationMs = 5000;
+        const expiresAt = now + durationMs;
+
+        const healingGroundId = 'hg_' + now + '_' + Math.random().toString(36).substr(2, 6);
+        const activeHealingGround = {
+            id: healingGroundId,
+            centerRow,
+            centerCol,
+            radius: 1,
+            inSuperboard: !!this.state.inSuperboard,
+            boardIndex: bm?.currentBoard?.id ?? bm?.playerTile?.boardIndex ?? 0,
+            levelId: bm?.currentLevel?.id ?? 0,
+            orientation: bm?.currentOrientation ?? 'front',
+            expiresAt,
+            createdAt: now
+        };
+
+        if (this._healingGroundTimer) {
+            clearInterval(this._healingGroundTimer);
+            this._healingGroundTimer = null;
+        }
+
+        this.setState({ activeHealingGround }, () => {
+            if (this.displayMessage) {
+                this.displayMessage("🌿 Sage's Healing Ground activated! 1-tile sanctuary restores 5 HP/sec for 5 seconds.");
+            }
+
+            if (socketHandler && socketHandler.socket && socketHandler.socket.connected) {
+                socketHandler.emit('dungeon:healing_ground_spawn', {
+                    healingGround: activeHealingGround
+                });
+            }
+
+            // Immediate initial tick at t=0s
+            this.tickHealingGround();
+
+            // Recurring tick every 1000ms
+            this._healingGroundTimer = setInterval(() => {
+                this.tickHealingGround();
+            }, 1000);
+        });
+    };
+
+    tickHealingGround = () => {
+        const hg = this.state.activeHealingGround;
+        if (!hg) {
+            if (this._healingGroundTimer) {
+                clearInterval(this._healingGroundTimer);
+                this._healingGroundTimer = null;
+            }
+            return;
+        }
+
+        const now = Date.now();
+        if (now >= hg.expiresAt) {
+            if (this._healingGroundTimer) {
+                clearInterval(this._healingGroundTimer);
+                this._healingGroundTimer = null;
+            }
+            this.setState({ activeHealingGround: null });
+            return;
+        }
+
+        const bm = this.props.boardManager;
+        const currentLoc = (bm && bm.playerTile && bm.playerTile.location) ? bm.playerTile.location : null;
+
+        // Check if player is within the 1-tile radius of healing ground
+        if (currentLoc && Array.isArray(currentLoc) && currentLoc.length >= 2) {
+            const [pRow, pCol] = currentLoc;
+            const inRange = Math.abs(pRow - hg.centerRow) <= hg.radius && Math.abs(pCol - hg.centerCol) <= hg.radius;
+            if (inRange) {
+                const crew = this.state.crew || ((this.props.crewManager && this.props.crewManager.crew) || []);
+                const updatedCrew = crew.map(member => {
+                    const maxHp = member.max_hp || member.maxHp || member.starting_hp || (member.stats && member.stats.hp) || 100;
+                    const curHp = typeof member.hp === 'number' ? member.hp : maxHp;
+                    return {
+                        ...member,
+                        hp: Math.min(maxHp, curHp + 5)
+                    };
+                });
+                this.setState({ crew: updatedCrew });
+                if (typeof this.props.saveUserData === 'function') {
+                    try { this.props.saveUserData(); } catch (e) { }
+                }
+            }
+        }
+
+        // Check multiplayer peers within the 1-tile vicinity
+        if (this.state.peerPlayers && this.state.peerPlayers.size > 0) {
+            let peersChanged = false;
+            const nextPeerPlayers = new Map(this.state.peerPlayers);
+
+            for (const [peerKey, peer] of this.state.peerPlayers.entries()) {
+                if (!peer || !peer.location) continue;
+                const pLoc = peer.location;
+                if (pLoc.levelId != null && pLoc.levelId !== hg.levelId) continue;
+                if (pLoc.orientation != null && pLoc.orientation !== hg.orientation) continue;
+                if (pLoc.boardIndex != null && pLoc.boardIndex !== hg.boardIndex) continue;
+
+                let peerRow = null;
+                let peerCol = null;
+                if (pLoc.tileIndex != null) {
+                    peerRow = Math.floor(pLoc.tileIndex / 15);
+                    peerCol = pLoc.tileIndex % 15;
+                } else if (pLoc.row != null && pLoc.col != null) {
+                    peerRow = pLoc.row;
+                    peerCol = pLoc.col;
+                }
+
+                if (peerRow != null && peerCol != null) {
+                    const inRange = Math.abs(peerRow - hg.centerRow) <= hg.radius && Math.abs(peerCol - hg.centerCol) <= hg.radius;
+                    if (inRange) {
+                        peersChanged = true;
+                        const updatedPeer = { ...peer };
+                        if (Array.isArray(updatedPeer.crew)) {
+                            updatedPeer.crew = updatedPeer.crew.map(m => {
+                                const maxHp = m.maxHp || m.max_hp || 100;
+                                const curHp = typeof m.hp === 'number' ? m.hp : maxHp;
+                                return { ...m, hp: Math.min(maxHp, curHp + 5) };
+                            });
+                        }
+                        if (Array.isArray(updatedPeer.crewSummary)) {
+                            updatedPeer.crewSummary = updatedPeer.crewSummary.map(m => {
+                                const maxHp = m.maxHp || m.max_hp || 100;
+                                const curHp = typeof m.hp === 'number' ? m.hp : maxHp;
+                                return { ...m, hp: Math.min(maxHp, curHp + 5) };
+                            });
+                        }
+                        nextPeerPlayers.set(peerKey, updatedPeer);
+
+                        if (socketHandler && socketHandler.socket && socketHandler.socket.connected) {
+                            socketHandler.emit('dungeon:healing_ground_tick', {
+                                targetSocketId: peer.socketId,
+                                targetUserId: peer.userId,
+                                healAmount: 5,
+                                healingGroundId: hg.id
+                            });
+                        }
+                    }
+                }
+            }
+
+            if (peersChanged) {
+                this.setState({ peerPlayers: nextPeerPlayers });
+            }
+        }
+    };
+
+    handlePeerHealingGroundSpawn = (data = {}) => {
+        if (!data || !data.healingGround) return;
+        const ground = data.healingGround;
+        this.setState(prevState => {
+            const nextMap = new Map(prevState.peerHealingGrounds || []);
+            nextMap.set(ground.id, ground);
+            return { peerHealingGrounds: nextMap };
+        });
+    };
+
+    handlePeerHealingGroundTick = (data = {}) => {
+        if (!data) return;
+        const healAmt = typeof data.healAmount === 'number' ? data.healAmount : 5;
+        const mySocketId = socketHandler.socket?.id;
+        const myUserId = (getMeta() || {}).userId;
+        if ((data.targetSocketId && data.targetSocketId === mySocketId) || (data.targetUserId && data.targetUserId === myUserId)) {
+            const crew = this.state.crew || ((this.props.crewManager && this.props.crewManager.crew) || []);
+            const updatedCrew = crew.map(member => {
+                const maxHp = member.max_hp || member.maxHp || member.starting_hp || (member.stats && member.stats.hp) || 100;
+                const curHp = typeof member.hp === 'number' ? member.hp : maxHp;
+                return {
+                    ...member,
+                    hp: Math.min(maxHp, curHp + healAmt)
+                };
+            });
+            this.setState({ crew: updatedCrew });
+        }
+    };
+
+    renderHealingGroundSanctuary = () => {
+        const grounds = [];
+        if (this.state.activeHealingGround) {
+            grounds.push(this.state.activeHealingGround);
+        }
+        if (this.state.peerHealingGrounds && this.state.peerHealingGrounds.size > 0) {
+            for (const pg of this.state.peerHealingGrounds.values()) {
+                if (pg && pg.expiresAt > Date.now()) {
+                    grounds.push(pg);
+                }
+            }
+        }
+        if (grounds.length === 0) return null;
+
+        const bm = this.props.boardManager;
+        const currentBoardId = bm?.currentBoard?.id ?? bm?.playerTile?.boardIndex ?? 0;
+        const currentLevelId = bm?.currentLevel?.id ?? 0;
+        const currentOrientation = bm?.currentOrientation ?? 'front';
+        const tileSize = this.state.tileSize || 48;
+
+        const renderedGrounds = grounds.filter(hg => {
+            if (hg.inSuperboard !== !!this.state.inSuperboard) return false;
+            if (bm) {
+                if (hg.boardIndex != null && hg.boardIndex !== currentBoardId) return false;
+                if (hg.levelId != null && hg.levelId !== currentLevelId) return false;
+                if (hg.orientation != null && hg.orientation !== currentOrientation) return false;
+            }
+            return true;
+        }).map(hg => {
+            const radius = hg.radius != null ? hg.radius : 1;
+            const sizeTiles = radius * 2 + 1;
+            const widthPx = sizeTiles * tileSize;
+            const heightPx = sizeTiles * tileSize;
+            const topPx = (hg.centerRow - radius) * tileSize;
+            const leftPx = (hg.centerCol - radius) * tileSize;
+            const secondsRemaining = Math.max(0, Math.ceil((hg.expiresAt - Date.now()) / 1000));
+
+            return (
+                <div
+                    key={hg.id || 'healing-ground-sanctuary'}
+                    className="healing-ground-sanctuary"
+                    style={{
+                        position: 'absolute',
+                        top: `${topPx}px`,
+                        left: `${leftPx}px`,
+                        width: `${widthPx}px`,
+                        height: `${heightPx}px`,
+                        pointerEvents: 'none',
+                        zIndex: 25
+                    }}
+                >
+                    <div className="healing-ground-wave wave-1" />
+                    <div className="healing-ground-wave wave-2" />
+                    <div className="healing-ground-wave wave-3" />
+                    <div className="healing-ground-circle-pulse" />
+                    <div className="healing-ground-runic-ring" />
+                    <div className="healing-ground-inner-star" />
+                    <div className="healing-ground-center-glow" />
+                    <div className="healing-ground-sparkle sparkle-top" />
+                    <div className="healing-ground-sparkle sparkle-bottom" />
+                    <div className="healing-ground-mote mote-1">✦</div>
+                    <div className="healing-ground-mote mote-2">✚</div>
+                    <div className="healing-ground-mote mote-3">✦</div>
+                    <div className="healing-ground-mote mote-4">✚</div>
+                    <div className="healing-ground-mote mote-5">✦</div>
+                    <div className="healing-ground-mote mote-6">✚</div>
+                    <div className="healing-ground-label">
+                        <span className="healing-ground-icon">🌿</span>
+                        <span className="healing-ground-text">Sanctuary</span>
+                        <span className="healing-ground-timer">{secondsRemaining}s</span>
+                    </div>
+                </div>
+            );
+        });
+
+        if (renderedGrounds.length === 0) return null;
+        if (renderedGrounds.length === 1) return renderedGrounds[0];
+        return <React.Fragment>{renderedGrounds}</React.Fragment>;
+    };
 
     renderBoardHudRow = () => {
         return (
@@ -31948,6 +32247,33 @@ class DungeonPage extends React.Component {
                             <span className="zoom-icon">{this.state.pocketZoomIn ? '🔍' : '🔎'}</span>
                             <span>{this.state.pocketZoomIn ? 'Zoom Out' : 'Zoom In'}</span>
                             <span className="zoom-badge">{this.state.pocketZoomIn ? '1.5x' : '1.0x'}</span>
+                        </button>
+                    )}
+                    {!this.state.inSuperboard && !this.state.isInPocketDimension && (
+                        <button
+                            className={`hud-timer-item iso-view-toggle-btn ${this.state.showIsometric ? 'active' : ''}`}
+                            onClick={this.toggleIsometricView}
+                            title="Toggle Isometric 2.5D Board View (Beta) — Hotkey: Shift+V"
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 6,
+                                background: this.state.showIsometric ? 'rgba(74, 222, 128, 0.22)' : 'rgba(25, 20, 35, 0.85)',
+                                border: this.state.showIsometric ? '1px solid #4ade80' : '1px solid rgba(255, 255, 255, 0.25)',
+                                borderRadius: '12px',
+                                padding: '2px 9px',
+                                cursor: 'pointer',
+                                pointerEvents: 'auto',
+                                color: this.state.showIsometric ? '#86efac' : '#e2e8f0',
+                                fontSize: '11px',
+                                fontWeight: 700,
+                                boxShadow: this.state.showIsometric ? '0 0 10px rgba(74, 222, 128, 0.5)' : 'none',
+                                transition: 'all 0.2s ease',
+                                userSelect: 'none'
+                            }}
+                        >
+                            <span style={{ fontSize: '12px' }}>📐</span>
+                            <span>{this.state.showIsometric ? 'Isometric: ON' : 'Isometric: OFF'}</span>
                         </button>
                     )}
                 </div>
@@ -39494,6 +39820,7 @@ class DungeonPage extends React.Component {
     };
 
     render() {
+        const isIsoView = !!(this.state.showIsometric && !this.state.inSuperboard && !this.state.isInPocketDimension);
         const crew = ((this.props.crewManager && this.props.crewManager.crew) || []);
 
         const bm = this.props.boardManager;
@@ -42700,83 +43027,60 @@ class DungeonPage extends React.Component {
                         height: this.state.boardSize + 'px',
                         overflow: (this.state.inSuperboard && this.state.pocketZoomIn) ? 'hidden' : 'visible'
                     }}>
-                        <div className={`dungeon-board-container ${this.state.portalTransitionClass || ''}`} style={{
-                            position: 'relative',
-                            width: this.state.boardSize + 'px',
-                            height: this.state.boardSize + 'px',
-                            transform: this.state.inSuperboard
-                                ? this.getPocketZoomTransform()
-                                : (this.state.isMobileLandscape
-                                    ? (this.state.mobileTileZoomMinus
-                                        ? `translate3d(${this.state.zoomOutOffsetX || 0}px, ${this.state.zoomOutOffsetY || 0}px, 0px)`
-                                        : `translate3d(${- (this.state.mobileViewX || 0) * this.state.tileSize + (this.state.leftPanelExpanded ? 200 : 0)}px, ${- (this.state.mobileViewY || 0) * this.state.tileSize}px, 0px)`)
-                                    : 'none'),
-                            transformOrigin: this.state.inSuperboard ? '0 0' : '50% 50%',
-                            transition: this.state.inSuperboard
-                                ? 'transform 0.25s cubic-bezier(0.25, 1, 0.5, 1)'
-                                : (this.state.isMobileLandscape
-                                    ? 'transform 0.5s ease-in-out'
-                                    : 'none')
-                        }}>
-                        <div className="overlay-board" style={{
-                            width: this.state.boardSize + 'px', height: this.state.boardSize + 'px',
-                            backgroundColor: 'transparent',
-                            pointerEvents: this.state.minimapPlaceMapMarkerStarted ? 'auto' : 'none'
-                        }}>
-                            {!this.state.inSuperboard && this.state.overlayTiles && this.state.overlayTiles.map((tile, i) => {
-                                let overlayImage = tile.image ? tile.image : null;
-                                return <Tile
-                                    key={i}
-                                    id={i}
-                                    cursor={this.state.minimapPlaceMapMarkerStarted ? 'crosshair' : 'default'}
-                                    tileSize={this.state.tileSize}
-                                    image={overlayImage}
-                                    imageOverride={overlayImage && overlayImage.includes('/') ? overlayImage : null}
-                                    contains={tile.contains}
-                                    boardTiles={this.state.tiles}
-                                    inSuperboard={this.state.inSuperboard}
-                                    terrain={tile.terrain}
-                                    color={(tile.color && tile.color !== 'null' && tile.color !== 'undefined' && tile.color !== 'black' && !String(tile.color).includes('ff0000')) ? tile.color : 'transparent'}
-                                    borders={tile.borders}
-                                    partialObscured={!!tile.partialObscured}
-                                    coordinates={tile.coordinates}
-                                    index={tile.id}
-                                    globalX={tile.globalX}
-                                    globalY={tile.globalY}
-                                    editMode={false}
-                                    handleHover={this.handleOverlayHover}
-                                    type={'overlay-tile'}
-                                    passThrough={!this.state.minimapPlaceMapMarkerStarted}
-                                    aggroOn={!!this.state.aggroOn}
-                                    handleClick={(e) => this.handleOverlayClick}
-                                    // For overlay tiles we want the background color to reflect overlay state (e.g. edge indicator)
-                                    backgroundColor={(tile.color && tile.color !== 'null' && tile.color !== 'black' && !String(tile.color).includes('ff0000')) ? tile.color : (this.state.overlayHoveredTileId === i && this.state.minimapPlaceMapMarkerStarted ? 'rgba(100, 100, 38, 0.272)' : 'transparent')}
-                                >
-                                </Tile>
-                            })}
-                        </div>
-
-                        <div className="board"
-                            onTouchStart={this.handleBoardTouchStart}
-                            onTouchMove={this.handleBoardTouchMove}
-                            onTouchEnd={this.handleBoardTouchEnd}
-                            style={{
-                                position: 'relative',
-                                zIndex: 10,
-                                isolation: 'isolate',
-                                overflow: 'hidden',
-                                width: this.state.boardSize + 'px', height: this.state.boardSize + 'px',
-                                backgroundColor: 'white',
-                                backgroundImage: (() => {
-                                    const rawSuper = (this.state.inSuperboard && (this.state.dungeon?.superboards?.[this.state.superboardType]?.floorTexture || 'ground_grey'));
-                                    const rawLvl = this.props.boardManager?.currentLevel?.floorTexture;
-                                    const resolved = resolveFloorTexture(rawSuper || rawLvl || (this.state.inSuperboard ? 'ground_grey' : null));
-                                    return resolved ? `url(${resolved})` : undefined;
-                                })(),
-                                backgroundSize: this.state.inSuperboard ? '300% 300%' : '100% 100%',
-                                backgroundPosition: this.state.inSuperboard ? `${((this.state.superboardViewportOrigin?.vx || 0) / 30) * 100}% ${((this.state.superboardViewportOrigin?.vy || 0) / 30) * 100}%` : 'center',
-                                touchAction: 'none'
-                            }}>
+                        <div className={`dungeon-board-container ${this.state.portalTransitionClass || ''} ${isIsoView ? 'isometric-view' : ''}`} style={{
+                                    position: 'relative',
+                                    width: this.state.boardSize + 'px',
+                                    height: this.state.boardSize + 'px',
+                                    transform: this.state.inSuperboard
+                                        ? this.getPocketZoomTransform()
+                                        : (this.state.isMobileLandscape
+                                            ? (this.state.mobileTileZoomMinus
+                                                ? `translate3d(${this.state.zoomOutOffsetX || 0}px, ${this.state.zoomOutOffsetY || 0}px, 0px)`
+                                                : `translate3d(${- (this.state.mobileViewX || 0) * this.state.tileSize + (this.state.leftPanelExpanded ? 200 : 0)}px, ${- (this.state.mobileViewY || 0) * this.state.tileSize}px, 0px)`)
+                                            : 'none'),
+                                    transformOrigin: this.state.inSuperboard ? '0 0' : '50% 50%',
+                                    transition: this.state.inSuperboard
+                                        ? 'transform 0.25s cubic-bezier(0.25, 1, 0.5, 1)'
+                                        : (this.state.isMobileLandscape
+                                            ? 'transform 0.5s ease-in-out'
+                                            : 'none')
+                                }}>
+                                <div className={`board ${isIsoView ? 'iso-view' : ''}`}
+                                    onTouchStart={this.handleBoardTouchStart}
+                                    onTouchMove={this.handleBoardTouchMove}
+                                    onTouchEnd={this.handleBoardTouchEnd}
+                                    style={{
+                                        position: 'relative',
+                                        zIndex: 10,
+                                        isolation: 'isolate',
+                                        overflow: isIsoView ? 'visible' : 'hidden',
+                                        width: this.state.boardSize + 'px', height: this.state.boardSize + 'px',
+                                        backgroundColor: isIsoView ? '#000000' : 'white',
+                                        backgroundImage: isIsoView ? undefined : (() => {
+                                            const rawSuper = (this.state.inSuperboard && (this.state.dungeon?.superboards?.[this.state.superboardType]?.floorTexture || 'ground_grey'));
+                                            const rawLvl = this.props.boardManager?.currentLevel?.floorTexture;
+                                            const resolved = resolveFloorTexture(rawSuper || rawLvl || (this.state.inSuperboard ? 'ground_grey' : null));
+                                            return resolved ? `url(${resolved})` : undefined;
+                                        })(),
+                                        backgroundSize: this.state.inSuperboard ? '300% 300%' : '100% 100%',
+                                        backgroundPosition: this.state.inSuperboard ? `${((this.state.superboardViewportOrigin?.vx || 0) / 30) * 100}% ${((this.state.superboardViewportOrigin?.vy || 0) / 30) * 100}%` : 'center',
+                                        touchAction: 'none'
+                                    }}>
+                                    <div className="board-plane"
+                                        style={{
+                                            backgroundColor: isIsoView ? '#000000' : undefined,
+                                            backgroundImage: isIsoView ? (() => {
+                                                const rawSuper = (this.state.inSuperboard && (this.state.dungeon?.superboards?.[this.state.superboardType]?.floorTexture || 'ground_grey'));
+                                                const rawLvl = this.props.boardManager?.currentLevel?.floorTexture;
+                                                const resolved = resolveFloorTexture(rawSuper || rawLvl || (this.state.inSuperboard ? 'ground_grey' : null));
+                                                return resolved ? `url(${resolved})` : undefined;
+                                            })() : undefined,
+                                            backgroundSize: isIsoView ? (this.state.inSuperboard ? '300% 300%' : '100% 100%') : undefined,
+                                            backgroundPosition: isIsoView ? (this.state.inSuperboard ? `${((this.state.superboardViewportOrigin?.vx || 0) / 30) * 100}% ${((this.state.superboardViewportOrigin?.vy || 0) / 30) * 100}%` : 'center') : undefined,
+                                            boxShadow: isIsoView ? '0 24px 50px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(0, 0, 0, 0.6)' : undefined,
+                                        }}
+                                    >
+                                    {/* front-skirt removed */}
                             {this.state.tiles && (() => {
                                 const touchTile = this.state.mobileTouchTileId !== null ? this.state.tiles[this.state.mobileTouchTileId] : null;
                                 let activeTouchAnchorId = this.state.mobileTouchTileId;
@@ -42876,6 +43180,23 @@ class DungeonPage extends React.Component {
                                                 }
                                             }
                                         });
+                                    }
+                                }
+
+                                const activeHealingGroundTileSet = new Set();
+                                const hg = this.state.activeHealingGround;
+                                if (hg && !this.state.inSuperboard && !this.state.isInPocketDimension) {
+                                    const cRow = hg.centerRow;
+                                    const cCol = hg.centerCol;
+                                    const rad = hg.radius != null ? hg.radius : 1;
+                                    for (let dr = -rad; dr <= rad; dr++) {
+                                        for (let dc = -rad; dc <= rad; dc++) {
+                                            const r = cRow + dr;
+                                            const c = cCol + dc;
+                                            if (r >= 0 && r < 15 && c >= 0 && c < 15) {
+                                                activeHealingGroundTileSet.add(r * 15 + c);
+                                            }
+                                        }
                                     }
                                 }
 
@@ -43155,12 +43476,55 @@ class DungeonPage extends React.Component {
                                         showTerritoryBoundary={visibleTerritoryTileIds !== null ? visibleTerritoryTileIds.has(tile.id !== undefined ? tile.id : i) : true}
                                         hasTerritoryLantern={hasTerritoryLantern}
                                         playerIdx={playerIdx}
+                                        isHealingGround={activeHealingGroundTileSet ? activeHealingGroundTileSet.has(tile.id !== undefined ? tile.id : i) : false}
                                     >
                                     </Tile>
                                 })
                             })()}
                             {this.renderSuperboardRotatingDomainSquares()}
-                        </div>
+                            {this.renderHealingGroundSanctuary()}
+
+                            <div className="overlay-board" style={{
+                                position: 'absolute',
+                                top: 0,
+                                left: 0,
+                                width: this.state.boardSize + 'px', height: this.state.boardSize + 'px',
+                                backgroundColor: 'transparent',
+                                pointerEvents: this.state.minimapPlaceMapMarkerStarted ? 'auto' : 'none',
+                                zIndex: 10
+                            }}>
+                                {!this.state.inSuperboard && this.state.overlayTiles && this.state.overlayTiles.map((tile, i) => {
+                                    let overlayImage = tile.image ? tile.image : null;
+                                    return <Tile
+                                        key={i}
+                                        id={i}
+                                        cursor={this.state.minimapPlaceMapMarkerStarted ? 'crosshair' : 'default'}
+                                        tileSize={this.state.tileSize}
+                                        image={overlayImage}
+                                        imageOverride={overlayImage && overlayImage.includes('/') ? overlayImage : null}
+                                        contains={tile.contains}
+                                        boardTiles={this.state.tiles}
+                                        inSuperboard={this.state.inSuperboard}
+                                        terrain={tile.terrain}
+                                        color={(tile.color && tile.color !== 'null' && tile.color !== 'undefined' && tile.color !== 'black' && !String(tile.color).includes('ff0000')) ? tile.color : 'transparent'}
+                                        borders={(this.state.tiles && this.state.tiles[i] && (this.state.tiles[i].color === 'black' || this.state.tiles[i].isVoid || this.state.tiles[i].color === '#000000' || this.state.tiles[i].color === '#000')) ? null : tile.borders}
+                                        partialObscured={!!tile.partialObscured}
+                                        coordinates={tile.coordinates}
+                                        index={tile.id}
+                                        globalX={tile.globalX}
+                                        globalY={tile.globalY}
+                                        editMode={false}
+                                        handleHover={this.handleOverlayHover}
+                                        type={'overlay-tile'}
+                                        passThrough={!this.state.minimapPlaceMapMarkerStarted}
+                                        aggroOn={!!this.state.aggroOn}
+                                        handleClick={(e) => this.handleOverlayClick}
+                                        // For overlay tiles we want the background color to reflect overlay state (e.g. edge indicator)
+                                        backgroundColor={(tile.color && tile.color !== 'null' && tile.color !== 'black' && !String(tile.color).includes('ff0000')) ? tile.color : (this.state.overlayHoveredTileId === i && this.state.minimapPlaceMapMarkerStarted ? 'rgba(100, 100, 38, 0.272)' : 'transparent')}
+                                    >
+                                    </Tile>
+                                })}
+                            </div>
 
                         {/* Pocket Dimension Lightweight Fog of War SVG Mask Overlay */}
                         {this.state.inSuperboard && (() => {
@@ -43316,44 +43680,47 @@ class DungeonPage extends React.Component {
                                         justifyContent: 'center'
                                     }}
                                 >
-                                    <div
-                                        style={{
-                                            position: 'absolute',
-                                            top: '-18px',
-                                            backgroundColor: 'rgba(0, 0, 0, 0.85)',
-                                            color: '#64ffda',
-                                            fontSize: '10px',
-                                            fontWeight: 'bold',
-                                            padding: '1px 6px',
-                                            borderRadius: '4px',
-                                            whiteSpace: 'nowrap',
-                                            border: '1px solid rgba(100, 255, 218, 0.5)',
-                                            pointerEvents: 'none',
-                                            boxShadow: '0 2px 5px rgba(0,0,0,0.7)'
-                                        }}
-                                    >
-                                        🌐 {peer.username || 'Explorer'}
+                                    <div className="iso-contact-shadow" />
+                                    <div className="iso-upright-sprite" style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                                        <div
+                                            style={{
+                                                position: 'absolute',
+                                                top: '-18px',
+                                                backgroundColor: 'rgba(0, 0, 0, 0.85)',
+                                                color: '#64ffda',
+                                                fontSize: '10px',
+                                                fontWeight: 'bold',
+                                                padding: '1px 6px',
+                                                borderRadius: '4px',
+                                                whiteSpace: 'nowrap',
+                                                border: '1px solid rgba(100, 255, 218, 0.5)',
+                                                pointerEvents: 'none',
+                                                boxShadow: '0 2px 5px rgba(0,0,0,0.7)'
+                                            }}
+                                        >
+                                            🌐 {peer.username || 'Explorer'}
+                                        </div>
+                                        <div
+                                            style={{
+                                                width: '80%',
+                                                height: '80%',
+                                                borderRadius: '50%',
+                                                border: ((this.state.highlightedPeerPlayer?.socketId && peer.socketId === this.state.highlightedPeerPlayer.socketId) || (this.state.highlightedPeerPlayer?.userId && peer.userId === this.state.highlightedPeerPlayer.userId))
+                                                    ? '3px solid #f59e0b'
+                                                    : '2px solid #10b981',
+                                                boxShadow: ((this.state.highlightedPeerPlayer?.socketId && peer.socketId === this.state.highlightedPeerPlayer.socketId) || (this.state.highlightedPeerPlayer?.userId && peer.userId === this.state.highlightedPeerPlayer.userId))
+                                                    ? '0 0 20px #f59e0b, 0 0 10px #f59e0b, inset 0 0 10px #f59e0b'
+                                                    : '0 0 10px rgba(16, 185, 129, 0.8), 0 0 4px rgba(0,0,0,0.9)',
+                                                backgroundImage: bgImageString,
+                                                backgroundSize: 'cover',
+                                                backgroundPosition: 'center',
+                                                backgroundColor: '#1c1917',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center'
+                                            }}
+                                        />
                                     </div>
-                                    <div
-                                        style={{
-                                            width: '80%',
-                                            height: '80%',
-                                            borderRadius: '50%',
-                                            border: ((this.state.highlightedPeerPlayer?.socketId && peer.socketId === this.state.highlightedPeerPlayer.socketId) || (this.state.highlightedPeerPlayer?.userId && peer.userId === this.state.highlightedPeerPlayer.userId))
-                                                ? '3px solid #f59e0b'
-                                                : '2px solid #10b981',
-                                            boxShadow: ((this.state.highlightedPeerPlayer?.socketId && peer.socketId === this.state.highlightedPeerPlayer.socketId) || (this.state.highlightedPeerPlayer?.userId && peer.userId === this.state.highlightedPeerPlayer.userId))
-                                                ? '0 0 20px #f59e0b, 0 0 10px #f59e0b, inset 0 0 10px #f59e0b'
-                                                : '0 0 10px rgba(16, 185, 129, 0.8), 0 0 4px rgba(0,0,0,0.9)',
-                                            backgroundImage: bgImageString,
-                                            backgroundSize: 'cover',
-                                            backgroundPosition: 'center',
-                                            backgroundColor: '#1c1917',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center'
-                                        }}
-                                    />
                                 </div>
                             );
                         })}
@@ -43385,13 +43752,14 @@ class DungeonPage extends React.Component {
                                         '--glide-y': this.state.playerGlideVector ? `${this.state.playerGlideVector.y}px` : '0px'
                                     }}
                                 >
+                                    <div className="iso-contact-shadow" />
                                     {(() => {
                                         const playerRecoilDir = this.state.playerRecoilDirection || (this.state.playerFacing === 'left' ? 'right' : 'left');
                                         const avatarRecoilClass = this.state.isAvatarDamaged ? `unit-damaged-recoil-wrapper damaged-jerk-${playerRecoilDir}` : '';
                                         return (
                                             <div
                                                 key={this.state.isAvatarDamaged ? (this.state.avatarDamageKey || 'damaged') : 'avatar-rest'}
-                                                className={`avatar-damage-shake-wrapper ${avatarRecoilClass}`.trim()}
+                                                className={`avatar-damage-shake-wrapper iso-upright-sprite ${avatarRecoilClass}`.trim()}
                                                 style={{ width: '100%', height: '100%' }}
                                             >
                                                 <div
@@ -44085,6 +44453,8 @@ class DungeonPage extends React.Component {
                                 </div>
                             );
                         })()}
+                        </div>
+                    </div>
 
                         {/* Floating 'Locked' Chest Indicator Badge */}
                         {this.state.lockedChestNotice && (
@@ -44348,8 +44718,8 @@ class DungeonPage extends React.Component {
                             </div>
                         )}
                     </div>
-                    </div>
-                </div>}
+                </div>
+            </div>}
 
                 {this.state.showDungeonInscriptionModal && (
                     <div
