@@ -4984,11 +4984,15 @@ export function BoardManager(){
                 const sKey = String(cSub).toLowerCase();
                 if (sKey.includes('observer') || sKey.includes('outpost') || sKey.includes('earthen_fort') || sKey.includes('hut')) return;
 
-                const vAnchor = (typeof tile.contains === 'object' && tile.contains?.vendorAnchorId) ?? tile.vendorAnchorId;
-                const vGroup = (typeof tile.contains === 'object' && tile.contains?.vendorGroupId) || tile.vendorGroupId;
+                const vAnchor = (tile.contains && typeof tile.contains === 'object' && tile.contains.vendorAnchorId != null)
+                    ? tile.contains.vendorAnchorId
+                    : (tile.vendorAnchorId != null ? tile.vendorAnchorId : null);
+                const vGroup = (tile.contains && typeof tile.contains === 'object' && tile.contains.vendorGroupId)
+                    ? tile.contains.vendorGroupId
+                    : (tile.vendorGroupId || null);
                 
                 let groupId = vGroup;
-                if (!groupId && vAnchor !== undefined && vAnchor !== null) {
+                if (!groupId && vAnchor !== null && vAnchor !== undefined && vAnchor !== false) {
                     groupId = `bldg_anchor_${vAnchor}`;
                 }
                 if (!groupId) return;

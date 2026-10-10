@@ -106,6 +106,22 @@ describe("Summoner's Wandering Eye Expedition Skill", () => {
             clearInterval(page._wanderingEyeDecayTimer);
             page._wanderingEyeDecayTimer = null;
         }
+        try {
+            delete window.wanderingEye;
+            delete window.wandering_eye;
+            delete window.narrativeReset;
+            delete window.narrative_reset;
+            delete window['narrative reset'];
+            delete window.siege;
+            delete window.tower_siege;
+            delete window.levelUp;
+            delete window.lvlUp;
+            delete window['level up'];
+            delete window['lvl up'];
+            delete window.toggleDebug;
+            delete window.debug;
+            delete window.d;
+        } catch (e) {}
         jest.clearAllTimers();
         jest.useRealTimers();
     });
@@ -158,9 +174,7 @@ describe("Summoner's Wandering Eye Expedition Skill", () => {
             // Advance time past expiration
             advanceTime(11000);
 
-            console.log('DEBUG Test 3: Date.now() =', Date.now(), 'currentTime =', currentTime, 'exp =', mockBoardManager.wanderingEyeRevealedTiles.get(key));
             mockBoardManager.handleFogOfWar(mockBoardManager.playerTile);
-            console.log('DEBUG Test 3 after handleFogOfWar: tile.color =', tile.color);
             // Expired -> returns to black fog
             expect(tile.color).toBe('black');
         });
@@ -172,14 +186,11 @@ describe("Summoner's Wandering Eye Expedition Skill", () => {
             voidTile.type = 'void';
             voidTile.contains = 'void';
 
-            const isVoid = mockBoardManager.isVoidTile(voidTile);
-            console.log('DEBUG Test 4: isVoidTile(3) =', isVoid);
-            expect(isVoid).toBe(true);
+            expect(mockBoardManager.isVoidTile(voidTile)).toBe(true);
 
             mockBoardManager.wanderingEyeRevealedTiles.set(voidTileId, currentTime + 20000);
 
             mockBoardManager.handleFogOfWar(mockBoardManager.playerTile);
-            console.log('DEBUG Test 4 after handleFogOfWar: voidTile.color =', voidTile.color);
             expect(voidTile.color).toBe('black');
         });
 
@@ -191,7 +202,6 @@ describe("Summoner's Wandering Eye Expedition Skill", () => {
             mockBoardManager.establishGetWanderingEyeRevealsCallback(() => externalMap);
             mockBoardManager.handleFogOfWar(mockBoardManager.playerTile);
 
-            console.log('DEBUG Test 5: tile 45 color =', mockBoardManager.tiles[tileId].color, 'partialObscured =', mockBoardManager.tiles[tileId].partialObscured);
             expect(mockBoardManager.tiles[tileId].color).not.toBe('black');
             expect(mockBoardManager.tiles[tileId].partialObscured).toBe(false);
         });
