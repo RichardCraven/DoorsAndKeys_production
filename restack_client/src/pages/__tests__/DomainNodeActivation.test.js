@@ -116,7 +116,7 @@ describe('Pocket Dimension Domain Node Territory Activation & Growth', () => {
         expect(darkNodeDef.resource).toBe('Territory');
     });
 
-    test('handleActivateGenerator activates a 1x1 domain_node and claims 9 tiles (3x3 ring 1) immediately', () => {
+    test('handleActivateGenerator activates a 1x1 domain_node and converts existing contiguous territory', () => {
         // Place domain_node at global (7, 7) in miniboard 0 (tIdx = 7 * 15 + 7 = 112)
         const targetTile = superboard.miniboards[0].tiles[112];
         targetTile.contains = {
@@ -126,6 +126,18 @@ describe('Pocket Dimension Domain Node Territory Activation & Growth', () => {
         };
         pageInstance.state.activeGeneratorTile = targetTile;
 
+        // Set existing contiguous territory around (7, 7)
+        for (let dy = -1; dy <= 1; dy++) {
+            for (let dx = -1; dx <= 1; dx++) {
+                const gx = 7 + dx;
+                const gy = 7 + dy;
+                const tIdx = gy * 15 + gx;
+                const t = superboard.miniboards[0].tiles[tIdx];
+                t.territory = 'neutral';
+                t.territoryAffiliation = 'neutral';
+            }
+        }
+
         pageInstance.handleActivateGenerator();
 
         // 1. Anchor tile itself is claimed for player
@@ -133,9 +145,8 @@ describe('Pocket Dimension Domain Node Territory Activation & Growth', () => {
         expect(targetTile.territoryAffiliation).toBe('player');
         expect(targetTile.contains.affiliation).toBe('player');
         expect(targetTile.contains.activated).toBe(true);
-        expect(targetTile.contains.growthCycles).toBe(1);
 
-        // 2. Surrounding 1-tile ring (dx in [-1, 1], dy in [-1, 1]) is claimed
+        // 2. Surrounding contiguous territory ring (dx in [-1, 1], dy in [-1, 1]) is converted
         let claimedCount = 0;
         for (let dy = -1; dy <= 1; dy++) {
             for (let dx = -1; dx <= 1; dx++) {
@@ -150,7 +161,7 @@ describe('Pocket Dimension Domain Node Territory Activation & Growth', () => {
         }
         expect(claimedCount).toBe(9);
 
-        // 3. Tile at distance 2 is NOT claimed at cycle 1
+        // 3. Tile at distance 2 was not territory, so remains unclaimed
         const dist2Tile = superboard.miniboards[0].tiles[9 * 15 + 7]; // (7, 9), dy = 2
         expect(dist2Tile.territory).toBeUndefined();
 
@@ -161,13 +172,24 @@ describe('Pocket Dimension Domain Node Territory Activation & Growth', () => {
         );
     });
 
-    test('triggerSuperboardMonolithImmediateGrowth expands domain around 1x1 domain_node footprint', () => {
+    test('triggerSuperboardMonolithImmediateGrowth converts existing contiguous territory around 1x1 domain_node footprint', () => {
         const targetTile = superboard.miniboards[0].tiles[112]; // (7, 7)
         targetTile.contains = {
             id: 'node_7_7',
             subtype: 'domain_node',
             key: 'domain_node'
         };
+
+        // Pre-set existing territory for flood-fill
+        for (let dy = -1; dy <= 1; dy++) {
+            for (let dx = -1; dx <= 1; dx++) {
+                const gx = 7 + dx;
+                const gy = 7 + dy;
+                const t = superboard.miniboards[0].tiles[gy * 15 + gx];
+                t.territory = 'neutral';
+                t.territoryAffiliation = 'neutral';
+            }
+        }
 
         const growthAnchor = {
             ...targetTile,
@@ -196,37 +218,20 @@ describe('Pocket Dimension Domain Node Territory Activation & Growth', () => {
         }
     });
 
-    test('tickPocketDomainMonoliths grows 1x1 domain_node into cycle 2 (5x5 footprint) over time', () => {
+    test('tickPocketDomainMonoliths does not expand domain onto neutral non-territory cells over time', () => {
         const targetTile = superboard.miniboards[0].tiles[112]; // (7, 7)
         targetTile.contains = {
             id: 'node_7_7',
             subtype: 'domain_node',
             key: 'domain_node',
             activated: true,
-            affiliation: 'player',
-            growthCycles: 1,
-            lastGrowthTime: Date.now() - 35000 // 35 seconds ago (> 30s)
+            affiliation: 'player'
         };
         targetTile.activated = true;
-        targetTile.growthCycles = 1;
-        targetTile.lastGrowthTime = Date.now() - 35000;
 
         pageInstance.tickPocketDomainMonoliths(superboard);
 
-        // Target tile now at cycle 2
-        expect(targetTile.contains.growthCycles).toBe(2);
-
-        // 5x5 footprint around (7, 7) claimed
-        for (let dy = -2; dy <= 2; dy++) {
-            for (let dx = -2; dx <= 2; dx++) {
-                const gx = 7 + dx;
-                const gy = 7 + dy;
-                const t = superboard.miniboards[0].tiles[gy * 15 + gx];
-                expect(t.territory).toBe('player');
-            }
-        }
-
-        // Tile at distance 3 is still unclaimed
+        // Tile at distance 3 is still unclaimed (no automatic growth onto non-territory tiles)
         const dist3Tile = superboard.miniboards[0].tiles[10 * 15 + 7]; // (7, 10), dy = 3
         expect(dist3Tile.territory).toBeUndefined();
     });
@@ -278,6 +283,11 @@ describe('Pocket Dimension Domain Node Territory Activation & Growth', () => {
             vendorCell: 'anchor'
         };
 
+        // Preset territory in Miniboard 4 for flood-fill
+        const neighborTileMb4 = superboard.miniboards[4].tiles[4 * 15 + 4]; // local (4, 4) -> global (19, 19)
+        neighborTileMb4.territory = 'neutral';
+        neighborTileMb4.territoryAffiliation = 'neutral';
+
         pageInstance.state.superboardPlayerPos = { gx: 20, gy: 20 };
         pageInstance.state.activeGeneratorTile = mb4Tile;
 
@@ -287,8 +297,7 @@ describe('Pocket Dimension Domain Node Territory Activation & Growth', () => {
         expect(mb4Tile.territory).toBe('player');
         expect(mb4Tile.contains.affiliation).toBe('player');
 
-        // 2. Surrounding ring in Miniboard 4 is claimed (gx: 19..22, gy: 19..22)
-        const neighborTileMb4 = superboard.miniboards[4].tiles[4 * 15 + 4]; // local (4, 4) -> global (19, 19)
+        // 2. Surrounding territory in Miniboard 4 is converted
         expect(neighborTileMb4.territory).toBe('player');
 
         // 3. Miniboard 0 tile 80 (local 5, 5 -> global 5, 5) was NOT claimed!
@@ -431,11 +440,6 @@ describe('Pocket Dimension Domain Node Territory Activation & Growth', () => {
             vendorCell: 'bottom_right'
         };
 
-        pageInstance.state.superboardPlayerPos = { gx: 13.5, gy: 8.5 }; // Micro-grid sub-tile float
-        pageInstance.state.activeGeneratorTile = nodeTile;
-
-        pageInstance.handleActivateGenerator();
-
         const getTileAt = (gx, gy) => {
             const mbX = Math.floor(gx / 15);
             const mbY = Math.floor(gy / 15);
@@ -444,6 +448,22 @@ describe('Pocket Dimension Domain Node Territory Activation & Growth', () => {
             const ly = gy % 15;
             return superboard.miniboards[mbIdx].tiles[ly * 15 + lx];
         };
+
+        // Preset territory centered at (14, 9)
+        for (let dy = -1; dy <= 1; dy++) {
+            for (let dx = -1; dx <= 1; dx++) {
+                const gx = 14 + dx;
+                const gy = 9 + dy;
+                const t = getTileAt(gx, gy);
+                t.territory = 'neutral';
+                t.territoryAffiliation = 'neutral';
+            }
+        }
+
+        pageInstance.state.superboardPlayerPos = { gx: 13.5, gy: 8.5 }; // Micro-grid sub-tile float
+        pageInstance.state.activeGeneratorTile = nodeTile;
+
+        pageInstance.handleActivateGenerator();
 
         // The territory must be centered at (14, 9): X in [13..15], Y in [8..10]
         for (let dy = -1; dy <= 1; dy++) {
@@ -484,9 +504,6 @@ describe('Pocket Dimension Domain Node Territory Activation & Growth', () => {
             }
         };
 
-        pageInstance.state.superboardPlayerPos = { gx: 14.5, gy: 9.5 }; // Float position
-        pageInstance.triggerSuperboardMonolithImmediateGrowth(growthAnchor, 'player', 1);
-
         const getTileAt = (gx, gy) => {
             const mbX = Math.floor(gx / 15);
             const mbY = Math.floor(gy / 15);
@@ -495,6 +512,20 @@ describe('Pocket Dimension Domain Node Territory Activation & Growth', () => {
             const ly = gy % 15;
             return superboard.miniboards[mbIdx].tiles[ly * 15 + lx];
         };
+
+        // Preset territory centered at (14, 9)
+        for (let dy = -1; dy <= 1; dy++) {
+            for (let dx = -1; dx <= 1; dx++) {
+                const gx = 14 + dx;
+                const gy = 9 + dy;
+                const t = getTileAt(gx, gy);
+                t.territory = 'neutral';
+                t.territoryAffiliation = 'neutral';
+            }
+        }
+
+        pageInstance.state.superboardPlayerPos = { gx: 14.5, gy: 9.5 }; // Float position
+        pageInstance.triggerSuperboardMonolithImmediateGrowth(growthAnchor, 'player', 1);
 
         // Center is (14, 9)
         for (let dy = -1; dy <= 1; dy++) {

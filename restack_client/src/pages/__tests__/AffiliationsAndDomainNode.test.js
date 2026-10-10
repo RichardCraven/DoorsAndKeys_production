@@ -317,6 +317,59 @@ describe('Affiliations System & Domain Node Territory Conversion', () => {
       expect(dungeonPage.displayMessage).toHaveBeenCalledWith(expect.stringContaining('Domain Node successfully converted to MOX'));
     });
 
+    test('completeDomainNodeConversion converts all territory across room boundaries, corridors, diagonals, and war camps/forts', () => {
+      const nodeTile = mockBoardManager.tiles[30]; // row 2, col 0
+      nodeTile.territory = 'benthic';
+      nodeTile.affiliation = 'benthic';
+      nodeTile.borders = { top: '2px solid black' }; // Wall border separating from northern corridor
+
+      const northTile = mockBoardManager.tiles[15]; // row 1, col 0
+      northTile.territory = 'benthic';
+      northTile.affiliation = 'benthic';
+      northTile.borders = { bottom: '2px solid black' };
+
+      const farNorthTile = mockBoardManager.tiles[0]; // row 0, col 0
+      farNorthTile.territory = 'benthic';
+      farNorthTile.affiliation = 'benthic';
+
+      const diagonalTile = mockBoardManager.tiles[16]; // row 1, col 1
+      diagonalTile.territory = 'benthic';
+      diagonalTile.affiliation = 'benthic';
+
+      const warCampTile = mockBoardManager.tiles[31]; // row 2, col 1
+      warCampTile.territory = 'benthic';
+      warCampTile.affiliation = 'benthic';
+      warCampTile.building = 'war_camp';
+      warCampTile.contains = { type: 'building', subtype: 'war_camp' };
+
+      const outpostTile = mockBoardManager.tiles[32]; // row 2, col 2
+      outpostTile.territory = 'benthic';
+      outpostTile.affiliation = 'benthic';
+      outpostTile.building = 'outpost';
+      outpostTile.contains = { type: 'building', subtype: 'outpost' };
+
+      dungeonPage.startDomainNodeConversion(nodeTile);
+      dungeonPage.completeDomainNodeConversion();
+
+      // All tiles across room boundary, corridor, diagonal, and structures convert to Mox (player affiliation)
+      expect(nodeTile.territory).toBe('mox');
+      expect(nodeTile.affiliation).toBe('mox');
+      expect(northTile.territory).toBe('mox');
+      expect(northTile.affiliation).toBe('mox');
+      expect(farNorthTile.territory).toBe('mox');
+      expect(farNorthTile.affiliation).toBe('mox');
+      expect(diagonalTile.territory).toBe('mox');
+      expect(diagonalTile.affiliation).toBe('mox');
+      expect(warCampTile.territory).toBe('mox');
+      expect(warCampTile.affiliation).toBe('mox');
+      expect(warCampTile.ownedByPlayer).toBe(true);
+      expect(warCampTile.placedBy).toBe('player');
+      expect(outpostTile.territory).toBe('mox');
+      expect(outpostTile.affiliation).toBe('mox');
+      expect(outpostTile.ownedByPlayer).toBe(true);
+      expect(outpostTile.placedBy).toBe('player');
+    });
+
     test('tickOutpostAttacks respects affiliation: friendly outpost attacks non-clan enemies and spares player', () => {
       const outpostTile = mockBoardManager.tiles[32];
       outpostTile.affiliation = 'mox';
@@ -338,7 +391,9 @@ describe('Affiliations System & Domain Node Territory Conversion', () => {
       expect(dungeonPage.projectileCanvasRef.current.fireProjectile).toHaveBeenCalledWith(
         32,
         31,
-        expect.any(Function)
+        expect.any(Function),
+        expect.anything(),
+        expect.anything()
       );
     });
 

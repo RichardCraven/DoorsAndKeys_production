@@ -4392,13 +4392,19 @@ export default function CombatGrid(props) {
             );
         }
 
-        if (anim.type === 'dark_apotheosis_pillar' && anim.srcPx) {
+        if (anim.type === 'dark_apotheosis_pillar' && (anim.srcPx || anim.sourceUnitId)) {
+            const liveUnit = anim.sourceUnitId ? (battleData?.[anim.sourceUnitId] || getLiveCombatant?.(anim.sourceUnitId)) : null;
+            const center = (liveUnit && liveUnit.coordinates) ? {
+                x: tilePos(liveUnit.coordinates.x) + TILE_SIZE / 2,
+                y: tilePos(liveUnit.coordinates.y) + TILE_SIZE / 2
+            } : anim.srcPx;
+            if (!center) return null;
             return (
                 <React.Fragment key={key}>
                     <div style={{
                         position: 'absolute',
-                        left: `${anim.srcPx.x}px`,
-                        top: `${anim.srcPx.y}px`,
+                        left: `${center.x}px`,
+                        top: `${center.y}px`,
                         width: '160px',
                         height: '600px',
                         transform: 'translate(-50%, -80%)',
@@ -4407,29 +4413,54 @@ export default function CombatGrid(props) {
                         borderRadius: '80px',
                         pointerEvents: 'none',
                         zIndex: 4900,
-                        animation: 'scaleUpFadeOut 1.6s cubic-bezier(0.15, 0.85, 0.35, 1) forwards'
+                        animation: 'voidPillarRise 1.6s cubic-bezier(0.15, 0.85, 0.35, 1) forwards'
                     }} />
                 </React.Fragment>
             );
         }
 
-        if (anim.type === 'dark_apotheosis_nova' && anim.srcPx) {
+        if (anim.type === 'dark_apotheosis_nova' && (anim.srcPx || anim.sourceUnitId)) {
+            const liveUnit = anim.sourceUnitId ? (battleData?.[anim.sourceUnitId] || getLiveCombatant?.(anim.sourceUnitId)) : null;
+            const center = (liveUnit && liveUnit.coordinates) ? {
+                x: tilePos(liveUnit.coordinates.x) + TILE_SIZE / 2,
+                y: tilePos(liveUnit.coordinates.y) + TILE_SIZE / 2
+            } : anim.srcPx;
+            if (!center) return null;
             return (
                 <div key={key} style={{
                     position: 'absolute',
-                    left: `${anim.srcPx.x}px`,
-                    top: `${anim.srcPx.y}px`,
-                    width: '350px',
-                    height: '350px',
+                    left: `${center.x}px`,
+                    top: `${center.y}px`,
+                    width: '380px',
+                    height: '380px',
                     transform: 'translate(-50%, -50%)',
-                    border: '4px solid #c084fc',
-                    background: 'radial-gradient(circle, rgba(168, 85, 247, 0.4) 0%, rgba(59, 7, 100, 0.2) 60%, transparent 100%)',
-                    boxShadow: '0 0 60px #9333ea, inset 0 0 40px #a855f7',
-                    borderRadius: '50%',
                     pointerEvents: 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
                     zIndex: 4850,
-                    animation: 'scaleUpFadeOut 1.8s cubic-bezier(0.1, 0.8, 0.3, 1) forwards'
-                }} />
+                    animation: 'voidNovaExpand 1.8s cubic-bezier(0.1, 0.8, 0.3, 1) forwards'
+                }}>
+                    {/* Outer void nova shockwave ring */}
+                    <div style={{
+                        position: 'absolute',
+                        width: '100%',
+                        height: '100%',
+                        borderRadius: '50%',
+                        border: '5px double #c084fc',
+                        boxShadow: '0 0 50px #9333ea, inset 0 0 40px #581c87',
+                        background: 'radial-gradient(circle, rgba(168, 85, 247, 0.35) 0%, rgba(59, 7, 100, 0.45) 50%, transparent 75%)'
+                    }} />
+                    {/* Inner dark singularity */}
+                    <div style={{
+                        position: 'absolute',
+                        width: '120px',
+                        height: '120px',
+                        borderRadius: '50%',
+                        background: 'radial-gradient(circle, #ffffff 10%, #7e22ce 50%, #090314 90%)',
+                        boxShadow: '0 0 35px #c084fc, 0 0 70px #581c87'
+                    }} />
+                </div>
             );
         }
 
@@ -4447,7 +4478,7 @@ export default function CombatGrid(props) {
                     borderRadius: '50%',
                     pointerEvents: 'none',
                     zIndex: 4800,
-                    animation: 'scaleUpFadeOut 1.0s ease-out forwards'
+                    animation: 'voidBurstPop 1.0s ease-out forwards'
                 }} />
             );
         }

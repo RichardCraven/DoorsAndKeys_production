@@ -11521,7 +11521,7 @@ export function CombatManagerRedux() {
             this.appendCombatLog(`💥 ${this.getCombatantLogName(unit)} unleashes Dark Apotheosis! Strikes ${hitCount} enemies with necrotic energy!`);
 
             if (this.animManagerRedux && typeof this.animManagerRedux.triggerAbility === 'function') {
-                this.animManagerRedux.triggerAbility(unit.coordinates, target ? target.coordinates : unit.coordinates, 'dark_apotheosis', false, null, unit.id);
+                this.animManagerRedux.triggerAbility(unit.coordinates, target ? target.coordinates : unit.coordinates, 'dark_apotheosis', !!(target && target.isLarge), (target && target.occupiedCoords) || null, unit.id);
             }
             if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
             return;
@@ -15133,7 +15133,7 @@ export function CombatManagerRedux() {
         const target = fighter.targetId ? this.combatants[fighter.targetId] : null;
 
         // Some abilities (self utility) don't need a hostile target
-        const isSelfTarget = resolved.range === 'self' || resolved.id === 'notch' || resolved.id === 'monk_meditate' || resolved.id === 'monk_ethereal_speed' || (resolved.id && resolved.id.startsWith('summon_'));
+        const isSelfTarget = resolved.range === 'self' || resolved.id === 'notch' || resolved.id === 'monk_meditate' || resolved.id === 'monk_ethereal_speed' || (resolved.id && resolved.id.startsWith('summon_')) || resolved.id === 'dark_apotheosis';
 
         const targetUnit = isSelfTarget ? fighter : target;
         if (!targetUnit) return;
