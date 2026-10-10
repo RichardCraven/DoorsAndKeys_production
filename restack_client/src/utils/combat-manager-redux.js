@@ -11527,6 +11527,114 @@ export function CombatManagerRedux() {
             return;
         }
 
+        if (abilityId === 'void_touch') {
+            const atkDmg = unit.stats?.atk || 10;
+            const rawDamage = Math.round(atkDmg * 1.1);
+            const finalDmg = this.damageCheck(unit, target, rawDamage, false);
+            target.hp = Math.max(0, target.hp - finalDmg);
+            this.checkShrinerConcentrationDamage(unit, target, finalDmg);
+            if (finalDmg > 0) this.wakeSleepingTarget(target, 'Void Touch');
+            target.damageIndicators = target.damageIndicators || [];
+            target.damageIndicators.push({
+                id: combatClock.now() + Math.random(),
+                value: `-${finalDmg}`,
+                source: 'Void Touch',
+                type: 'damage'
+            });
+            this.appendCombatLog(`${this.getCombatantLogName(unit)} strikes ${this.getCombatantLogName(target)} with Void Touch for ${finalDmg} necrotic damage.`);
+            if (target.hp <= 0) this.targetKilled(target);
+            if (this.animManagerRedux && typeof this.animManagerRedux.triggerAbility === 'function') {
+                this.animManagerRedux.triggerAbility(unit.coordinates, target.coordinates, 'void_touch', target.isLarge, target.occupiedCoords, unit.id);
+            }
+            if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
+            return;
+        }
+
+        if (abilityId === 'death_grasp') {
+            const atkDmg = unit.stats?.atk || 10;
+            const rawDamage = Math.round(atkDmg * 1.25);
+            const finalDmg = this.damageCheck(unit, target, rawDamage, false);
+            target.hp = Math.max(0, target.hp - finalDmg);
+            this.checkShrinerConcentrationDamage(unit, target, finalDmg);
+            if (finalDmg > 0) this.wakeSleepingTarget(target, 'Death Grasp');
+            target.damageIndicators = target.damageIndicators || [];
+            target.damageIndicators.push({
+                id: combatClock.now() + Math.random(),
+                value: `-${finalDmg}`,
+                source: 'Death Grasp',
+                type: 'damage'
+            });
+            this.appendCombatLog(`${this.getCombatantLogName(unit)} casts Death Grasp on ${this.getCombatantLogName(target)} for ${finalDmg} necrotic damage!`);
+            if (target.hp <= 0) this.targetKilled(target);
+            if (this.animManagerRedux && typeof this.animManagerRedux.triggerAbility === 'function') {
+                this.animManagerRedux.triggerAbility(unit.coordinates, target.coordinates, 'death_grasp', target.isLarge, target.occupiedCoords, unit.id);
+            }
+            if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
+            return;
+        }
+
+        if (abilityId === 'soul_rend') {
+            const atkDmg = unit.stats?.atk || 10;
+            const rawDamage = Math.round(atkDmg * 1.4);
+            const finalDmg = this.damageCheck(unit, target, rawDamage, false);
+            target.hp = Math.max(0, target.hp - finalDmg);
+            this.checkShrinerConcentrationDamage(unit, target, finalDmg);
+            if (finalDmg > 0) this.wakeSleepingTarget(target, 'Soul Rend');
+            target.damageIndicators = target.damageIndicators || [];
+            target.damageIndicators.push({
+                id: combatClock.now() + Math.random(),
+                value: `-${finalDmg}`,
+                source: 'Soul Rend',
+                type: 'damage'
+            });
+            const healAmt = Math.max(1, Math.round(finalDmg * 0.25));
+            const maxHp = unit.starting_hp || unit.hp || 100;
+            unit.hp = Math.min(maxHp, unit.hp + healAmt);
+            unit.damageIndicators = unit.damageIndicators || [];
+            unit.damageIndicators.push({
+                id: combatClock.now() + Math.random() + 1,
+                value: `+${healAmt}`,
+                source: 'Soul Rend',
+                type: 'heal'
+            });
+            this.appendCombatLog(`${this.getCombatantLogName(unit)} uses Soul Rend on ${this.getCombatantLogName(target)}, dealing ${finalDmg} necrotic damage and healing +${healAmt} HP!`);
+            if (target.hp <= 0) this.targetKilled(target);
+            if (this.animManagerRedux && typeof this.animManagerRedux.triggerAbility === 'function') {
+                this.animManagerRedux.triggerAbility(unit.coordinates, target.coordinates, 'soul_rend', target.isLarge, target.occupiedCoords, unit.id);
+            }
+            if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
+            return;
+        }
+
+        if (abilityId === 'abyssal_chains') {
+            const atkDmg = unit.stats?.atk || 10;
+            const rawDamage = Math.round(atkDmg * 1.55);
+            const finalDmg = this.damageCheck(unit, target, rawDamage, false);
+            target.hp = Math.max(0, target.hp - finalDmg);
+            this.checkShrinerConcentrationDamage(unit, target, finalDmg);
+            if (finalDmg > 0) this.wakeSleepingTarget(target, 'Abyssal Chains');
+            target.damageIndicators = target.damageIndicators || [];
+            target.damageIndicators.push({
+                id: combatClock.now() + Math.random(),
+                value: `-${finalDmg}`,
+                source: 'Abyssal Chains',
+                type: 'damage'
+            });
+            const dur = 2;
+            target.ensnared = true;
+            target.ensnaredSourceAbility = 'abyssal_chains';
+            target.ensnaredRounds = dur;
+            target.ensnaredTotalRounds = dur;
+            this._applyDebuff(target, null, 'ensnared', dur);
+            this.appendCombatLog(`${this.getCombatantLogName(unit)} casts Abyssal Chains on ${this.getCombatantLogName(target)}: ${finalDmg} necrotic damage and ensnared!`);
+            if (target.hp <= 0) this.targetKilled(target);
+            if (this.animManagerRedux && typeof this.animManagerRedux.triggerAbility === 'function') {
+                this.animManagerRedux.triggerAbility(unit.coordinates, target.coordinates, 'abyssal_chains', target.isLarge, target.occupiedCoords, unit.id);
+            }
+            if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
+            return;
+        }
+
         if (abilityId === 'monk_whirlwind' || abilityId === 'barbarian_whirlwind' || abilityId === 'whirlwind') {
             const callerOccupied = unit.occupiedCoords || [unit.coordinates];
             let hitCount = 0;

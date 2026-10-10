@@ -621,9 +621,16 @@ class MapMakerPage extends React.Component {
                     const pinnedPaletteTile = this.props.mapMaker?.paletteTiles?.[this.state.pinnedOption.id];
                     if (pinnedPaletteTile && (pinnedPaletteTile.optionType === 'dream den' || pinnedPaletteTile.optionType === 'dream_den')) {
                          vendorKey = 'dream_den';
-                    } else if (pinnedPaletteTile && (pinnedPaletteTile.optionType === 'archaic tunnel' || pinnedPaletteTile.optionType === 'archaic_tunnel')) {
+                    } else if (pinnedPaletteTile && (pinnedPaletteTile.optionType === 'archaic tunnel' || pinnedPaletteTile.optionType === 'archaic_tunnel' || pinnedPaletteTile.optionType === 'archaic_tunnel_endpoint')) {
                          baseType = 'archaic_tunnel';
                          vendorKey = 'archaic_tunnel';
+                         image = 'archaic_tunnel';
+                    }
+                } else if (this.state.pinnedOption.type === 'archaic-tile') {
+                    const archaicOption = this.props.mapMaker?.archaicOptions?.[this.state.pinnedOption.id];
+                    if (archaicOption && (archaicOption.key === 'archaic_tunnel_endpoint' || archaicOption.footprintType === '1x2')) {
+                         baseType = 'archaic_tunnel_endpoint';
+                         vendorKey = 'archaic_tunnel_endpoint';
                          image = 'archaic_tunnel';
                     }
                 } else if (this.state.pinnedOption.type === 'terrain-tile') {
@@ -1538,7 +1545,7 @@ class MapMakerPage extends React.Component {
   }
 
   isParentPaletteOption = (optionType) => {
-    return ['monsters', 'gate', 'key', 'items', 'jewels', 'runes', 'treasure', 'vendors', 'shrine', 'territory', 'buildings', 'pocket buildings', 'generators', 'dungeon litter', 'dimension litter', 'pocket litter', 'terrain'].includes(optionType);
+    return ['monsters', 'gate', 'key', 'items', 'jewels', 'runes', 'treasure', 'vendors', 'shrine', 'territory', 'buildings', 'pocket buildings', 'generators', 'dungeon litter', 'dimension litter', 'pocket litter', 'terrain', 'archaic'].includes(optionType);
   }
 
   getVendorFootprintTileIds = (anchorTileId, footprintType = '2x2') => {
@@ -1609,11 +1616,20 @@ class MapMakerPage extends React.Component {
         if (pocketLitterOption.footprintType) return pocketLitterOption.footprintType;
         keyToCheck = pocketLitterOption.key;
       }
+    } else if (pinnedOption.type === 'archaic-tile') {
+      const archaicOption = this.props.mapMaker?.archaicOptions?.[pinnedOption.id];
+      if (archaicOption) {
+        if (archaicOption.footprintType) return archaicOption.footprintType;
+        if (archaicOption.key === 'archaic_tunnel_endpoint') return '1x2';
+        if (archaicOption.key === 'archaic_tunnel') return null;
+        keyToCheck = archaicOption.key;
+      }
     }
 
     if (keyToCheck) {
       if (['keep', 'fortress', 'summoning_temple', 'rift', 'rift_2', 'pocket_litter_fractured_monolith', 'fractured_monolith'].includes(keyToCheck)) return '3x3';
-      if (['archaic_tunnel', 'pocket_litter_archaic_tunnel'].includes(keyToCheck)) return '1x2';
+      if (['archaic_tunnel_endpoint', 'archaic_tunnel', 'pocket_litter_archaic_tunnel'].includes(keyToCheck) && keyToCheck !== 'archaic_tunnel') return '1x2';
+      if (keyToCheck === 'archaic_tunnel_endpoint') return '1x2';
       if (['war_camp', 'war_fort', 'dream_den', 'pocket_litter_rift_embers', 'rift_embers', 'healing_circle', 'pocket_healing_circle'].includes(keyToCheck)) return '2x2';
     }
 
@@ -1622,7 +1638,8 @@ class MapMakerPage extends React.Component {
       const pinnedPaletteTile = this.props.mapMaker?.paletteTiles?.[pinnedOption.id];
       if (pinnedPaletteTile && (
         pinnedPaletteTile.optionType === 'archaic tunnel' ||
-        pinnedPaletteTile.optionType === 'archaic_tunnel'
+        pinnedPaletteTile.optionType === 'archaic_tunnel' ||
+        pinnedPaletteTile.optionType === 'archaic_tunnel_endpoint'
       )) {
         return '1x2';
       }
@@ -1830,6 +1847,8 @@ class MapMakerPage extends React.Component {
       }
 
       const isArchaic = String(vendorKey).includes('archaic_tunnel') || String(baseType).includes('archaic_tunnel');
+      const existingVar = tiles[anchorTileId]?.contains?.variation || tiles[anchorTileId]?.variation || tiles[tileId]?.contains?.variation || tiles[tileId]?.variation || 'facing_left';
+      const existingDir = tiles[anchorTileId]?.contains?.direction || tiles[anchorTileId]?.direction || tiles[tileId]?.contains?.direction || tiles[tileId]?.direction || 'left';
 
       tiles[tileId].contains = {
         type: baseType,
@@ -1837,13 +1856,13 @@ class MapMakerPage extends React.Component {
         vendorGroupId,
         vendorAnchorId: anchorTileId,
         vendorCell: vendorCells[idx] || 'anchor',
-        ...(isArchaic ? { state: 'dormant', active: false, variation: 'facing_left', direction: 'left' } : {})
+        ...(isArchaic ? { state: 'active', active: true, variation: existingVar, direction: existingDir } : {})
       };
       if (isArchaic) {
-        tiles[tileId].state = 'dormant';
-        tiles[tileId].active = false;
-        tiles[tileId].variation = 'facing_left';
-        tiles[tileId].direction = 'left';
+        tiles[tileId].state = 'active';
+        tiles[tileId].active = true;
+        tiles[tileId].variation = existingVar;
+        tiles[tileId].direction = existingDir;
       }
       tiles[tileId].image = imageOverride || vendorKey;
       tiles[tileId].color = null;
@@ -2074,8 +2093,12 @@ class MapMakerPage extends React.Component {
     if (pinnedOption.type === 'locus-tile') {
       locusOption = this.props.mapMaker?.locusOptions?.[pinnedOption.id];
     }
+    let archaicOption = null;
+    if (pinnedOption.type === 'archaic-tile') {
+      archaicOption = this.props.mapMaker?.archaicOptions?.[pinnedOption.id];
+    }
 
-    const isSpecialOption = monster || gate || key || tierOption || jewelOption || runeOption || treasureOption || vendorOption || shrineOption || territoryOption || buildingOption || pocketBuildingOption || generatorOption || dungeonLitterOption || pocketLitterOption || terrainOption || locusOption;
+    const isSpecialOption = monster || gate || key || tierOption || jewelOption || runeOption || treasureOption || vendorOption || shrineOption || territoryOption || buildingOption || pocketBuildingOption || generatorOption || dungeonLitterOption || pocketLitterOption || terrainOption || locusOption || archaicOption;
     if (!isSpecialOption && !pinned) return null;
 
     let arr = this.state.tiles.map(t => ({ ...t }));
@@ -2207,6 +2230,13 @@ class MapMakerPage extends React.Component {
           if (['pocket_litter_fractured_monolith', 'fractured_monolith'].includes(pocketLitterOption.key)) {
             footprintType = '3x3';
           }
+          if (pocketLitterOption.key === 'pocket_litter_archaic_tunnel') {
+            const currentContains = arr[tileId]?.contains;
+            const isAlreadyTunnel = currentContains?.type === 'archaic_tunnel' || currentContains?.subtype === 'archaic_tunnel' || arr[tileId]?.image === 'archaic_tunnel' || String(currentContains?.vendorGroupId || '').includes('archaic_tunnel');
+            if (isAlreadyTunnel) {
+              return arr;
+            }
+          }
           if (!this.canPlaceVendorFootprint(arr, tileId, footprintType)) {
             this.toast(`${pocketLitterOption.name} requires a ${footprintType} empty space.`);
             return null;
@@ -2239,6 +2269,30 @@ class MapMakerPage extends React.Component {
         };
         arr[tileId].image = images[locusOption.image] || locusOption.image;
         arr[tileId].color = null;
+      } else if (archaicOption) {
+        if (archaicOption.key === 'archaic_tunnel_endpoint' || archaicOption.footprintType === '1x2') {
+          const currentContains = arr[tileId]?.contains;
+          const isAlreadyTunnel = String(currentContains?.subtype || currentContains?.type || arr[tileId]?.image || '').includes('archaic_tunnel') && (arr[tileId]?.vendorGroupId || currentContains?.vendorGroupId);
+          if (isAlreadyTunnel) {
+            return arr;
+          }
+          if (!this.canPlaceVendorFootprint(arr, tileId, '1x2')) {
+            this.toast('Archaic Tunnel Endpoint requires a 1x2 empty space.');
+            return null;
+          }
+          arr = this.placeVendorFootprint(arr, tileId, 'archaic_tunnel_endpoint', 'archaic_tunnel', 'archaic_tunnel', '1x2');
+        } else {
+          delete arr[tileId].vendorCell;
+          delete arr[tileId].vendorGroupId;
+          delete arr[tileId].vendorAnchorId;
+          delete arr[tileId].building;
+          arr[tileId].contains = {
+            type: 'archaic_tunnel',
+            subtype: 'archaic_tunnel'
+          };
+          arr[tileId].image = images['archaic_tunnel_tile'] ? 'archaic_tunnel_tile' : archaicOption.image;
+          arr[tileId].color = null;
+        }
       }
       return updateTerrainAutotiles(arr, tileId);
     } else if (pinned && pinned.optionType === 'passage') {
@@ -2316,11 +2370,16 @@ class MapMakerPage extends React.Component {
       }
       arr = this.placeVendorFootprint(arr, tileId, 'dream_den', 'dream_den', 'moon_castle');
     } else if (pinned.optionType === 'archaic tunnel' || pinned.optionType === 'archaic_tunnel') {
-      if (!this.canPlaceVendorFootprint(arr, tileId, '1x2')) {
-        this.toast('Archaic Tunnel requires a 1x2 empty space.');
-        return null;
-      }
-      arr = this.placeVendorFootprint(arr, tileId, 'archaic_tunnel', 'archaic_tunnel', 'archaic_tunnel', '1x2');
+      delete arr[tileId].vendorCell;
+      delete arr[tileId].vendorGroupId;
+      delete arr[tileId].vendorAnchorId;
+      delete arr[tileId].building;
+      arr[tileId].contains = {
+        type: 'archaic_tunnel',
+        subtype: 'archaic_tunnel'
+      };
+      arr[tileId].image = 'archaic_tunnel_tile';
+      arr[tileId].color = null;
     } else {
       const rawType = pinned.optionType || pinned.image || pinned.type || 'misc';
       const normalizedType = String(rawType).replace(/\s+/g, '_');
@@ -2346,7 +2405,7 @@ class MapMakerPage extends React.Component {
       : null;
     const isSpecialOption = this.state.pinnedOption && [
       'monster-tile', 'gate-tile', 'key-tile', 'tier-tile', 'jewel-tile', 
-      'rune-tile', 'treasure-tile', 'vendor-tile', 'shrine-tile', 'territory-tile', 'building-tile', 'pocket-building-tile', 'generator-tile', 'dungeon-litter-tile', 'pocket-litter-tile', 'terrain-tile', 'locus-tile', 'forest-stamp-tile', 'mountain-stamp-tile'
+      'rune-tile', 'treasure-tile', 'vendor-tile', 'shrine-tile', 'territory-tile', 'building-tile', 'pocket-building-tile', 'generator-tile', 'dungeon-litter-tile', 'pocket-litter-tile', 'terrain-tile', 'locus-tile', 'forest-stamp-tile', 'mountain-stamp-tile', 'archaic-tile'
     ].includes(this.state.pinnedOption.type);
 
     if (this.state.mouseDown && this.state.pinnedOption && (pinnedPaletteTile || pinnedPassageTool || isSpecialOption)) {
@@ -3576,7 +3635,7 @@ class MapMakerPage extends React.Component {
         ['monster-tile', 'gate-tile', 'key-tile', 'tier-tile', 'jewel-tile', 'rune-tile', 'treasure-tile',
          'vendor-tile', 'shrine-tile', 'territory-tile', 'building-tile', 'pocket-building-tile',
          'generator-tile', 'dungeon-litter-tile', 'pocket-litter-tile', 'terrain-tile', 'locus-tile',
-         'forest-stamp-tile', 'mountain-stamp-tile'].includes(tile.type);
+         'forest-stamp-tile', 'mountain-stamp-tile', 'archaic-tile'].includes(tile.type);
 
       if (isToolTile) {
         this.setState({ patrolPlacement: null });
@@ -3625,7 +3684,7 @@ class MapMakerPage extends React.Component {
         })
       }
 
-    } else if (tile.type === 'monster-tile' || tile.type === 'gate-tile' || tile.type === 'key-tile' || tile.type === 'tier-tile' || tile.type === 'jewel-tile' || tile.type === 'rune-tile' || tile.type === 'treasure-tile' || tile.type === 'vendor-tile' || tile.type === 'shrine-tile' || tile.type === 'territory-tile' || tile.type === 'building-tile' || tile.type === 'pocket-building-tile' || tile.type === 'generator-tile' || tile.type === 'dungeon-litter-tile' || tile.type === 'pocket-litter-tile' || tile.type === 'terrain-tile' || tile.type === 'locus-tile' || tile.type === 'forest-stamp-tile' || tile.type === 'mountain-stamp-tile') {
+    } else if (tile.type === 'monster-tile' || tile.type === 'gate-tile' || tile.type === 'key-tile' || tile.type === 'tier-tile' || tile.type === 'jewel-tile' || tile.type === 'rune-tile' || tile.type === 'treasure-tile' || tile.type === 'vendor-tile' || tile.type === 'shrine-tile' || tile.type === 'territory-tile' || tile.type === 'building-tile' || tile.type === 'pocket-building-tile' || tile.type === 'generator-tile' || tile.type === 'dungeon-litter-tile' || tile.type === 'pocket-litter-tile' || tile.type === 'terrain-tile' || tile.type === 'locus-tile' || tile.type === 'forest-stamp-tile' || tile.type === 'mountain-stamp-tile' || tile.type === 'archaic-tile') {
       this.setState({
         pinnedOption: tile
       })

@@ -36,7 +36,7 @@ export function MapMaker(props){
         'food',
         'dream den',
         'dungeon portal',
-        'archaic tunnel',
+        'archaic',
         'locuses',
         'inscription',
         'shrine',
@@ -222,12 +222,17 @@ export function MapMaker(props){
         { key: 'pocket_litter_fractured_monolith', name: 'Fractured Monolith', image: 'pocket_litter_fractured_monolith', isLarge: true, isMultiTile: true, footprintType: '3x3' },
         { key: 'pocket_litter_forge_remnants', name: 'Forge Remnants', image: 'pocket_litter_forge_remnants' },
         { key: 'pocket_litter_rift_embers', name: 'Rift Embers', image: 'pocket_litter_rift_embers', isLarge: true, isMultiTile: true },
-        { key: 'pocket_litter_archaic_tunnel', name: 'Archaic Tunnel', image: 'archaic_tunnel', isLarge: true, isMultiTile: true, footprintType: '1x2' },
+        { key: 'pocket_litter_archaic_tunnel', name: 'Archaic Tunnel Endpoint', image: 'archaic_tunnel', isLarge: true, isMultiTile: true, footprintType: '1x2' },
         { key: 'pocket_litter_astral_obelisk', name: 'Astral Obelisk', image: 'pocket_litter_astral_obelisk' },
         { key: 'pocket_litter_ancient_reliquary', name: 'Ancient Reliquary', image: 'pocket_litter_ancient_reliquary' },
         { key: 'pocket_litter_celestial_geode', name: 'Celestial Geode', image: 'pocket_litter_celestial_geode' },
     ];
     this.dimensionLitterOptions = this.pocketLitterOptions;
+
+    this.archaicOptions = [
+        { key: 'archaic_tunnel_endpoint', name: 'Archaic Tunnel Endpoint', image: 'archaic_tunnel', isLarge: true, isMultiTile: true, footprintType: '1x2' },
+        { key: 'archaic_tunnel', name: 'Archaic Tunnel', image: 'archaic_tunnel_tile' }
+    ];
 
     this.terrainOptions = [
         { key: 'terrain_tree_1', name: 'Pine Trees', image: 'terrain_tree_1' },
@@ -935,9 +940,13 @@ export function MapMaker(props){
                 return 'moon_castle'
             case 'dungeon portal':
                 return 'dungeon_portal'
+            case 'archaic':
+            case 'archaic_tunnel_endpoint':
+                return 'archaic_tunnel'
             case 'archaic tunnel':
             case 'archaic_tunnel':
-                return 'archaic_tunnel'
+            case 'archaic_tunnel_tile':
+                return 'archaic_tunnel_tile'
             case 'locuses':
                 return 'emerald_locus'
             case 'food':

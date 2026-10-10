@@ -36,6 +36,8 @@ class BoardsPalette extends React.Component {
         if (optionType === 'generators') return 'Generators';
         if (optionType === 'dungeon litter') return 'Dungeon Litter';
         if (optionType === 'dimension litter' || optionType === 'pocket litter') return 'Dimension Litter';
+        if (optionType === 'archaic') return 'Archaic';
+        if (optionType === 'archaic_tunnel_endpoint') return 'Archaic Tunnel Endpoint';
         if (optionType === 'archaic tunnel' || optionType === 'archaic_tunnel') return 'Archaic Tunnel';
         if (optionType === 'dream den' || optionType === 'dream_den') return 'Dream Den';
         if (optionType === 'dungeon portal' || optionType === 'dungeon_portal') return 'Dungeon Portal';
@@ -135,7 +137,7 @@ class BoardsPalette extends React.Component {
                                     </button>
                                 </div>
                             )}
-                            {['monsters', 'passage', 'gate', 'key', 'items', 'treasure', 'jewels', 'runes', 'vendors', 'locuses', 'shrine', 'territory', 'buildings', 'pocket buildings', 'generators', 'dungeon litter', 'dimension litter', 'pocket litter', 'terrain'].includes(tile.optionType) && (() => {
+                            {['monsters', 'passage', 'gate', 'key', 'items', 'treasure', 'jewels', 'runes', 'vendors', 'locuses', 'shrine', 'territory', 'buildings', 'pocket buildings', 'generators', 'dungeon litter', 'dimension litter', 'pocket litter', 'terrain', 'archaic'].includes(tile.optionType) && (() => {
                                 const isExpanded = this.props.optionClickedIdx === i;
                                 return (
                                     <div style={{ marginRight: '15px', display: 'flex', alignItems: 'center', userSelect: 'none' }}>
@@ -1082,6 +1084,38 @@ class BoardsPalette extends React.Component {
                                     index={ti}
                                     image={images[tItem.image]}
                                     imageOverride={images[tItem.image]}
+                                    handleHover={null}
+                                    handleClick={null}
+                                    isPaletteTile={true}
+                                    type={'item'}>
+                                    </Tile>
+                                </div>
+                            })}
+                        </div>}
+                        {tile.optionType === 'archaic' && <div className={`palette-option-expandable-container ${this.props.optionClickedIdx === i ? 'expanded' : ''}`}>
+                            {(this.props.mapMaker.archaicOptions || []).map((aItem, ai) => {
+                                const isHovered = this.state.hoveredSubItem?.type === 'archaic' && this.state.hoveredSubItem?.id === ai;
+                                const isSelected = this.props.pinnedOption?.type === 'archaic-tile' && this.props.pinnedOption?.id === ai;
+                                return <div
+                                key={`archaic-${ai}`}
+                                className={`palette-option-subcontainer${isHovered ? ' sub-hovered' : ''}${isSelected ? ' sub-selected' : ''}`}
+                                onMouseEnter={() => this.setState({ hoveredSubItem: { type: 'archaic', id: ai } })}
+                                onMouseLeave={() => this.setState({ hoveredSubItem: null })}
+                                onClick={() => {
+                                    this.props.handleClick({
+                                        type: 'archaic-tile',
+                                        id: ai,
+                                        key: aItem.key
+                                    })
+                                }}
+                                >
+                                    <div className="text-container">{aItem.name}</div>
+                                    <Tile
+                                    id={ai}
+                                    tileSize={this.props.tileSize}
+                                    index={ai}
+                                    image={images[aItem.image] || aItem.image}
+                                    imageOverride={images[aItem.image] || aItem.image}
                                     handleHover={null}
                                     handleClick={null}
                                     isPaletteTile={true}

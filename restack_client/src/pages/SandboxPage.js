@@ -38,8 +38,23 @@ import {
   summoner_alt_portrait,
   engineer_alt_portrait,
   glitterburn_alt_portrait,
+  hollow_portrait,
   hollow_alt_portrait,
+  horologist_portrait,
   horologist_alt_portrait,
+  horologist_future_echo,
+  horologist_set_anchor,
+  horologist_recall,
+  horologist_hour_of_reckoning,
+  horologist_clockwork_heart,
+  horologist_ledger_of_hours,
+  horologist_rewind_step,
+  horologist_stopwatch,
+  dark_pact_summoner,
+  soul_tithe_summoner,
+  soul_tap_summoner,
+  spirit_sight_summoner,
+  curse_doll,
   goblin_portrait,
   soldier_portrait,
   skeleton_portrait,
@@ -256,7 +271,9 @@ import '../styles/monster-battle.scss';
 import skillsMatrix from '../utils/skills-matrix';
 
 // Dynamically load all runes from the directory
-const req = require.context('../assets/icons/runes', true, /\.png$/);
+const req = typeof require.context === 'function'
+  ? require.context('../assets/icons/runes', true, /\.png$/)
+  : { keys: () => [] };
 
 const runesData = {};
 
@@ -540,7 +557,7 @@ const monstersData = [
 ];
 
 // Map of alternate portraits for crew fighter classes
-const ALT_PORTRAITS_MAP = {
+export const ALT_PORTRAITS_MAP = {
   ranger: ranger_alt_portrait,
   sage: sage_alt_portrait,
   soldier: soldier_alt_portrait,
@@ -554,8 +571,8 @@ const ALT_PORTRAITS_MAP = {
   horologist: horologist_alt_portrait,
 };
 
-// Predefined list of 8 crew fighters and their test abilities
-const fightersData = [
+// Predefined list of crew fighters and their test abilities
+export const fightersData = [
   {
     id: 'ranger',
     name: 'Ranger',
@@ -679,6 +696,34 @@ const fightersData = [
       { id: 'throw_grenade', name: 'Throw Grenade', desc: 'Toss a shrapnel bomb in an arc.', icon: fireball, type: 'projectile_arc', projectileIcon: fireball },
       { id: 'deploy_turret', name: 'Deploy Turret', desc: 'Construct a defensive turret on the grid.', icon: construct_icon, type: 'deploy_turret' },
       { id: 'overdrive', name: 'Overdrive', desc: 'Overload mechanical core for extra stats.', icon: sigil_icon, type: 'overdrive' }
+    ]
+  },
+  {
+    id: 'hollow',
+    name: 'Hollow',
+    portrait: hollow_portrait,
+    altPortrait: hollow_alt_portrait,
+    abilities: [
+      { id: 'void_touch', name: 'Void Touch', desc: 'Reach into the void to strike an adjacent enemy with chilling necrotic energy.', icon: dark_pact_summoner, type: 'void_touch_type' },
+      { id: 'death_grasp', name: 'Death Grasp', desc: 'Crush a distant foe with phantom force drawn from the underworld, dealing 125% necrotic damage.', icon: soul_tithe_summoner, type: 'death_grasp_type' },
+      { id: 'soul_rend', name: 'Soul Rend', desc: 'Tears at the life essence of an enemy, dealing heavy necrotic damage and siphoning a portion back as health.', icon: soul_tap_summoner, type: 'soul_rend_type' },
+      { id: 'spectral_step', name: 'Spectral Step', desc: 'Dissolve into the void and reform at an advantageous position, gaining ethereal evasion.', icon: spirit_sight_summoner, type: 'spectral_step_type' },
+      { id: 'abyssal_chains', name: 'Abyssal Chains', desc: 'Ethereal chains erupt from the void, ensnaring foes and dealing crushing necrotic damage.', icon: curse_doll, type: 'abyssal_chains_type' },
+      { id: 'dark_apotheosis', name: 'Dark Apotheosis', desc: 'Unleash the full dread of the void in an apocalyptic burst of necrotic energy, striking all enemies.', icon: spirit_sight_summoner, type: 'dark_apotheosis_type' }
+    ]
+  },
+  {
+    id: 'horologist',
+    name: 'Horologist',
+    portrait: horologist_portrait,
+    altPortrait: horologist_alt_portrait,
+    abilities: [
+      { id: 'future_echo', name: 'Future Echo', desc: 'Queue a strike that lands 1-3 rounds from now. +35% damage per round of delay.', icon: horologist_future_echo, type: 'future_echo_type' },
+      { id: 'set_anchor', name: 'Set Anchor', desc: "Snapshot a unit's HP, position and statuses. After 4 rounds the anchor crystallizes and can only be Shattered.", icon: horologist_set_anchor, type: 'set_anchor_type' },
+      { id: 'recall', name: 'Recall', desc: 'Return an anchored unit to its snapshot (HP, tile, statuses). Crystallized anchors Shatter instead.', icon: horologist_recall, type: 'recall_type' },
+      { id: 'hour_of_reckoning', name: 'Hour of Reckoning', desc: 'Every queued Future Echo lands immediately at maximum delay bonus, and every active anchor is Recalled at once.', icon: horologist_hour_of_reckoning, type: 'hour_of_reckoning_type' },
+      { id: 'rewind_step', name: 'Rewind Step', desc: "Undo the party's last 3 tiles of movement. Traps sprung along the way are re-hidden. 1 charge per board.", icon: horologist_rewind_step, type: 'rewind_step_type' },
+      { id: 'stopwatch', name: 'Stopwatch', desc: 'Freeze all monster patrol and aggro movement on the board for 8 seconds. Costs 10 Resolve.', icon: horologist_stopwatch, type: 'stopwatch_type' }
     ]
   }
 ];
@@ -917,6 +962,9 @@ const SandboxPage = () => {
   const [healIcon, setHealIcon] = useState(null); // { row, col, active }
   const [dispelIcon, setDispelIcon] = useState(null); // { row, col, active }
   const [targetHealGlow, setTargetHealGlow] = useState(false);
+  const [horoAnim, setHoroAnim] = useState(null);
+  const [horoAnchorActive, setHoroAnchorActive] = useState(null);
+  const [spectralStepActive, setSpectralStepActive] = useState(false);
   const [equippedWeapons, setEquippedWeapons] = useState({
     soldier: 'shortsword_sword',
     barbarian: 'woodcutters_axe',
@@ -925,7 +973,9 @@ const SandboxPage = () => {
     wizard: 'shortsword_sword',
     monk: 'shortsword_sword',
     summoner: 'shortsword_sword',
-    engineer: 'shortsword_sword'
+    engineer: 'shortsword_sword',
+    hollow: 'shortsword_sword',
+    horologist: 'shortsword_sword'
   });
   const [weaponModalOpen, setWeaponModalOpen] = useState(false);
   const [weaponModalTab, setWeaponModalTab] = useState('swords');
@@ -5675,6 +5725,297 @@ const SandboxPage = () => {
         setAnimating(false);
       }, 2400);
     }
+
+    // ==========================================
+    // HOLLOW ABILITIES
+    // ==========================================
+    else if (ability.type === 'void_touch_type') {
+      setAnimating(true);
+      setAnimationPhase('step_adjacent');
+
+      setTimeout(() => {
+        setHitEffect({ type: 'void_touch_swipe' });
+      }, 250);
+
+      setTimeout(() => {
+        setTargetShake(true);
+        setTargetFlash(true);
+        addFloatingText('-16', 'normal', '#c084fc', targetPos.row, targetPos.col);
+
+        setTimeout(() => {
+          setTargetShake(false);
+          setTargetFlash(false);
+        }, 250);
+      }, 650);
+
+      setTimeout(() => {
+        setHitEffect(null);
+        setAnimationPhase('return');
+      }, 850);
+
+      setTimeout(() => {
+        setAnimating(false);
+        setAnimationPhase(null);
+      }, 1100);
+    }
+
+    else if (ability.type === 'death_grasp_type') {
+      setAnimating(true);
+      setHitEffect({ type: 'death_grasp_crush' });
+
+      setTimeout(() => {
+        setTargetShake(true);
+        setTargetFlash(true);
+        addFloatingText('CRUSHED!', 'crit', '#a855f7', targetPos.row, targetPos.col);
+        addFloatingText('-22', 'normal', '#c084fc', targetPos.row, targetPos.col);
+
+        setTimeout(() => {
+          setTargetShake(false);
+          setTargetFlash(false);
+        }, 250);
+      }, 500);
+
+      setTimeout(() => {
+        setHitEffect(null);
+        setAnimating(false);
+      }, 1000);
+    }
+
+    else if (ability.type === 'soul_rend_type') {
+      setAnimating(true);
+      setHitEffect({ type: 'soul_rend_siphon' });
+
+      setTimeout(() => {
+        setTargetShake(true);
+        setTargetFlash(true);
+        addFloatingText('-25', 'crit', '#c084fc', targetPos.row, targetPos.col);
+        addFloatingText('+8', 'heal', '#2ecc71', fighterPos.row, fighterPos.col);
+        addFloatingText('SOUL SIPHON', 'normal', '#2ecc71', fighterPos.row, fighterPos.col);
+        setSelfBuffEffect('heal');
+
+        setTimeout(() => {
+          setTargetShake(false);
+          setTargetFlash(false);
+        }, 250);
+      }, 550);
+
+      setTimeout(() => {
+        setSelfBuffEffect(null);
+        setHitEffect(null);
+        setAnimating(false);
+      }, 1100);
+    }
+
+    else if (ability.type === 'spectral_step_type') {
+      setAnimating(true);
+      setAnimationPhase('teleport_fade');
+      setHitEffect({ type: 'spectral_step_poof', row: fighterPos.row, col: fighterPos.col });
+      addFloatingText('SPECTRAL STEP', 'normal', '#c084fc', fighterPos.row, fighterPos.col);
+
+      setTimeout(() => {
+        setAnimationPhase(null);
+        setSpectralStepActive(true);
+        addFloatingText('ETHEREAL EVASION', 'normal', '#e9d5ff', fighterPos.row, fighterPos.col);
+      }, 400);
+
+      setTimeout(() => {
+        setHitEffect(null);
+        setAnimating(false);
+      }, 900);
+
+      setTimeout(() => {
+        setSpectralStepActive(false);
+      }, 5000);
+    }
+
+    else if (ability.type === 'abyssal_chains_type') {
+      setAnimating(true);
+      setHitEffect({ type: 'abyssal_chains_wrap' });
+
+      setTimeout(() => {
+        setTargetShake(true);
+        setTargetFlash(true);
+        addFloatingText('ENSNARED!', 'crit', '#a855f7', targetPos.row, targetPos.col);
+        addFloatingText('-20', 'normal', '#8b5cf6', targetPos.row, targetPos.col);
+
+        setTimeout(() => {
+          setTargetShake(false);
+          setTargetFlash(false);
+        }, 250);
+      }, 500);
+
+      setTimeout(() => {
+        setHitEffect(null);
+        setAnimating(false);
+      }, 1100);
+    }
+
+    else if (ability.type === 'dark_apotheosis_type') {
+      setAnimating(true);
+      setAnimationPhase('lunge');
+      setFighterShake(true);
+      setHitEffect({ type: 'dark_apotheosis_nova', row: fighterPos.row, col: fighterPos.col });
+
+      setTimeout(() => {
+        setFighterShake(false);
+        setTargetShake(true);
+        setTargetFlash(true);
+        addFloatingText('DARK APOTHEOSIS!', 'crit', '#e9d5ff', fighterPos.row, fighterPos.col);
+        addFloatingText('-38', 'crit', '#c084fc', targetPos.row, targetPos.col);
+
+        setTimeout(() => {
+          setTargetShake(false);
+          setTargetFlash(false);
+        }, 350);
+      }, 600);
+
+      setTimeout(() => {
+        setAnimationPhase('return');
+      }, 900);
+
+      setTimeout(() => {
+        setHitEffect(null);
+        setAnimationPhase(null);
+        setAnimating(false);
+      }, 1400);
+    }
+
+    // ==========================================
+    // HOROLOGIST ABILITIES
+    // ==========================================
+    else if (ability.type === 'future_echo_type') {
+      setAnimating(true);
+      const srcPx = { x: (fighterPos.col + 0.5) * (500 / GRID_SIZE), y: (fighterPos.row + 0.5) * (500 / GRID_SIZE) };
+      const tgtPx = { x: (targetPos.col + 0.5) * (500 / GRID_SIZE), y: (targetPos.row + 0.5) * (500 / GRID_SIZE) };
+
+      // Phase 1: Golden thread and clockface cast
+      setHoroAnim({ type: 'future_echo_cast', srcPx, tgtPx, id: Date.now() });
+      addFloatingText('ECHO QUEUED (2 ROUNDS)', 'normal', '#e0b042', targetPos.row, targetPos.col);
+
+      // Phase 2: Future echo landing impact
+      setTimeout(() => {
+        setHoroAnim({ type: 'future_echo_strike', tgtPx, id: Date.now() });
+        setTargetShake(true);
+        setTargetFlash(true);
+        addFloatingText('FUTURE ECHO!', 'crit', '#ffdd57', targetPos.row, targetPos.col);
+        addFloatingText('-27', 'normal', '#ffd700', targetPos.row, targetPos.col);
+
+        setTimeout(() => {
+          setTargetShake(false);
+          setTargetFlash(false);
+        }, 250);
+      }, 750);
+
+      setTimeout(() => {
+        setHoroAnim(null);
+        setAnimating(false);
+      }, 1350);
+    }
+
+    else if (ability.type === 'set_anchor_type') {
+      setAnimating(true);
+      const srcPx = { x: (fighterPos.col + 0.5) * (500 / GRID_SIZE), y: (fighterPos.row + 0.5) * (500 / GRID_SIZE) };
+      const tgtPx = { x: (targetPos.col + 0.5) * (500 / GRID_SIZE), y: (targetPos.row + 0.5) * (500 / GRID_SIZE) };
+
+      setHoroAnim({ type: 'horologist_anchor', srcPx, tgtPx, id: Date.now() });
+      addFloatingText('ANCHOR SET', 'normal', '#67e8f9', targetPos.row, targetPos.col);
+      setHoroAnchorActive({ row: targetPos.row, col: targetPos.col });
+
+      setTimeout(() => {
+        setHoroAnim(null);
+        setAnimating(false);
+      }, 900);
+    }
+
+    else if (ability.type === 'recall_type') {
+      setAnimating(true);
+      const srcPx = { x: (fighterPos.col + 0.5) * (500 / GRID_SIZE), y: (fighterPos.row + 0.5) * (500 / GRID_SIZE) };
+      const tgtPx = { x: (targetPos.col + 0.5) * (500 / GRID_SIZE), y: (targetPos.row + 0.5) * (500 / GRID_SIZE) };
+
+      setHoroAnim({ type: 'horologist_recall', srcPx, tgtPx, id: Date.now() });
+      addFloatingText('RECALL ANCHOR', 'normal', '#67e8f9', targetPos.row, targetPos.col);
+
+      setTimeout(() => {
+        setHoroAnim({ type: 'horologist_shatter', tgtPx, id: Date.now() });
+        setTargetShake(true);
+        setTargetFlash(true);
+        addFloatingText('TIME SHATTER!', 'crit', '#67e8f9', targetPos.row, targetPos.col);
+        addFloatingText('-32', 'normal', '#ffffff', targetPos.row, targetPos.col);
+        setHoroAnchorActive(null);
+
+        setTimeout(() => {
+          setTargetShake(false);
+          setTargetFlash(false);
+        }, 250);
+      }, 550);
+
+      setTimeout(() => {
+        setHoroAnim(null);
+        setAnimating(false);
+      }, 1200);
+    }
+
+    else if (ability.type === 'hour_of_reckoning_type') {
+      setAnimating(true);
+      const srcPx = { x: (fighterPos.col + 0.5) * (500 / GRID_SIZE), y: (fighterPos.row + 0.5) * (500 / GRID_SIZE) };
+      const tgtPx = { x: (targetPos.col + 0.5) * (500 / GRID_SIZE), y: (targetPos.row + 0.5) * (500 / GRID_SIZE) };
+
+      setHoroAnim({ type: 'hour_of_reckoning', srcPx, id: Date.now() });
+      addFloatingText('HOUR OF RECKONING!', 'crit', '#ffd700', fighterPos.row, fighterPos.col);
+
+      setTimeout(() => {
+        setHoroAnim({ type: 'future_echo_strike', tgtPx, id: Date.now() });
+        setTargetShake(true);
+        setTargetFlash(true);
+        addFloatingText('-48 CRIT!', 'crit', '#ffd700', targetPos.row, targetPos.col);
+
+        setTimeout(() => {
+          setTargetShake(false);
+          setTargetFlash(false);
+        }, 350);
+      }, 700);
+
+      setTimeout(() => {
+        setHoroAnim(null);
+        setHoroAnchorActive(null);
+        setAnimating(false);
+      }, 1450);
+    }
+
+    else if (ability.type === 'rewind_step_type') {
+      setAnimating(true);
+      const srcPx = { x: (fighterPos.col + 0.5) * (500 / GRID_SIZE), y: (fighterPos.row + 0.5) * (500 / GRID_SIZE) };
+
+      setHoroAnim({ type: 'rewind_step', srcPx, id: Date.now() });
+      addFloatingText('REWIND STEP', 'normal', '#e0b042', fighterPos.row, fighterPos.col);
+      addFloatingText('+15 HEAL', 'heal', '#2ecc71', fighterPos.row, fighterPos.col);
+      setSelfBuffEffect('heal');
+
+      setTimeout(() => {
+        setSelfBuffEffect(null);
+        setHoroAnim(null);
+        setAnimating(false);
+      }, 950);
+    }
+
+    else if (ability.type === 'stopwatch_type') {
+      setAnimating(true);
+      const srcPx = { x: (fighterPos.col + 0.5) * (500 / GRID_SIZE), y: (fighterPos.row + 0.5) * (500 / GRID_SIZE) };
+
+      setHoroAnim({ type: 'stopwatch', srcPx, id: Date.now() });
+      addFloatingText('TIME STOP!', 'crit', '#ffd700', fighterPos.row, fighterPos.col);
+      addFloatingText('FROZEN IN TIME (8s)', 'normal', '#e0b042', targetPos.row, targetPos.col);
+      setTargetFrozen(true);
+
+      setTimeout(() => {
+        setTargetFrozen(false);
+      }, 8000);
+
+      setTimeout(() => {
+        setHoroAnim(null);
+        setAnimating(false);
+      }, 1200);
+    }
   };
 
   return (
@@ -5690,6 +6031,41 @@ const SandboxPage = () => {
     }}>
       {/* Dynamic Keyframes Stylesheet */}
       <style>{`
+        @keyframes voidTouchSlash {
+          0% { transform: scale(0.4) rotate(-35deg); opacity: 0; filter: drop-shadow(0 0 4px #a855f7); }
+          30% { transform: scale(1.15) rotate(0deg); opacity: 1; filter: drop-shadow(0 0 16px #c084fc); }
+          100% { transform: scale(1.3) rotate(15deg); opacity: 0; filter: drop-shadow(0 0 2px #38124d); }
+        }
+        @keyframes deathGraspContract {
+          0% { transform: scale(1.6); opacity: 0; }
+          40% { transform: scale(1.0); opacity: 1; filter: drop-shadow(0 0 20px #8b5cf6); }
+          70% { transform: scale(0.85); opacity: 1; filter: drop-shadow(0 0 28px #a855f7); }
+          100% { transform: scale(0.7); opacity: 0; }
+        }
+        @keyframes soulRendPulse {
+          0% { transform: scale(0.3) rotate(0deg); opacity: 0; }
+          35% { transform: scale(1.2) rotate(120deg); opacity: 1; filter: drop-shadow(0 0 22px #c084fc); }
+          70% { transform: scale(1.0) rotate(240deg); opacity: 0.9; }
+          100% { transform: scale(1.35) rotate(360deg); opacity: 0; }
+        }
+        @keyframes spectralBurst {
+          0% { transform: scale(0.2); opacity: 0.9; }
+          50% { transform: scale(1.3); opacity: 1; filter: drop-shadow(0 0 18px #c084fc); }
+          100% { transform: scale(1.8); opacity: 0; }
+        }
+        @keyframes abyssalChainsSpin {
+          0% { transform: scale(1.5) rotate(-25deg); opacity: 0; }
+          30% { transform: scale(1) rotate(0deg); opacity: 1; filter: drop-shadow(0 0 16px #a855f7); }
+          75% { transform: scale(0.95) rotate(5deg); opacity: 1; filter: drop-shadow(0 0 24px #c084fc); }
+          100% { transform: scale(1.05) rotate(10deg); opacity: 0; }
+        }
+        @keyframes voidNovaExpand {
+          0% { transform: translate(-50%, -50%) scale(0.1); opacity: 0; }
+          30% { transform: translate(-50%, -50%) scale(0.8); opacity: 1; }
+          70% { transform: translate(-50%, -50%) scale(1.4); opacity: 0.9; filter: drop-shadow(0 0 35px #a855f7); }
+          100% { transform: translate(-50%, -50%) scale(2.0); opacity: 0; }
+        }
+
         .yellow-ray {
           position: absolute;
           bottom: -100%;
@@ -6731,6 +7107,9 @@ const SandboxPage = () => {
                     setBetrayalHitActive(false);
                     setRangerBetrayalEffectActive(false);
                     setRangerBetrayalEffectEndTime(null);
+                    setHoroAnim(null);
+                    setHoroAnchorActive(null);
+                    setSpectralStepActive(false);
                     if (selectedUnitType === 'fighter' && f.id === 'sage') {
                       setTargetPos({ row: 2, col: 3 });
                     }
@@ -7830,9 +8209,9 @@ const SandboxPage = () => {
                   zIndex: 10,
                   pointerEvents: 'none',
                   transform: getFighterTransformStyle(),
-                  opacity: (animationPhase === 'astral_projection' || animationPhase === 'astral_projection_delay')
-                    ? 0.4
-                    : (selfBuffEffect === 'stealth' ? 0.3 : 1),
+                  opacity: (animationPhase === 'astral_projection' || animationPhase === 'astral_projection_delay' || animationPhase === 'teleport_fade')
+                    ? 0.3
+                    : (selfBuffEffect === 'stealth' ? 0.3 : (spectralStepActive ? 0.65 : 1)),
                   transition: getFighterTransitionStyle()
                 }}
               >
@@ -7873,7 +8252,9 @@ const SandboxPage = () => {
                       ? '3px solid #ffffff'
                       : (selectedFighterId === 'barbarian' && berserkerActive)
                         ? '2px solid #ff3333'
-                        : '2px solid #ffb703',
+                        : spectralStepActive
+                          ? '2px solid #c084fc'
+                          : '2px solid #ffb703',
                     backgroundColor: '#222',
                     backgroundImage: `url(${(selectedUnitType === 'monster' && selectedMonsterId === 'skeleton' && skeletonReassemblyActive)
                       ? bones
@@ -7893,7 +8274,9 @@ const SandboxPage = () => {
                               ? '0 0 20px rgba(255, 0, 0, 0.7), inset 0 0 10px rgba(255, 0, 0, 0.5)'
                               : selfBuffEffect === 'barrier'
                                 ? '0 0 20px rgba(0, 150, 255, 0.7), inset 0 0 10px rgba(0, 150, 255, 0.5)'
-                                : '0 8px 16px rgba(0,0,0,0.5)',
+                                : spectralStepActive
+                                  ? '0 0 20px rgba(192, 132, 252, 0.9), inset 0 0 12px rgba(168, 85, 247, 0.7)'
+                                  : '0 8px 16px rgba(0,0,0,0.5)',
                     animation: (selectedFighterId === 'barbarian' && animationPhase === 'leap_landing')
                       ? 'leapScale 0.6s ease-in-out forwards'
                       : (selectedMonsterId === 'ogre' && animationPhase === 'stomp_animation')
@@ -11604,6 +11987,93 @@ const SandboxPage = () => {
                 </>
               )}
 
+              {/* --- Horologist Animation Overlays --- */}
+              {horoAnim && (() => {
+                const { type, srcPx, tgtPx, isUltimate } = horoAnim;
+                if ((type === 'future_echo_cast' || type === 'horologist_anchor' || type === 'horologist_recall') && srcPx && tgtPx) {
+                  const dx = tgtPx.x - srcPx.x;
+                  const dy = tgtPx.y - srcPx.y;
+                  const length = Math.sqrt(dx * dx + dy * dy);
+                  const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+                  return (
+                    <React.Fragment key={horoAnim.id}>
+                      <div className={`horologist-thread ${type}`} style={{ left: `${srcPx.x}px`, top: `${srcPx.y}px`, width: `${length}px`, transform: `rotate(${angle}deg)` }} />
+                      <div className={`horologist-clockface ${type}${isUltimate ? ' ultimate' : ''}`} style={{ left: `${tgtPx.x}px`, top: `${tgtPx.y}px` }}>
+                        <span className="hand hour" />
+                        <span className="hand minute" />
+                      </div>
+                    </React.Fragment>
+                  );
+                }
+                if ((type === 'future_echo_strike' || type === 'horologist_shatter') && tgtPx) {
+                  return (
+                    <div key={horoAnim.id} className={`horologist-impact ${type}`} style={{ left: `${tgtPx.x}px`, top: `${tgtPx.y}px` }}>
+                      {type === 'horologist_shatter' && [0, 1, 2, 3, 4, 5].map(i => (
+                        <span key={i} className="shard" style={{ '--shard-angle': `${i * 60}deg` }} />
+                      ))}
+                    </div>
+                  );
+                }
+                if (type === 'hour_of_reckoning' && srcPx) {
+                  return (
+                    <React.Fragment key={horoAnim.id}>
+                      <div className="horologist-reckoning-veil" />
+                      <div className="horologist-clockface hour_of_reckoning" style={{ left: `${srcPx.x}px`, top: `${srcPx.y}px` }}>
+                        <span className="hand hour" />
+                        <span className="hand minute" />
+                      </div>
+                    </React.Fragment>
+                  );
+                }
+                if (type === 'rewind_step' && srcPx) {
+                  return (
+                    <div key={horoAnim.id} className="horologist-clockface horologist_recall" style={{ left: `${srcPx.x}px`, top: `${srcPx.y}px`, width: '100px', height: '100px' }}>
+                      <span className="hand hour" />
+                      <span className="hand minute" />
+                    </div>
+                  );
+                }
+                if (type === 'stopwatch' && srcPx) {
+                  return (
+                    <React.Fragment key={horoAnim.id}>
+                      <div style={{
+                        position: 'absolute',
+                        inset: 0,
+                        background: 'radial-gradient(circle, rgba(224, 176, 66, 0.25) 0%, rgba(10, 10, 20, 0.65) 85%)',
+                        pointerEvents: 'none',
+                        zIndex: 4100,
+                        animation: 'horoVeil 1.2s ease-in-out forwards'
+                      }} />
+                      <div className="horologist-clockface" style={{ left: `${srcPx.x}px`, top: `${srcPx.y}px`, width: '120px', height: '120px', border: '3px solid #ffd700', boxShadow: '0 0 30px #ffd700' }}>
+                        <span className="hand hour" style={{ background: '#ffd700' }} />
+                        <span className="hand minute" style={{ background: '#fff' }} />
+                      </div>
+                    </React.Fragment>
+                  );
+                }
+                return null;
+              })()}
+
+              {/* Horologist Active Anchor Ring on Target */}
+              {horoAnchorActive && (
+                <div
+                  className="horologist-anchor-ring"
+                  style={{
+                    position: 'absolute',
+                    left: `${(horoAnchorActive.col + 0.5) * TILE_PCT}%`,
+                    top: `${(horoAnchorActive.row + 0.5) * TILE_PCT}%`,
+                    transform: 'translate(-50%, -50%)',
+                    width: '64px',
+                    height: '64px',
+                    pointerEvents: 'none',
+                    zIndex: 28
+                  }}
+                >
+                  <span className="horologist-anchor-hand" />
+                  <span className="horologist-anchor-count">4</span>
+                </div>
+              )}
+
               {/* --- Hit Particle Effect Overlay --- */}
               {hitEffect && (
                 <div
@@ -11621,6 +12091,227 @@ const SandboxPage = () => {
                     justifyContent: 'center'
                   }}
                 >
+                  {/* Hollow Hit Effects */}
+                  {hitEffect.type === 'void_touch_swipe' && (
+                    <div style={{
+                      position: 'relative',
+                      width: '100px',
+                      height: '100px',
+                      pointerEvents: 'none',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      animation: 'voidTouchSlash 0.5s ease-out forwards'
+                    }}>
+                      <div style={{
+                        position: 'absolute',
+                        width: '90px',
+                        height: '10px',
+                        background: 'linear-gradient(90deg, transparent, #c084fc 40%, #ffffff 60%, transparent)',
+                        borderRadius: '5px',
+                        boxShadow: '0 0 16px #a855f7, 0 0 24px #7e22ce',
+                        transform: 'rotate(-40deg)'
+                      }} />
+                      <div style={{
+                        position: 'absolute',
+                        width: '80px',
+                        height: '8px',
+                        background: 'linear-gradient(90deg, transparent, #818cf8 30%, #ffffff 60%, transparent)',
+                        borderRadius: '4px',
+                        boxShadow: '0 0 14px #6366f1',
+                        transform: 'rotate(25deg)'
+                      }} />
+                      <div style={{
+                        position: 'absolute',
+                        width: '40px',
+                        height: '40px',
+                        borderRadius: '50%',
+                        background: 'radial-gradient(circle, #e9d5ff 20%, #a855f7 60%, transparent 80%)',
+                        filter: 'blur(2px)'
+                      }} />
+                    </div>
+                  )}
+
+                  {hitEffect.type === 'death_grasp_crush' && (
+                    <div style={{
+                      position: 'relative',
+                      width: '110px',
+                      height: '110px',
+                      pointerEvents: 'none',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      animation: 'deathGraspContract 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards'
+                    }}>
+                      {/* Left phantom claw */}
+                      <div style={{
+                        position: 'absolute',
+                        left: '5px',
+                        width: '45px',
+                        height: '90px',
+                        border: '4px solid #c084fc',
+                        borderRight: 'none',
+                        borderRadius: '50px 0 0 50px',
+                        boxShadow: '-4px 0 15px #7e22ce, inset 0 0 10px #a855f7'
+                      }} />
+                      {/* Right phantom claw */}
+                      <div style={{
+                        position: 'absolute',
+                        right: '5px',
+                        width: '45px',
+                        height: '90px',
+                        border: '4px solid #c084fc',
+                        borderLeft: 'none',
+                        borderRadius: '0 50px 50px 0',
+                        boxShadow: '4px 0 15px #7e22ce, inset 0 0 10px #a855f7'
+                      }} />
+                      {/* Center crushed soul core */}
+                      <div style={{
+                        width: '36px',
+                        height: '36px',
+                        borderRadius: '50%',
+                        background: 'radial-gradient(circle, #ffffff 10%, #a855f7 60%, rgba(30, 10, 50, 0.8) 100%)',
+                        boxShadow: '0 0 20px #c084fc, 0 0 35px #581c87'
+                      }} />
+                    </div>
+                  )}
+
+                  {hitEffect.type === 'soul_rend_siphon' && (
+                    <div style={{
+                      position: 'relative',
+                      width: '110px',
+                      height: '110px',
+                      pointerEvents: 'none',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      animation: 'soulRendPulse 0.9s ease-out forwards'
+                    }}>
+                      <div style={{
+                        position: 'absolute',
+                        width: '90px',
+                        height: '90px',
+                        borderRadius: '50%',
+                        border: '3px dashed #c084fc',
+                        boxShadow: '0 0 25px #a855f7, inset 0 0 18px #22c55e',
+                        animation: 'horoCounterSpin 1s linear infinite'
+                      }} />
+                      <div style={{
+                        position: 'absolute',
+                        width: '50px',
+                        height: '50px',
+                        borderRadius: '40% 60% 70% 30% / 40% 50% 60% 50%',
+                        background: 'radial-gradient(circle, #34d399 20%, #7e22ce 70%, transparent 100%)',
+                        boxShadow: '0 0 20px #10b981',
+                        filter: 'blur(1px)'
+                      }} />
+                    </div>
+                  )}
+
+                  {hitEffect.type === 'spectral_step_poof' && (
+                    <div style={{
+                      position: 'relative',
+                      width: '100px',
+                      height: '100px',
+                      pointerEvents: 'none',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      animation: 'spectralBurst 0.7s ease-out forwards'
+                    }}>
+                      <div style={{
+                        width: '80px',
+                        height: '80px',
+                        borderRadius: '50%',
+                        background: 'radial-gradient(circle, rgba(192, 132, 252, 0.7) 10%, rgba(88, 28, 135, 0.4) 50%, transparent 75%)',
+                        boxShadow: '0 0 25px #a855f7',
+                        filter: 'blur(3px)'
+                      }} />
+                    </div>
+                  )}
+
+                  {hitEffect.type === 'abyssal_chains_wrap' && (
+                    <div style={{
+                      position: 'relative',
+                      width: '100px',
+                      height: '100px',
+                      pointerEvents: 'none',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      animation: 'abyssalChainsSpin 0.9s ease-out forwards'
+                    }}>
+                      {/* Crossed Chain 1 */}
+                      <div style={{
+                        position: 'absolute',
+                        width: '110px',
+                        height: '12px',
+                        border: '2px dashed #c084fc',
+                        background: 'linear-gradient(90deg, rgba(88, 28, 135, 0.8), rgba(168, 85, 247, 0.9), rgba(88, 28, 135, 0.8))',
+                        borderRadius: '6px',
+                        transform: 'rotate(45deg)',
+                        boxShadow: '0 0 15px #a855f7'
+                      }} />
+                      {/* Crossed Chain 2 */}
+                      <div style={{
+                        position: 'absolute',
+                        width: '110px',
+                        height: '12px',
+                        border: '2px dashed #c084fc',
+                        background: 'linear-gradient(90deg, rgba(88, 28, 135, 0.8), rgba(168, 85, 247, 0.9), rgba(88, 28, 135, 0.8))',
+                        borderRadius: '6px',
+                        transform: 'rotate(-45deg)',
+                        boxShadow: '0 0 15px #a855f7'
+                      }} />
+                      {/* Center Rune Seal */}
+                      <div style={{
+                        position: 'absolute',
+                        width: '32px',
+                        height: '32px',
+                        borderRadius: '50%',
+                        border: '2px solid #e9d5ff',
+                        background: 'radial-gradient(circle, #7e22ce 0%, #1e1b4b 100%)',
+                        boxShadow: '0 0 14px #c084fc'
+                      }} />
+                    </div>
+                  )}
+
+                  {hitEffect.type === 'dark_apotheosis_nova' && (
+                    <div style={{
+                      position: 'absolute',
+                      left: '50%',
+                      top: '50%',
+                      width: '380px',
+                      height: '380px',
+                      pointerEvents: 'none',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      animation: 'voidNovaExpand 1.2s ease-out forwards',
+                      zIndex: 45
+                    }}>
+                      {/* Outer void nova shockwave ring */}
+                      <div style={{
+                        position: 'absolute',
+                        width: '100%',
+                        height: '100%',
+                        borderRadius: '50%',
+                        border: '5px double #c084fc',
+                        boxShadow: '0 0 40px #a855f7, inset 0 0 35px #581c87',
+                        background: 'radial-gradient(circle, rgba(168, 85, 247, 0.25) 0%, rgba(30, 10, 60, 0.5) 50%, transparent 75%)'
+                      }} />
+                      {/* Inner dark singularity */}
+                      <div style={{
+                        position: 'absolute',
+                        width: '120px',
+                        height: '120px',
+                        borderRadius: '50%',
+                        background: 'radial-gradient(circle, #ffffff 10%, #7e22ce 50%, #090314 90%)',
+                        boxShadow: '0 0 30px #c084fc, 0 0 60px #581c87'
+                      }} />
+                    </div>
+                  )}
+
                   {hitEffect.type === 'bite_chomping' && (
                     <div style={{
                       position: 'relative',
