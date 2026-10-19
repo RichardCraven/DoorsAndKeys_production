@@ -578,6 +578,11 @@ class CrewManagerPage extends React.Component {
             return 'tattoo imprinting';
         }
 
+        // Check homunculusAssembling (summoner)
+        if (member.homunculusAssembling && member.homunculusAssembling.endDate && new Date(member.homunculusAssembling.endDate) > now) {
+            return 'homunculus assembly';
+        }
+
         return null;
     }
 
@@ -597,6 +602,9 @@ class CrewManagerPage extends React.Component {
             if (member.tattooImprinting && member.tattooImprinting.endDate && new Date(member.tattooImprinting.endDate) > now) {
                 delete member.tattooImprinting;
             }
+            if (member.homunculusAssembling && member.homunculusAssembling.endDate && new Date(member.homunculusAssembling.endDate) > now) {
+                delete member.homunculusAssembling;
+            }
 
             const targetId = member.id;
             if (this.props.crewManager && Array.isArray(this.props.crewManager.adventurers)) {
@@ -613,6 +621,9 @@ class CrewManagerPage extends React.Component {
                     }
                     if (adv.tattooImprinting && adv.tattooImprinting.endDate && new Date(adv.tattooImprinting.endDate) > now) {
                         delete adv.tattooImprinting;
+                    }
+                    if (adv.homunculusAssembling && adv.homunculusAssembling.endDate && new Date(adv.homunculusAssembling.endDate) > now) {
+                        delete adv.homunculusAssembling;
                     }
                 }
             }
@@ -632,6 +643,9 @@ class CrewManagerPage extends React.Component {
                         }
                         if (cloned.tattooImprinting && cloned.tattooImprinting.endDate && new Date(cloned.tattooImprinting.endDate) > now) {
                             delete cloned.tattooImprinting;
+                        }
+                        if (cloned.homunculusAssembling && cloned.homunculusAssembling.endDate && new Date(cloned.homunculusAssembling.endDate) > now) {
+                            delete cloned.homunculusAssembling;
                         }
                         return cloned;
                     }

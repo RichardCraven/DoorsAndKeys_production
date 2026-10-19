@@ -344,7 +344,7 @@ export function MonsterManager() {
             level: 6,
             portrait: images['ghoul_portrait'],
             minions: ['beholder_minion', 'beholder_minion'],
-            greetings: [], deathCries: [], skills: [], weaknesses: [], drops: []
+            greetings: [], deathCries: [], skills: ['claw_strike', 'bite'], weaknesses: [], drops: []
         },
         archaic_familiar: {
             type: 'archaic_familiar',
@@ -1231,7 +1231,8 @@ export function MonsterManager() {
             subtype: 'demon',
             key: 'hagigah',
             image_names: ['hagigah'],
-            monster_names: [],
+            monster_names: ['Hagigah'],
+            lordName: 'Hagigah the Tormentor',
             stats: {
                 hp: 450,
                 atk: 20,
@@ -1257,7 +1258,8 @@ export function MonsterManager() {
             subtype: 'greater entity',
             key: 'hashmallim',
             image_names: ['hashmallim'],
-            monster_names: [],
+            monster_names: ['Hashmallim'],
+            lordName: 'The Hashmallim',
             stats: {
                 hp: 510,
                 atk: 20,
@@ -1329,16 +1331,81 @@ export function MonsterManager() {
 
     }
 
-    this.getMonster = (monsterString) => {
-        let match = null;
-        match = this.monsters[monsterString];
-
-        return match ? JSON.parse(JSON.stringify(match)) : null;
+    this.getMonster = (monsterInput) => {
+        if (!monsterInput) return null;
+        let key = null;
+        if (typeof monsterInput === 'string') {
+            key = monsterInput.trim();
+        } else if (typeof monsterInput === 'object') {
+            let sub = monsterInput.subtype;
+            if (typeof sub === 'object' && sub !== null) {
+                sub = sub.key || sub.type || sub.id || sub.subtype || sub.name;
+            }
+            key = sub || monsterInput.key || monsterInput.type || monsterInput.name;
+            if (key === 'monster' && sub) {
+                key = sub;
+            }
+        }
+        if (!key || key === 'monster') {
+            const tier = (typeof monsterInput === 'object' && monsterInput && (monsterInput.tier || monsterInput.level)) ? (monsterInput.tier || Math.ceil(monsterInput.level / 2)) : 1;
+            return this.getRandomMonsterByTier(typeof tier === 'number' ? Math.max(1, Math.min(5, tier)) : 1);
+        }
+        if (typeof key === 'string' && key.startsWith('tier_') && key.includes('_monster')) {
+            const parts = key.split('_');
+            const tierNum = parseInt(parts[1], 10);
+            return this.getRandomMonsterByTier(isNaN(tierNum) ? 1 : tierNum);
+        }
+        let match = this.monsters[key] || this.monsters[String(key).toLowerCase()];
+        if (!match) {
+            match = Object.values(this.monsters).find(m =>
+                (m.key && m.key.toLowerCase() === String(key).toLowerCase()) ||
+                (m.type && m.type.toLowerCase() === String(key).toLowerCase()) ||
+                (Array.isArray(m.monster_names) && m.monster_names.some(n => n.toLowerCase() === String(key).toLowerCase())) ||
+                (m.name && m.name.toLowerCase() === String(key).toLowerCase())
+            );
+        }
+        if (match) {
+            const copy = JSON.parse(JSON.stringify(match));
+            if (typeof copy.level !== 'number' || !Number.isFinite(copy.level) || copy.level <= 0) {
+                copy.level = (typeof copy.tier === 'number' && copy.tier > 0) ? copy.tier * 2 : 1;
+            }
+            if (!copy.stats || typeof copy.stats !== 'object') {
+                copy.stats = { hp: 50, atk: 5, def: 5, speed: 5 };
+            }
+            if (typeof copy.stats.hp !== 'number' || !Number.isFinite(copy.stats.hp) || copy.stats.hp <= 0) {
+                copy.stats.hp = 50;
+            }
+            if (!copy.name) {
+                copy.name = this.pickRandom(copy.monster_names) || copy.lordName || copy.type || 'Monster';
+            }
+            if (!copy.portrait) {
+                copy.portrait = images[copy.key] || images[copy.type] || images['avatar'];
+            }
+            return copy;
+        }
+        return null;
     }
     this.getRandomMonster = () => {
-        // return this.monsters['sphinx']
         const available = Object.values(this.monsters).filter(e => !e.isMinion && !e.isSummoned);
-        return this.pickRandom(available);
+        const chosen = this.pickRandom(available);
+        if (!chosen) return null;
+        const copy = JSON.parse(JSON.stringify(chosen));
+        if (typeof copy.level !== 'number' || !Number.isFinite(copy.level) || copy.level <= 0) {
+            copy.level = (typeof copy.tier === 'number' && copy.tier > 0) ? copy.tier * 2 : 1;
+        }
+        if (!copy.stats || typeof copy.stats !== 'object') {
+            copy.stats = { hp: 50, atk: 5, def: 5, speed: 5 };
+        }
+        if (typeof copy.stats.hp !== 'number' || !Number.isFinite(copy.stats.hp) || copy.stats.hp <= 0) {
+            copy.stats.hp = 50;
+        }
+        if (!copy.name) {
+            copy.name = this.pickRandom(copy.monster_names) || copy.lordName || copy.type || 'Monster';
+        }
+        if (!copy.portrait) {
+            copy.portrait = images[copy.key] || images[copy.type] || images['avatar'];
+        }
+        return copy;
     }
     this.getPaletteMonsters = () => {
         const seen = new Set();
@@ -1364,7 +1431,24 @@ export function MonsterManager() {
     this.getRandomMonsterByTier = (tier) => {
         let availableMonsters = Object.values(this.monsters).filter(e => e.tier === tier && !e.isMinion && !e.isSummoned);
         if (availableMonsters.length > 0) {
-            return JSON.parse(JSON.stringify(this.pickRandom(availableMonsters)));
+            const chosen = this.pickRandom(availableMonsters);
+            const copy = JSON.parse(JSON.stringify(chosen));
+            if (typeof copy.level !== 'number' || !Number.isFinite(copy.level) || copy.level <= 0) {
+                copy.level = (typeof copy.tier === 'number' && copy.tier > 0) ? copy.tier * 2 : 1;
+            }
+            if (!copy.stats || typeof copy.stats !== 'object') {
+                copy.stats = { hp: 50, atk: 5, def: 5, speed: 5 };
+            }
+            if (typeof copy.stats.hp !== 'number' || !Number.isFinite(copy.stats.hp) || copy.stats.hp <= 0) {
+                copy.stats.hp = 50;
+            }
+            if (!copy.name) {
+                copy.name = this.pickRandom(copy.monster_names) || copy.lordName || copy.type || 'Monster';
+            }
+            if (!copy.portrait) {
+                copy.portrait = images[copy.key] || images[copy.type] || images['avatar'];
+            }
+            return copy;
         }
         return this.getRandomMonster();
     }

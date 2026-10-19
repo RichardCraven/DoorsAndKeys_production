@@ -3209,12 +3209,18 @@
         .floating-player,
         .floating-peer-player,
         .floating-wandering-eye,
+        .floating-dungeon-walker,
+        .floating-shadow-effigy,
+        .floating-void-fetch,
         .avatar-radial-menu-overlay,
         .tile {
             transform-style: preserve-3d !important;
             overflow: visible !important;
 
             .iso-upright-sprite,
+            .dungeon-walker-sprite,
+            .shadow-effigy-sprite,
+            .void-fetch-sprite,
             .monster-container,
             .player-avatar-container,
             .floating-player-avatar,
@@ -3244,6 +3250,34 @@
                 transform-origin: 50% 100% !important;
                 transform: translateZ(8px) rotateX(calc(-1 * var(--iso-tilt, 49deg))) !important;
                 transition: transform 0.2s ease-out;
+            }
+
+            /* Multi-tile 2x2 structures (e.g. lumber mill / sawmill): stand upright seamlessly from base of 2x2 footprint */
+            .iso-upright-sprite.multi-tile-structure-sprite {
+                transform-origin: 50% 100% !important;
+                transform: translateZ(8px) rotateX(calc(-1 * var(--iso-tilt, 49deg))) !important;
+                overflow: visible !important;
+                transition: transform 0.2s ease-out;
+            }
+
+            /* Spawn Point: elevate Z in isometric view so 2x scaled rotating rune and glow never clip or dip below floor plane */
+            &.spawn-point-tile {
+                z-index: 150 !important;
+                /* Ground tile must never hover — only the sprite is elevated */
+
+                .iso-upright-sprite {
+                    transform-origin: 50% 100% !important;
+                    transform: translateZ(68px) rotateX(calc(-1 * var(--iso-tilt, 49deg))) !important;
+                    transition: transform 0.2s ease-out;
+                    overflow: visible !important;
+                    transform-style: preserve-3d !important;
+                }
+            }
+
+            /* Archaic Portal Endpoint complex */
+            &.archaic-endpoint-tile {
+                z-index: 30 !important;
+                overflow: visible !important;
             }
 
             /* Passages and floor litter lie flat on the ground plane */
@@ -3329,8 +3363,200 @@
                     animation: isoShadowPulse 2s ease-in-out infinite alternate;
                 }
             }
+
+            .floating-wandering-eye {
+                transform-style: preserve-3d !important;
+                overflow: visible !important;
+
+                .wandering-eye-sprite {
+                    transform-origin: 50% 100% !important;
+                    transform: translateZ(22px) rotateX(calc(-1 * var(--iso-tilt, 49deg))) !important;
+                    animation: isoEyeBob 2s ease-in-out infinite alternate !important;
+                    transition: transform 0.2s ease-out;
+
+                    &.appearing {
+                        animation: isoEyeAppear 0.55s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+                    }
+
+                    &.melting {
+                        animation: isoEyeMelt 0.65s cubic-bezier(0.45, 0, 0.7, 1) forwards !important;
+                    }
+                }
+
+                .wandering-eye-shadow {
+                    display: block !important;
+
+                    &.appearing {
+                        animation: wanderingEyeShadowAppear 0.55s ease-out forwards !important;
+                    }
+
+                    &.melting {
+                        animation: wanderingEyeShadowMelt 0.65s ease-in forwards !important;
+                    }
+                }
+
+                .wandering-eye-melt-puddle {
+                    transform: translateX(-50%) translateZ(2px);
+                }
+            }
+
+            /* Autonomous Combat Walker: billboard upright matching user avatar portrait */
+            .floating-dungeon-walker {
+                transform-style: preserve-3d !important;
+                overflow: visible !important;
+
+                .dungeon-walker-sprite,
+                .iso-upright-sprite {
+                    transform-origin: 50% 100% !important;
+                    transform: translateZ(8px) rotateX(calc(-1 * var(--iso-tilt, 49deg))) !important;
+                    transition: transform 0.2s ease-out;
+                    transform-style: preserve-3d !important;
+                    overflow: visible !important;
+                }
+
+                .dungeon-walker-shadow {
+                    display: block !important;
+                    transform: translateX(-50%) translateZ(0px) !important;
+                }
+
+                .dungeon-walker-timer-badge {
+                    top: -19px !important;
+                    bottom: auto !important;
+                }
+            }
+
+            /* Summoner Expedition Skills: Shadow Effigy & Void Fetch in Isometric Perspective */
+            .floating-shadow-effigy,
+            .floating-void-fetch {
+                transform-style: preserve-3d !important;
+                overflow: visible !important;
+
+                .shadow-effigy-sprite,
+                .void-fetch-sprite,
+                .iso-upright-sprite {
+                    transform-origin: 50% 100% !important;
+                    transform: translateZ(8px) rotateX(calc(-1 * var(--iso-tilt, 49deg))) !important;
+                    transition: transform 0.2s ease-out;
+                    transform-style: preserve-3d !important;
+                    overflow: visible !important;
+                }
+
+                .shadow-effigy-shadow,
+                .void-fetch-shadow {
+                    display: block !important;
+                    transform: translateX(-50%) translateZ(0px) !important;
+                }
+            }
+        }
+
+        /* Player avatar walks flush on the ground: no Z lift, no contact shadow.
+           Exception: the spawn-drop intro, where the avatar starts at the
+           floating spawn rune's height and falls to the board. */
+        .floating-player {
+            .avatar-damage-shake-wrapper {
+                transform: translateZ(0px) rotateX(calc(-1 * var(--iso-tilt, 49deg))) !important;
+            }
+
+            > .iso-contact-shadow {
+                display: none !important;
+            }
+
+            &.spawn-elevated,
+            &.spawn-dropping {
+                > .iso-contact-shadow {
+                    display: block !important;
+                    position: absolute;
+                    bottom: 2px;
+                    left: 50%;
+                    width: 70%;
+                    height: 25%;
+                    border-radius: 50%;
+                    background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.65) 0%, transparent 75%);
+                    pointer-events: none;
+                    z-index: 1;
+                }
+            }
+
+            &.spawn-elevated {
+                .avatar-damage-shake-wrapper {
+                    transform: translateZ(68px) rotateX(calc(-1 * var(--iso-tilt, 49deg))) !important;
+                    transition: none !important;
+                }
+                > .iso-contact-shadow {
+                    opacity: 0.35;
+                    transform: translateX(-50%) scale(0.55);
+                }
+            }
+
+            &.spawn-dropping {
+                .avatar-damage-shake-wrapper {
+                    animation: isoSpawnDrop 0.55s cubic-bezier(0.55, 0, 1, 0.45) forwards !important;
+                }
+                > .iso-contact-shadow {
+                    animation: isoSpawnDropShadow 0.55s cubic-bezier(0.55, 0, 1, 0.45) forwards;
+                }
+            }
+        }
+
+        /* Floating combat damage text: billboard upright in isometric perspective */
+        .floating-combat-damage {
+            transform-origin: 50% 100% !important;
+            animation-name: isoFloatingDamageRise !important;
+            transform-style: preserve-3d !important;
+        }
+
+        /* Chest/pickup loot preview orbs: billboard upright toward the viewer
+           instead of lying flat on the tilted floor plane */
+        .chest-loot-overlay {
+            transform-style: preserve-3d !important;
+            overflow: visible !important;
+        }
+
+        .chest-loot-item {
+            transform-origin: 50% 100% !important;
+            transform: translateZ(10px) rotateX(calc(-1 * var(--iso-tilt, 49deg))) scale(0) translateY(10px);
+
+            &.fade-in {
+                transform: translateZ(10px) rotateX(calc(-1 * var(--iso-tilt, 49deg))) scale(1) translateY(0);
+            }
+
+            &.fade-out {
+                transform: translateZ(10px) rotateX(calc(-1 * var(--iso-tilt, 49deg))) scale(0.3) translateY(-30px);
+            }
         }
     }
+}
+
+@keyframes isoFloatingDamageRise {
+    0% {
+        transform: translate(-50%, 0) translateZ(12px) rotateX(calc(-1 * var(--iso-tilt, 49deg))) scale(0.7);
+        opacity: 0;
+    }
+    20% {
+        transform: translate(-50%, -10px) translateZ(16px) rotateX(calc(-1 * var(--iso-tilt, 49deg))) scale(1.2);
+        opacity: 1;
+    }
+    70% {
+        transform: translate(-50%, -24px) translateZ(22px) rotateX(calc(-1 * var(--iso-tilt, 49deg))) scale(1);
+        opacity: 0.9;
+    }
+    100% {
+        transform: translate(-50%, -36px) translateZ(28px) rotateX(calc(-1 * var(--iso-tilt, 49deg))) scale(0.85);
+        opacity: 0;
+    }
+}
+
+@keyframes isoSpawnDrop {
+    0%   { transform: translateZ(68px) rotateX(calc(-1 * var(--iso-tilt, 49deg))); }
+    75%  { transform: translateZ(0px) rotateX(calc(-1 * var(--iso-tilt, 49deg))); }
+    88%  { transform: translateZ(6px) rotateX(calc(-1 * var(--iso-tilt, 49deg))); }
+    100% { transform: translateZ(0px) rotateX(calc(-1 * var(--iso-tilt, 49deg))); }
+}
+
+@keyframes isoSpawnDropShadow {
+    0%   { opacity: 0.35; transform: translateX(-50%) scale(0.55); }
+    75%  { opacity: 0.8;  transform: translateX(-50%) scale(1); }
+    100% { opacity: 0;    transform: translateX(-50%) scale(1); }
 }
 
 @keyframes isoPickupBob {
@@ -3339,6 +3565,15 @@
     }
     100% {
         transform: translateZ(26px) rotateX(calc(-1 * var(--iso-tilt, 49deg)));
+    }
+}
+
+@keyframes isoEyeBob {
+    0% {
+        transform: translateZ(20px) rotateX(calc(-1 * var(--iso-tilt, 49deg)));
+    }
+    100% {
+        transform: translateZ(28px) rotateX(calc(-1 * var(--iso-tilt, 49deg)));
     }
 }
 
@@ -4672,6 +4907,36 @@
     }
 }
 
+.tile.spawn-point-tile,
+.spawn-point-tile {
+    z-index: 150 !important;
+    overflow: visible !important;
+
+    .portrait,
+    .iso-upright-sprite {
+        overflow: visible !important;
+    }
+
+    .iso-upright-sprite {
+        transform-style: preserve-3d !important;
+    }
+
+    .portrait.spawn-point-spinning {
+        top: -150% !important;
+        left: -150% !important;
+        right: -150% !important;
+        bottom: -150% !important;
+        background-size: 50% 50% !important;
+        background-position: center center !important;
+        background-repeat: no-repeat !important;
+        transform-origin: center center !important;
+        overflow: visible !important;
+        will-change: transform;
+        filter: drop-shadow(0 0 10px rgba(192, 132, 252, 0.85)) drop-shadow(0 0 20px rgba(168, 85, 247, 0.5));
+        z-index: 150 !important;
+    }
+}
+
 
 @keyframes pulseGlow {
     from {
@@ -5444,6 +5709,365 @@
 .tattoo-slots-remaining {
     font-size: 0.72rem;
     color: #6a5a4a;
+    letter-spacing: 0.5px;
+}
+
+/* ── Homunculus Assembly Overlay (Summoner) ────────────────────── */
+.homunculus-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.9);
+    backdrop-filter: blur(10px);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn 0.25s ease-out;
+}
+
+.homunculus-overlay-card {
+    background: linear-gradient(160deg, #0e0917 0%, #170d24 60%, #0c0614 100%);
+    border: 2px solid #5b2c6f;
+    box-shadow:
+        0 0 50px rgba(91, 44, 111, 0.5),
+        0 0 100px rgba(74, 21, 75, 0.25),
+        inset 0 0 30px rgba(91, 44, 111, 0.12);
+    border-radius: 16px;
+    width: 820px;
+    max-width: 96vw;
+    max-height: 90vh;
+    overflow-y: auto;
+    padding: 26px 30px 30px;
+    position: relative;
+
+    &::before {
+        content: '';
+        position: absolute;
+        top: 0; left: 0; right: 0;
+        height: 3px;
+        background: linear-gradient(90deg, #3d124d, #8e44ad, #16a085, #8e44ad, #3d124d);
+        border-radius: 16px 16px 0 0;
+    }
+}
+
+.homunculus-overlay-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 22px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid rgba(142, 68, 173, 0.35);
+}
+
+.homunculus-overlay-title {
+    font-size: 1.45rem;
+    font-weight: 800;
+    color: #a569bd;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    margin: 0;
+    text-shadow: 0 0 14px rgba(165, 105, 189, 0.6);
+}
+
+.homunculus-overlay-sub {
+    color: #8c7b99;
+    font-size: 0.88rem;
+    flex: 1;
+}
+
+.homunculus-close-btn {
+    background: transparent;
+    border: 1px solid #444;
+    color: #888;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 0.85rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+
+    &:hover {
+        border-color: #a569bd;
+        color: #a569bd;
+    }
+}
+
+.homunculus-overlay-body {
+    display: flex;
+    gap: 28px;
+    align-items: flex-start;
+}
+
+.homunculus-body-section {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    flex-shrink: 0;
+    width: 260px;
+}
+
+.homunculus-body-label {
+    font-size: 0.75rem;
+    color: #8c7b99;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    text-align: center;
+}
+
+.homunculus-body-container {
+    position: relative;
+    width: 260px;
+}
+
+.homunculus-body-img {
+    display: block;
+    width: 100%;
+    height: auto;
+    filter: invert(1) brightness(0.35) sepia(0.8) hue-rotate(240deg);
+    opacity: 0.7;
+    pointer-events: none;
+}
+
+.homunculus-slot {
+    position: absolute;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: 2px solid rgba(142, 68, 173, 0.65);
+    background: rgba(18, 10, 28, 0.85);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 0.65rem;
+    color: #888;
+    transform: translate(-50%, -50%);
+    transition: all 0.2s ease;
+    z-index: 2;
+
+    &:hover:not(.filled):not(.assembling) {
+        border-color: #bb8fce;
+        background: rgba(142, 68, 173, 0.35);
+        transform: translate(-50%, -50%) scale(1.25);
+        box-shadow: 0 0 10px rgba(187, 143, 206, 0.6);
+    }
+
+    &.selected {
+        border-color: #d7bde2;
+        background: rgba(142, 68, 173, 0.4);
+        box-shadow: 0 0 10px rgba(215, 189, 226, 0.7), 0 0 20px rgba(142, 68, 173, 0.4);
+        transform: translate(-50%, -50%) scale(1.2);
+        color: #d7bde2;
+    }
+
+    &.filled {
+        border-color: #5b2c6f;
+        cursor: default;
+        color: #ddd;
+        font-size: 0.7rem;
+    }
+
+    &.assembling {
+        border-color: #9b59b6;
+        color: #9b59b6;
+        cursor: default;
+        animation: homunculusSlotPulse 1.5s ease-in-out infinite;
+    }
+}
+
+@keyframes homunculusSlotPulse {
+    0%, 100% { box-shadow: 0 0 4px rgba(155, 89, 182, 0.4); }
+    50%       { box-shadow: 0 0 14px rgba(155, 89, 182, 0.9), 0 0 28px rgba(155, 89, 182, 0.3); }
+}
+
+.homunculus-slot-legend {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 10px 8px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(142, 68, 173, 0.2);
+    border-radius: 8px;
+}
+
+.homunculus-legend-row {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 0.72rem;
+    color: #777;
+    padding: 2px 0;
+    transition: color 0.15s;
+
+    &.legend-filled { color: #b8a9c9; }
+    &.legend-selected { color: #d7bde2; }
+}
+
+.homunculus-legend-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    opacity: 0.8;
+}
+
+.homunculus-legend-name {
+    flex: 1;
+}
+
+.homunculus-legend-design {
+    color: #8c7b99;
+    font-size: 0.68rem;
+    font-style: italic;
+}
+
+.homunculus-design-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    min-width: 0;
+}
+
+.homunculus-design-label {
+    font-size: 0.75rem;
+    color: #8c7b99;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.homunculus-design-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.homunculus-design-card {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(142, 68, 173, 0.3);
+    border-radius: 10px;
+    padding: 12px 14px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    cursor: pointer;
+    transition: all 0.18s ease;
+    position: relative;
+
+    &:hover:not(.applied) {
+        background: rgba(142, 68, 173, 0.12);
+        border-color: rgba(187, 143, 206, 0.5);
+        transform: translateX(2px);
+    }
+
+    &.selected {
+        background: rgba(142, 68, 173, 0.2);
+        box-shadow: 0 0 12px rgba(187, 143, 206, 0.3), inset 0 0 8px rgba(142, 68, 173, 0.2);
+    }
+
+    &.applied {
+        opacity: 0.4;
+        cursor: not-allowed;
+        transform: none !important;
+    }
+}
+
+.homunculus-design-icon {
+    width: 52px;
+    height: 52px;
+    border-radius: 8px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+
+    img {
+        width: 36px;
+        height: 36px;
+        object-fit: contain;
+        opacity: 0.85;
+    }
+}
+
+.homunculus-design-info {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+
+.homunculus-design-name {
+    font-weight: 800;
+    font-size: 0.98rem;
+    letter-spacing: 0.5px;
+}
+
+.homunculus-design-desc {
+    font-size: 0.78rem;
+    color: #b3a2c7;
+    line-height: 1.4;
+}
+
+.homunculus-design-applied-badge {
+    margin-top: 4px;
+    font-size: 0.68rem;
+    color: #9b59b6;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.homunculus-confirm-area {
+    margin-top: auto;
+    padding-top: 18px;
+    border-top: 1px solid rgba(142, 68, 173, 0.25);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+}
+
+.homunculus-selection-summary {
+    font-size: 0.83rem;
+    color: #9c8da9;
+    text-align: center;
+    min-height: 1.2em;
+}
+
+.homunculus-assemble-btn {
+    background: linear-gradient(180deg, #7d3c98 0%, #4a235a 100%);
+    border: 1px solid #8e44ad;
+    box-shadow: 0 4px 18px rgba(142, 68, 173, 0.55);
+    color: #f5eef8;
+    font-size: 1rem;
+    font-weight: 800;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    padding: 11px 40px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+
+    &:hover:not(.disabled) {
+        background: linear-gradient(180deg, #9b59b6 0%, #5b2c6f 100%);
+        transform: translateY(-2px);
+        box-shadow: 0 6px 24px rgba(155, 89, 182, 0.75);
+    }
+
+    &.disabled {
+        opacity: 0.38;
+        cursor: not-allowed;
+        transform: none;
+        box-shadow: none;
+    }
+}
+
+.homunculus-slots-remaining {
+    font-size: 0.72rem;
+    color: #8c7b99;
     letter-spacing: 0.5px;
 }
 
@@ -7844,15 +8468,17 @@
 .spawn-point-spinning {
     animation: spawnPointSpin 6s linear infinite !important;
     transform-origin: center center !important;
+    overflow: visible !important;
+    will-change: transform;
     filter: drop-shadow(0 0 10px rgba(192, 132, 252, 0.85)) drop-shadow(0 0 20px rgba(168, 85, 247, 0.5));
 }
 
 @keyframes spawnPointSpin {
     0% {
-        transform: scale(2) rotate(0deg);
+        transform: rotate(0deg);
     }
     100% {
-        transform: scale(2) rotate(360deg);
+        transform: rotate(360deg);
     }
 }
 
@@ -8581,6 +9207,69 @@
     will-change: left, top;
     transition: opacity 0.3s ease-out;
 
+    .wandering-eye-shadow {
+        position: absolute;
+        bottom: 2px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 50%;
+        height: 22%;
+        border-radius: 50%;
+        background: radial-gradient(ellipse at center, rgba(147, 51, 234, 0.45) 0%, rgba(0, 0, 0, 0.55) 45%, transparent 75%);
+        pointer-events: none;
+        z-index: 1;
+        display: block;
+        animation: wanderingEyeShadowPulse 2s ease-in-out infinite alternate;
+
+        &.appearing {
+            animation: wanderingEyeShadowAppear 0.55s ease-out forwards !important;
+        }
+
+        &.melting {
+            animation: wanderingEyeShadowMelt 0.65s ease-in forwards !important;
+        }
+    }
+
+    .wandering-eye-melt-puddle {
+        position: absolute;
+        bottom: -2px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 72%;
+        height: 32%;
+        border-radius: 50%;
+        background: radial-gradient(ellipse at center, rgba(192, 132, 252, 0.95) 0%, rgba(147, 51, 234, 0.75) 45%, rgba(88, 28, 135, 0.4) 70%, transparent 100%);
+        box-shadow: 0 0 14px rgba(168, 85, 247, 0.85);
+        pointer-events: none;
+        z-index: 2;
+        animation: wanderingEyePuddleExpand 0.65s cubic-bezier(0.2, 0.8, 0.4, 1) forwards;
+
+        &::before,
+        &::after {
+            content: '';
+            position: absolute;
+            width: 18%;
+            height: 45%;
+            border-radius: 50%;
+            background: radial-gradient(circle, #d8b4fe 0%, #a855f7 60%, transparent 100%);
+            box-shadow: 0 0 6px #c084fc;
+            opacity: 0;
+            animation: wanderingEyeDroplets 0.65s ease-out forwards;
+        }
+
+        &::before {
+            left: 18%;
+            top: -12px;
+            animation-delay: 0.08s;
+        }
+
+        &::after {
+            right: 20%;
+            top: -16px;
+            animation-delay: 0.16s;
+        }
+    }
+
     .wandering-eye-sprite {
         position: relative;
         width: 100%;
@@ -8588,7 +9277,16 @@
         display: flex;
         align-items: center;
         justify-content: center;
+        transform-origin: 50% 100%;
         animation: wanderingEyeFloat 2s ease-in-out infinite alternate;
+
+        &.appearing {
+            animation: wanderingEyeAppear 0.55s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+        }
+
+        &.melting {
+            animation: wanderingEyeMelt 0.65s cubic-bezier(0.45, 0, 0.7, 1) forwards !important;
+        }
     }
 
     .wandering-eye-aura {
@@ -8599,12 +9297,23 @@
         box-shadow: 0 0 16px rgba(168, 85, 247, 0.85), 0 0 32px rgba(192, 132, 252, 0.5);
         animation: wanderingEyePulse 1.5s ease-in-out infinite alternate;
         pointer-events: none;
+
+        .floating-wandering-eye.appearing & {
+            animation: wanderingEyeAuraAppear 0.55s ease-out forwards;
+        }
+
+        .floating-wandering-eye.melting & {
+            animation: wanderingEyeAuraMelt 0.65s ease-out forwards !important;
+        }
     }
 
     .wandering-eye-image {
         width: 85%;
         height: 85%;
-        object-fit: contain;
+        border-radius: 50%;
+        object-fit: cover;
+        mask-image: radial-gradient(circle, black 65%, transparent 100%);
+        -webkit-mask-image: radial-gradient(circle, black 65%, transparent 100%);
         filter: drop-shadow(0 0 10px #a855f7) drop-shadow(0 0 16px #c084fc);
         pointer-events: none;
         user-select: none;
@@ -8613,10 +9322,83 @@
 
 @keyframes wanderingEyeFloat {
     0% {
-        transform: translateY(-2px);
+        transform: translateY(-4px);
     }
     100% {
         transform: translateY(4px);
+    }
+}
+
+@keyframes wanderingEyeAppear {
+    0% {
+        transform: translateY(8px) scale(0.1);
+        opacity: 0;
+        filter: brightness(2.5) drop-shadow(0 0 24px #c084fc);
+    }
+    55% {
+        transform: translateY(-8px) scale(1.22);
+        opacity: 1;
+        filter: brightness(1.3) drop-shadow(0 0 18px #a855f7);
+    }
+    100% {
+        transform: translateY(-4px) scale(1);
+        opacity: 1;
+        filter: brightness(1) drop-shadow(0 0 10px #a855f7);
+    }
+}
+
+@keyframes isoEyeAppear {
+    0% {
+        transform: translateZ(2px) rotateX(calc(-1 * var(--iso-tilt, 49deg))) scale(0.1);
+        opacity: 0;
+        filter: brightness(2.5) drop-shadow(0 0 24px #c084fc);
+    }
+    55% {
+        transform: translateZ(32px) rotateX(calc(-1 * var(--iso-tilt, 49deg))) scale(1.22);
+        opacity: 1;
+        filter: brightness(1.3) drop-shadow(0 0 18px #a855f7);
+    }
+    100% {
+        transform: translateZ(22px) rotateX(calc(-1 * var(--iso-tilt, 49deg))) scale(1);
+        opacity: 1;
+        filter: brightness(1) drop-shadow(0 0 10px #a855f7);
+    }
+}
+
+@keyframes wanderingEyeShadowAppear {
+    0% {
+        transform: translateX(-50%) scale(0);
+        opacity: 0;
+    }
+    100% {
+        transform: translateX(-50%) scale(1);
+        opacity: 0.7;
+    }
+}
+
+@keyframes wanderingEyeAuraAppear {
+    0% {
+        transform: scale(0.2);
+        opacity: 0;
+    }
+    50% {
+        transform: scale(1.6);
+        opacity: 1;
+    }
+    100% {
+        transform: scale(1);
+        opacity: 0.85;
+    }
+}
+
+@keyframes wanderingEyeShadowPulse {
+    0% {
+        transform: translateX(-50%) scale(0.85);
+        opacity: 0.55;
+    }
+    100% {
+        transform: translateX(-50%) scale(1.1);
+        opacity: 0.85;
     }
 }
 
@@ -8631,6 +9413,547 @@
     }
 }
 
+@keyframes wanderingEyeMelt {
+    0% {
+        transform: translateY(-4px) scale(1, 1);
+        opacity: 1;
+        filter: drop-shadow(0 0 10px #a855f7);
+    }
+    20% {
+        transform: translateY(2px) scale(1.18, 0.82);
+        opacity: 0.95;
+        filter: drop-shadow(0 0 12px #9333ea) hue-rotate(15deg);
+    }
+    45% {
+        transform: translateY(12px) scale(1.45, 0.55);
+        opacity: 0.85;
+        filter: drop-shadow(0 0 14px #7c3aed) blur(1px) hue-rotate(30deg);
+    }
+    70% {
+        transform: translateY(20px) scale(1.9, 0.22);
+        opacity: 0.55;
+        filter: drop-shadow(0 0 10px #6b21a8) blur(3px);
+    }
+    100% {
+        transform: translateY(24px) scale(2.4, 0.02);
+        opacity: 0;
+        filter: blur(6px);
+    }
+}
 
+@keyframes isoEyeMelt {
+    0% {
+        transform: translateZ(22px) rotateX(calc(-1 * var(--iso-tilt, 49deg))) scale(1, 1);
+        opacity: 1;
+        filter: drop-shadow(0 0 10px #a855f7);
+    }
+    20% {
+        transform: translateZ(14px) rotateX(calc(-1 * var(--iso-tilt, 49deg))) scale(1.18, 0.82);
+        opacity: 0.95;
+        filter: drop-shadow(0 0 12px #9333ea) hue-rotate(15deg);
+    }
+    45% {
+        transform: translateZ(7px) rotateX(calc(-1 * var(--iso-tilt, 49deg))) scale(1.48, 0.52);
+        opacity: 0.85;
+        filter: drop-shadow(0 0 14px #7c3aed) blur(1px) hue-rotate(30deg);
+    }
+    70% {
+        transform: translateZ(2px) rotateX(calc(-1 * var(--iso-tilt, 49deg))) scale(1.95, 0.2);
+        opacity: 0.55;
+        filter: drop-shadow(0 0 10px #6b21a8) blur(3px);
+    }
+    100% {
+        transform: translateZ(0px) rotateX(calc(-1 * var(--iso-tilt, 49deg))) scale(2.4, 0.02);
+        opacity: 0;
+        filter: blur(6px);
+    }
+}
 
+@keyframes wanderingEyeShadowMelt {
+    0% {
+        transform: translateX(-50%) scale(1);
+        opacity: 0.7;
+    }
+    40% {
+        transform: translateX(-50%) scale(1.5, 1.2);
+        opacity: 0.9;
+    }
+    80% {
+        transform: translateX(-50%) scale(2.0, 1.4);
+        opacity: 0.4;
+    }
+    100% {
+        transform: translateX(-50%) scale(2.3, 1.5);
+        opacity: 0;
+    }
+}
 
+@keyframes wanderingEyeAuraMelt {
+    0% {
+        transform: scale(1);
+        opacity: 1;
+    }
+    40% {
+        transform: scale(1.3);
+        opacity: 0.7;
+        filter: blur(3px);
+    }
+    100% {
+        transform: scale(0.2);
+        opacity: 0;
+        filter: blur(8px);
+    }
+}
+
+@keyframes wanderingEyePuddleExpand {
+    0% {
+        transform: translateX(-50%) scale(0.1);
+        opacity: 0;
+    }
+    35% {
+        transform: translateX(-50%) scale(0.9);
+        opacity: 0.95;
+    }
+    70% {
+        transform: translateX(-50%) scale(1.35);
+        opacity: 0.6;
+    }
+    100% {
+        transform: translateX(-50%) scale(1.7);
+        opacity: 0;
+        filter: blur(4px);
+    }
+}
+
+@keyframes wanderingEyeDroplets {
+    0% {
+        transform: translateY(-8px) scale(1);
+        opacity: 1;
+    }
+    70% {
+        transform: translateY(10px) scale(0.8);
+        opacity: 0.8;
+    }
+    100% {
+        transform: translateY(18px) scale(0.2);
+        opacity: 0;
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   Mobile Combat Walker in Dungeon Board
+   ═══════════════════════════════════════════════════════════════════ */
+
+.floating-dungeon-walker {
+    position: absolute;
+    pointer-events: none;
+    z-index: 48;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transform-style: preserve-3d;
+    overflow: visible;
+
+    &.destroyed {
+        animation: walkerDestructionBlow 0.75s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+    }
+
+    .dungeon-walker-shadow {
+        position: absolute;
+        bottom: 2px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 60%;
+        height: 22%;
+        background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.65) 0%, rgba(0, 0, 0, 0) 70%);
+        border-radius: 50%;
+        z-index: 1;
+        pointer-events: none;
+        display: block;
+    }
+
+    .dungeon-walker-sprite {
+        position: relative;
+        z-index: 2;
+        width: 100%;
+        height: 100%;
+        transform-style: preserve-3d;
+        overflow: visible;
+    }
+
+    .dungeon-walker-flip-wrapper {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transform-origin: 50% 50%;
+        transform-style: preserve-3d;
+        overflow: visible;
+    }
+
+    .dungeon-walker-hp-bar {
+        position: absolute;
+        top: -6px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 36px;
+        height: 5px;
+        background: rgba(0, 0, 0, 0.85);
+        border: 1px solid rgba(255, 255, 255, 0.35);
+        border-radius: 3px;
+        overflow: hidden;
+        z-index: 10;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+
+        .dungeon-walker-hp-fill {
+            height: 100%;
+            transition: width 0.25s ease, background-color 0.25s ease;
+            box-shadow: 0 0 4px currentColor;
+        }
+    }
+
+    .dungeon-walker-timer-badge {
+        position: absolute;
+        bottom: -7px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(15, 23, 42, 0.88);
+        border: 1px solid #38bdf8;
+        color: #38bdf8;
+        font-size: 9px;
+        font-weight: 800;
+        padding: 0 4px;
+        border-radius: 4px;
+        line-height: 12px;
+        z-index: 10;
+        letter-spacing: 0.5px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.6), 0 0 6px rgba(56, 189, 248, 0.35);
+    }
+}
+
+.monster-retaliation-attack {
+    position: absolute;
+    inset: -8px;
+    pointer-events: none;
+    z-index: 60;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: monsterRetaliationPulse 0.45s ease-out forwards;
+
+    .monster-claw-slash-1,
+    .monster-claw-slash-2,
+    .monster-claw-slash-3 {
+        position: absolute;
+        height: 3px;
+        background: linear-gradient(90deg, transparent, #ef4444, #ffffff, #ef4444, transparent);
+        box-shadow: 0 0 8px #ef4444, 0 0 14px #ff0055;
+        border-radius: 2px;
+        animation: monsterClawStrike 0.45s cubic-bezier(0.15, 0.85, 0.35, 1.2) forwards;
+    }
+
+    .monster-claw-slash-1 {
+        width: 44px;
+        transform: rotate(-35deg) translateY(-8px);
+        animation-delay: 0.02s;
+    }
+    .monster-claw-slash-2 {
+        width: 50px;
+        transform: rotate(-25deg);
+        animation-delay: 0.06s;
+    }
+    .monster-claw-slash-3 {
+        width: 42px;
+        transform: rotate(-15deg) translateY(8px);
+        animation-delay: 0.1s;
+    }
+}
+
+.floating-combat-damage {
+    position: absolute;
+    font-weight: 900;
+    font-size: 15px;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.9), 0 0 8px rgba(0, 0, 0, 0.8);
+    pointer-events: none;
+    z-index: 70;
+    animation: floatingDamageRise 0.85s ease-out forwards;
+    white-space: nowrap;
+
+    &.walker-damage {
+        color: #38bdf8;
+        text-shadow: 0 0 8px #0284c7, 0 2px 4px #000;
+    }
+    &.monster-damage {
+        color: #ef4444;
+        text-shadow: 0 0 8px #dc2626, 0 2px 4px #000;
+    }
+}
+
+@keyframes walkerDestructionBlow {
+    0% {
+        transform: scale(1) rotate(0deg);
+        filter: brightness(1);
+        opacity: 1;
+    }
+    20% {
+        transform: scale(1.25) rotate(-6deg);
+        filter: brightness(2) drop-shadow(0 0 14px #ef4444);
+        opacity: 1;
+    }
+    50% {
+        transform: scale(0.9) rotate(8deg);
+        filter: brightness(1.6) drop-shadow(0 0 20px #f97316);
+        opacity: 0.85;
+    }
+    100% {
+        transform: scale(0.2) rotate(25deg);
+        filter: brightness(0.5) blur(4px);
+        opacity: 0;
+    }
+}
+
+@keyframes monsterClawStrike {
+    0% {
+        opacity: 0;
+        transform: scaleX(0.2) rotate(-35deg);
+    }
+    30% {
+        opacity: 1;
+        transform: scaleX(1.1) rotate(-30deg);
+    }
+    70% {
+        opacity: 0.9;
+        transform: scaleX(1) rotate(-25deg);
+    }
+    100% {
+        opacity: 0;
+        transform: scaleX(1.3) translateY(4px) rotate(-20deg);
+    }
+}
+
+@keyframes monsterRetaliationPulse {
+    0% {
+        background: radial-gradient(circle, rgba(239, 68, 68, 0.45) 0%, transparent 65%);
+        transform: scale(0.9);
+    }
+    40% {
+        background: radial-gradient(circle, rgba(239, 68, 68, 0.55) 0%, transparent 75%);
+        transform: scale(1.1);
+    }
+    100% {
+        background: transparent;
+        transform: scale(1.2);
+        opacity: 0;
+    }
+}
+
+@keyframes floatingDamageRise {
+    0% {
+        transform: translate(-50%, 0) scale(0.7);
+        opacity: 0;
+    }
+    20% {
+        transform: translate(-50%, -10px) scale(1.2);
+        opacity: 1;
+    }
+    70% {
+        transform: translate(-50%, -24px) scale(1);
+        opacity: 0.9;
+    }
+    100% {
+        transform: translate(-50%, -36px) scale(0.85);
+        opacity: 0;
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   Summoner Expedition Skills: Shadow Effigy & Void Fetch
+   ═══════════════════════════════════════════════════════════════════ */
+
+.floating-shadow-effigy {
+    position: absolute;
+    pointer-events: none;
+    z-index: 47;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transform-style: preserve-3d;
+    overflow: visible;
+
+    .shadow-effigy-shadow {
+        position: absolute;
+        bottom: 2px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 60%;
+        height: 22%;
+        background: radial-gradient(ellipse at center, rgba(168, 85, 247, 0.45) 0%, rgba(0, 0, 0, 0.5) 50%, transparent 75%);
+        border-radius: 50%;
+        z-index: 1;
+        pointer-events: none;
+        display: block;
+    }
+
+    .shadow-effigy-sprite {
+        position: relative;
+        z-index: 2;
+        width: 100%;
+        height: 100%;
+        transform-style: preserve-3d;
+        overflow: visible;
+    }
+
+    .shadow-effigy-inner {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        filter: drop-shadow(0 0 8px #a855f7) drop-shadow(0 0 16px #6366f1) opacity(0.82);
+        animation: shadowEffigyPulse 1.6s ease-in-out infinite alternate;
+    }
+
+    .shadow-effigy-aura {
+        position: absolute;
+        inset: -6px;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(168, 85, 247, 0.4) 0%, rgba(99, 102, 241, 0.2) 50%, transparent 75%);
+        pointer-events: none;
+        animation: shadowEffigyAuraPulse 1.4s ease-in-out infinite alternate;
+    }
+
+    &.bursting {
+        .shadow-effigy-inner {
+            animation: shadowEffigyBurst 0.65s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        .shadow-effigy-frost-blast {
+            position: absolute;
+            inset: -24px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(56, 189, 248, 0.8) 0%, rgba(168, 85, 247, 0.5) 45%, transparent 75%);
+            box-shadow: 0 0 24px #38bdf8, 0 0 40px #a855f7;
+            animation: shadowEffigyFrostRing 0.65s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            pointer-events: none;
+            z-index: 10;
+        }
+    }
+}
+
+.floating-void-fetch {
+    position: absolute;
+    pointer-events: none;
+    z-index: 49;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transform-style: preserve-3d;
+    overflow: visible;
+
+    .void-fetch-shadow {
+        position: absolute;
+        bottom: 2px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 50%;
+        height: 20%;
+        background: radial-gradient(ellipse at center, rgba(147, 51, 234, 0.5) 0%, rgba(0, 0, 0, 0.6) 50%, transparent 75%);
+        border-radius: 50%;
+        z-index: 1;
+        pointer-events: none;
+        display: block;
+    }
+
+    .void-fetch-sprite {
+        position: relative;
+        z-index: 2;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transform-style: preserve-3d;
+        overflow: visible;
+        animation: voidFetchFlutter 0.4s ease-in-out infinite alternate;
+    }
+
+    .void-fetch-imp-icon {
+        font-size: 28px;
+        filter: drop-shadow(0 0 10px #c084fc) drop-shadow(0 0 18px #a855f7);
+        user-select: none;
+        transform: scale(1.1);
+    }
+
+    .void-fetch-aura {
+        position: absolute;
+        inset: -4px;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(192, 132, 252, 0.5) 0%, rgba(147, 51, 234, 0.25) 50%, transparent 75%);
+        box-shadow: 0 0 14px rgba(168, 85, 247, 0.85);
+        pointer-events: none;
+        animation: voidFetchAuraPulse 1s ease-in-out infinite alternate;
+    }
+}
+
+@keyframes shadowEffigyPulse {
+    0% { filter: drop-shadow(0 0 8px #a855f7) drop-shadow(0 0 16px #6366f1) opacity(0.85); }
+    100% { filter: drop-shadow(0 0 14px #c084fc) drop-shadow(0 0 24px #818cf8) opacity(0.65); }
+}
+
+@keyframes shadowEffigyAuraPulse {
+    0% { transform: scale(0.9); opacity: 0.6; }
+    100% { transform: scale(1.15); opacity: 1; }
+}
+
+@keyframes shadowEffigyBurst {
+    0% { transform: scale(1); opacity: 0.85; filter: brightness(2) drop-shadow(0 0 20px #38bdf8); }
+    100% { transform: scale(1.6); opacity: 0; filter: brightness(3) blur(6px); }
+}
+
+@keyframes shadowEffigyFrostRing {
+    0% { transform: scale(0.3); opacity: 1; }
+    70% { transform: scale(1.4); opacity: 0.8; }
+    100% { transform: scale(2.2); opacity: 0; }
+}
+
+@keyframes voidFetchFlutter {
+    0% { transform: translateY(-3px) rotate(-6deg); }
+    100% { transform: translateY(3px) rotate(6deg); }
+}
+
+@keyframes voidFetchAuraPulse {
+    0% { transform: scale(0.85); opacity: 0.5; }
+    100% { transform: scale(1.2); opacity: 0.9; }
+}
+
+/* ── Engineer Expedition Visuals ─────────────────────────────────────────── */
+.engineer-ziplines-layer {
+    pointer-events: none;
+    z-index: 38;
+}
+
+.engineer-forward-emplacement-overlay {
+    pointer-events: none;
+    z-index: 42;
+
+    .emplacement-sprite {
+        position: relative;
+    }
+
+    .emplacement-pulse-beacon {
+        position: absolute;
+        top: 4px;
+        right: 4px;
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background-color: #f59e0b;
+        box-shadow: 0 0 8px #f59e0b, 0 0 14px rgba(245, 158, 11, 0.8);
+        animation: emplacementBlink 1.6s infinite ease-in-out;
+    }
+}
+
+@keyframes emplacementBlink {
+    0%, 100% { opacity: 0.3; transform: scale(0.85); }
+    50% { opacity: 1; transform: scale(1.3); }
+}

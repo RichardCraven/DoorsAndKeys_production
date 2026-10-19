@@ -26,7 +26,7 @@ import AudioManager from '../../utils/audio-manager';
 import { INTERVALS, INTERVAL_DISPLAY_NAMES } from '../../utils/shared-constants';
 import REAGENTS, { REAGENT_KEYS } from '../../utils/reagents';
 import BREW_INGREDIENTS, { BREW_INGREDIENT_KEYS } from '../../utils/brew-ingredients';
-import { BATTLE_TACTICS } from '../../utils/spells-table';
+import { BATTLE_TACTICS, SPIRIT_VESSELS } from '../../utils/spells-table';
 import socketHandler from '../../utils/socket-handler';
 
 // const MAX_DEPTH = 7;
@@ -51,10 +51,13 @@ const SHOW_MONSTER_IDS = false;
 const DEATH_ANIMATION_DURATION = 2200;
 
 
-const AnimatedXPBar = ({ percentBefore, percentAfter, levelTransition }) => {
+export const AnimatedXPBar = ({ percentBefore, percentAfter, levelTransition }) => {
     // If level transition occurs, we start at percentBefore, fill to 100, drop to 0, then go to percentAfter.
     // To handle drop to 0 without backwards animation, we temporarily disable transition.
-    const [currentPercent, setCurrentPercent] = React.useState(percentBefore);
+    const safeBefore = (typeof percentBefore === 'number' && Number.isFinite(percentBefore)) ? Math.max(0, Math.min(100, Math.round(percentBefore))) : 0;
+    const safeAfter = (typeof percentAfter === 'number' && Number.isFinite(percentAfter)) ? Math.max(0, Math.min(100, Math.round(percentAfter))) : 0;
+
+    const [currentPercent, setCurrentPercent] = React.useState(safeBefore);
     const [isLevelingUp, setIsLevelingUp] = React.useState(false);
     const [disableTransition, setDisableTransition] = React.useState(false);
     
@@ -73,10 +76,10 @@ const AnimatedXPBar = ({ percentBefore, percentAfter, levelTransition }) => {
                     setDisableTransition(true);
                     setCurrentPercent(0);
                     
-                    // Wait a tiny bit for the snap to apply, then re-enable transition and go to percentAfter
+                    // Wait a tiny bit for the snap to apply, then re-enable transition and go to safeAfter
                     t3 = setTimeout(() => {
                         setDisableTransition(false);
-                        setCurrentPercent(percentAfter);
+                        setCurrentPercent(safeAfter);
                         
                         t4 = setTimeout(() => {
                             setIsLevelingUp(false);
@@ -84,7 +87,7 @@ const AnimatedXPBar = ({ percentBefore, percentAfter, levelTransition }) => {
                     }, 50);
                 }, 800);
             } else {
-                setCurrentPercent(percentAfter);
+                setCurrentPercent(safeAfter);
             }
         }, 1000); // 1 sec delay before starting animation
         
@@ -94,10 +97,11 @@ const AnimatedXPBar = ({ percentBefore, percentAfter, levelTransition }) => {
             clearTimeout(t3);
             clearTimeout(t4);
         };
-    }, [percentBefore, percentAfter, levelTransition]);
+    }, [safeBefore, safeAfter, levelTransition]);
     
     const transitionStyle = disableTransition ? 'none' : 'width 0.8s ease-in-out, background-color 0.3s ease';
-    
+    const displayPercent = (typeof currentPercent === 'number' && Number.isFinite(currentPercent)) ? Math.max(0, Math.min(100, Math.round(currentPercent))) : 0;
+
     return (
         <div className="crew-xp-container">
             <div className="crew-xp-bg" style={{ position: 'relative' }}>
@@ -111,13 +115,13 @@ const AnimatedXPBar = ({ percentBefore, percentAfter, levelTransition }) => {
                 <div 
                     className={`crew-xp-fill ${isLevelingUp ? 'leveling-up' : ''}`} 
                     style={{ 
-                        width: `${currentPercent}%`, 
+                        width: `${displayPercent}%`, 
                         transition: transitionStyle,
                         backgroundColor: isLevelingUp ? '#ffd700' : undefined 
                     }} 
                 />
             </div>
-            <span className="crew-xp-text">{Math.round(currentPercent)}% XP</span>
+            <span className="crew-xp-text">{displayPercent}% XP</span>
         </div>
     );
 };
@@ -277,7 +281,11 @@ class MonsterBattle extends React.Component {
                 console.warn('fireSpecialForAI: failed to remove glyph from fighter.specialActions', err);
             }
 
-            this.fireGlyph(glyph, fighter);
+            if (glyph.type === 'spirit_vessel') {
+                this.fireSpiritVessel(glyph, fighter);
+            } else {
+                this.fireGlyph(glyph, fighter);
+            }
         } else {
             // fallback: set selectedFighter for other specials
             this.setState({ selectedFighter: fighter }, () => {
@@ -1012,7 +1020,7 @@ class MonsterBattle extends React.Component {
         // Do NOT enable manual mode here; just select the fighter
         this.setState({
             selectedFighter,
-            glyphTrayExpanded: selectedFighter.type === 'wizard',
+            glyphTrayExpanded: selectedFighter.type === 'wizard' || selectedFighter.type === 'summoner',
             manualControl: false // Ensure manual mode is off when tabbing
         })
     }
@@ -1244,7 +1252,7 @@ class MonsterBattle extends React.Component {
                     this.setState({
                         selectedFighter: first,
                         selectedMonster: null,
-                        glyphTrayExpanded: first.type === 'wizard'
+                        glyphTrayExpanded: first.type === 'wizard' || first.type === 'summoner'
                     });
                 }
             }
@@ -1782,7 +1790,9 @@ class MonsterBattle extends React.Component {
     combatBegins = () => {
         this.setState({
             combatStarted: true
-        })
+        }, () => {
+            this.autoDeploySpiritVessels();
+        });
     }
     gameOver = (outcome) => {
         // outcome received
@@ -1922,7 +1932,10 @@ class MonsterBattle extends React.Component {
                     const normalItems = itemsGained.filter(itemKey => !itemKey.endsWith('_soul_shard'));
                     this.props.inventoryManager.addItemsByName(normalItems);
                 }
-                experienceGained = this.props.monster.level * 10;
+                const mLevel = (this.props.monster && typeof this.props.monster.level === 'number' && Number.isFinite(this.props.monster.level) && this.props.monster.level > 0)
+                    ? this.props.monster.level
+                    : ((this.props.monster && typeof this.props.monster.tier === 'number' && Number.isFinite(this.props.monster.tier) && this.props.monster.tier > 0) ? this.props.monster.tier * 2 : 1);
+                experienceGained = Math.max(10, Math.round(mLevel * 10));
                 try {
                     let spiderKillsCount = 0;
                     Object.values(latestBattleData || {}).forEach(c => {
@@ -2096,7 +2109,8 @@ class MonsterBattle extends React.Component {
                     (this.props.crewManager.crew || []).forEach(c => {
                         if (c && c.id) {
                             levelsBefore[c.id] = typeof c.level === 'number' ? c.level : 0;
-                            xpPercentsBefore[c.id] = this.props.crewManager.calculateExpPercentage(c);
+                            const p = this.props.crewManager.calculateExpPercentage(c);
+                            xpPercentsBefore[c.id] = (typeof p === 'number' && Number.isFinite(p)) ? p : 0;
                         }
                     });
                 } catch (e) { }
@@ -2110,6 +2124,9 @@ class MonsterBattle extends React.Component {
                         console.log(`[Leader's Doctrine] Leader survived — +${doctrineBonus} XP bonus. Total: ${experienceGained}`);
                     }
                 } catch (e) { console.warn('[Leader\'s Doctrine] XP bonus failed', e); }
+                if (typeof experienceGained !== 'number' || !Number.isFinite(experienceGained) || experienceGained <= 0) {
+                    experienceGained = Math.max(10, Math.round(mLevel * 10));
+                }
                 try { this.props.crewManager.addExperience(liveCrew, experienceGained); } catch (e) { console.warn('addExperience failed', e); }
                 // ── Battle Tactics: decrement combatsRemaining after this victory ──
                 try {
@@ -2632,6 +2649,7 @@ class MonsterBattle extends React.Component {
                 (Array.isArray(clickedSpecial.effect) && clickedSpecial.effect.some(e => typeof e === 'string' && e.includes('buff_self'))) ||
                 (typeof clickedSpecial.effect === 'string' && clickedSpecial.effect.includes('buff_self')) ||
                 clickedSpecial.id === 'monk_ethereal_speed' ||
+                clickedSpecial.id === 'ethereal_speed' ||
                 clickedSpecial.id === 'monk_meditate' ||
                 clickedSpecial.id === 'monk_inner_fire'
             ));
@@ -2800,6 +2818,120 @@ class MonsterBattle extends React.Component {
         this.setState({ acidBombMode: true, acidBombItem: bombItem });
     }
 
+    // ── Spirit Vessel firing & auto-deployment (Summoner) ──────────────────────
+    fireSpiritVessel = (vessel, fighterOverride = null) => {
+        const selectedFighter = fighterOverride || this.state.selectedFighter;
+        if (!selectedFighter) return;
+
+        if (vessel.type === 'spirit_vessel' && Array.isArray(vessel.spirits) && vessel.spirits.length > 0) {
+            let target = this.props.combatManager?.getCombatant?.(selectedFighter?.targetId);
+            if (!target) {
+                target = this.props.monster || Object.values(this.props.combatManager?.combatants || {}).find(c => c && c.isMonster && !c.dead);
+            }
+
+            // Consume the vessel
+            let consumableSpecials = selectedFighter.specialActions;
+            if (consumableSpecials) {
+                const targetIndex = consumableSpecials.findIndex(a =>
+                    a && a.type === 'spirit_vessel' &&
+                    a.vesselTier === vessel.vesselTier &&
+                    (!vessel.startDate || a.startDate === vessel.startDate)
+                );
+                if (targetIndex > -1) {
+                    consumableSpecials.splice(targetIndex, 1);
+                    try {
+                        const meta = getMeta ? getMeta() : null;
+                        if (meta && meta.crew) {
+                            const metaMember = meta.crew.find(m => m && m.id === selectedFighter.id);
+                            if (metaMember && Array.isArray(metaMember.specialActions)) {
+                                const mIdx = metaMember.specialActions.findIndex(a =>
+                                    a && a.type === 'spirit_vessel' &&
+                                    a.vesselTier === vessel.vesselTier &&
+                                    (!vessel.startDate || a.startDate === vessel.startDate)
+                                );
+                                if (mIdx >= 0) {
+                                    metaMember.specialActions.splice(mIdx, 1);
+                                    if (typeof storeMeta === 'function') storeMeta(meta);
+                                }
+                            }
+                        }
+                    } catch (e) { }
+                    this.setState({
+                        selectedFighter: { ...selectedFighter, specialActions: consumableSpecials }
+                    }, () => {
+                        if (this.props.combatManager && typeof this.props.combatManager.syncCrewMember === 'function') {
+                            this.props.combatManager.syncCrewMember(this.state.selectedFighter || selectedFighter);
+                        }
+                    });
+                }
+            }
+
+            try {
+                if (this.props.combatManager && typeof this.props.combatManager.appendCombatLog === 'function') {
+                    const attackerName = typeof this.props.combatManager.getCombatantLogName === 'function'
+                        ? this.props.combatManager.getCombatantLogName(selectedFighter)
+                        : (selectedFighter.name || 'Summoner');
+                    const targetName = target && typeof this.props.combatManager.getCombatantLogName === 'function'
+                        ? this.props.combatManager.getCombatantLogName(target)
+                        : (target?.name || 'the battlefield');
+                    const spiritNames = (vessel.spiritDefs || []).map(s => s.name).join(', ') || vessel.spirits.join(', ');
+                    this.props.combatManager.appendCombatLog(
+                        `💀 [Spirit Vessel] ${attackerName}'s ${vessel.name || 'Spirit Vessel'} shatters! Slotted spirits deploy: ${spiritNames}!`
+                    );
+                }
+            } catch (e) { }
+
+            vessel.spirits.forEach((spiritKey, index) => {
+                setTimeout(() => {
+                    try {
+                        const currentTarget = this.props.combatManager?.getCombatant?.(selectedFighter.targetId) || target;
+                        const specialsMatrix = this.props.combatManager?.specialsMatrix || {};
+                        const spiritDef = specialsMatrix[spiritKey] || { id: spiritKey, name: spiritKey, type: 'utility', selected: true };
+                        const spiritWithSelected = { ...spiritDef, selected: true };
+
+                        const cmFighter = this.props.combatManager?.getCombatant?.(selectedFighter.id);
+                        const prevActions = cmFighter ? cmFighter.actionsTakenThisRound : 0;
+                        if (cmFighter) cmFighter.actionsTakenThisRound = 0;
+
+                        if (this.props.combatManager && typeof this.props.combatManager.fighterSpecialAttack === 'function') {
+                            this.props.combatManager.fighterSpecialAttack(spiritWithSelected);
+                        }
+
+                        if (cmFighter) cmFighter.actionsTakenThisRound = prevActions;
+                        const combatLog = this.props.combatManager && typeof this.props.combatManager.getCombatLog === 'function'
+                            ? this.props.combatManager.getCombatLog()
+                            : [];
+                        this.setState({ combatLog });
+                    } catch (e) {
+                        console.warn('[fireSpiritVessel] spirit firing error for', spiritKey, e);
+                    }
+                }, index * 400);
+            });
+        }
+    }
+
+    autoDeploySpiritVessels = () => {
+        // Auto-deploy ready spirit vessels at combat start for all Summoner crew members
+        const crewList = (this.props.crew && Array.isArray(this.props.crew)) ? this.props.crew : [];
+        const battleUnits = this.state.battleData ? Object.values(this.state.battleData) : [];
+        const allCandidates = [...crewList, ...battleUnits];
+        const seenFighters = new Set();
+
+        allCandidates.forEach(fighter => {
+            if (!fighter || !fighter.id || seenFighters.has(fighter.id)) return;
+            seenFighters.add(fighter.id);
+
+            const readyVessels = (fighter.specialActions || []).filter(a => a && a.type === 'spirit_vessel' && a.available);
+            if (readyVessels.length > 0) {
+                readyVessels.forEach((vessel, vIdx) => {
+                    setTimeout(() => {
+                        this.fireSpiritVessel(vessel, fighter);
+                    }, vIdx * 600);
+                });
+            }
+        });
+    }
+
     // ── Acid Bomb: called when player clicks a combat tile in acidBombMode ──
     handleAcidBombPlacement = (tile) => {
         const { acidBombItem } = this.state;
@@ -2942,7 +3074,7 @@ class MonsterBattle extends React.Component {
         if (this._isTouchDragging) return;
         if (!fighter || !fighter.coordinates) return;
         const details = this.state.battleData[fighter.id];
-        if (!details || details.dead) return;
+        if (!details || details.dead || details.stationary || details.isStationary || details.type === 'turret' || details.isWall) return;
         const fighterSleepDebuff = Array.isArray(details.activeDebuffs) && details.activeDebuffs.some(d => d && d.name && ["sleep", "sleep_spell"].includes(d.name.toLowerCase()) && (d.roundsLeft || 0) > 0);
         if (!!details.asleep || (details.sleepRounds || 0) > 0 || fighterSleepDebuff) return;
         // Store whether combat was already paused so we can restore it on mouseup
@@ -2971,7 +3103,7 @@ class MonsterBattle extends React.Component {
         if (!fighter || !fighter.coordinates) return;
         this._isTouchDragging = true;
         const details = this.state.battleData[fighter.id];
-        if (!details || details.dead) return; 
+        if (!details || details.dead || details.stationary || details.isStationary || details.type === 'turret' || details.isWall) return; 
         const fighterSleepDebuff = Array.isArray(details.activeDebuffs) && details.activeDebuffs.some(d => d && d.name && ["sleep", "sleep_spell"].includes(d.name.toLowerCase()) && (d.roundsLeft || 0) > 0);
         if (!!details.asleep || (details.sleepRounds || 0) > 0 || fighterSleepDebuff) return;
 
@@ -3162,8 +3294,11 @@ class MonsterBattle extends React.Component {
                     if (enemyUnit) this._issueGroupCommand(dragSource.id, dragTargetTile, true, enemyUnit.id);
                 } else {
                     // Dragged onto an empty tile — send the fighter toward that destination.
-                    if (typeof cm.setFighterDestination === 'function') {
-                        cm.setFighterDestination(dragSource.id, dragTargetTile);
+                    const sourceFighter = this.state.battleData[dragSource.id];
+                    if (sourceFighter && !sourceFighter.stationary && !sourceFighter.isStationary && sourceFighter.type !== 'turret' && !sourceFighter.isWall) {
+                        if (typeof cm.setFighterDestination === 'function') {
+                            cm.setFighterDestination(dragSource.id, dragTargetTile);
+                        }
                     }
                     // Issue group move command to remaining group members
                     this._issueGroupCommand(dragSource.id, dragTargetTile, false, null);
@@ -3203,7 +3338,7 @@ class MonsterBattle extends React.Component {
 
         group.forEach((fighterId, idx) => {
             const fighter = this.state.battleData[fighterId];
-            if (!fighter || fighter.dead) return;
+            if (!fighter || fighter.dead || fighter.stationary || fighter.isStationary || fighter.type === 'turret' || fighter.isWall) return;
             const fighterSleepDebuff = Array.isArray(fighter.activeDebuffs) && fighter.activeDebuffs.some(d => d && d.name && ["sleep", "sleep_spell"].includes(d.name.toLowerCase()) && (d.roundsLeft || 0) > 0);
             if (!!fighter.asleep || (fighter.sleepRounds || 0) > 0 || fighterSleepDebuff) return;
 
@@ -3329,7 +3464,7 @@ class MonsterBattle extends React.Component {
     // ── Group Selection: shift-click handler ─────────────────────────────────
     onFighterShiftClick = (fighterId) => {
         const fighter = this.state.battleData[fighterId];
-        if (!fighter || fighter.dead || fighter.isMonster || fighter.isMinion) return;
+        if (!fighter || fighter.dead || fighter.isMonster || fighter.isMinion || fighter.stationary || fighter.isStationary || fighter.type === 'turret' || fighter.isWall) return;
 
         const primary = this.state.selectedFighter;
         let next = [...(this.state.groupSelectedIds || [])];
@@ -3468,6 +3603,8 @@ class MonsterBattle extends React.Component {
         })
     }
     onDragStart = (fighter) => {
+        const details = this.state.battleData[fighter?.id] || fighter;
+        if (details?.stationary || details?.isStationary || details?.type === 'turret' || details?.isWall) return;
         this.setState({
             selectedFighter: this.state.battleData[fighter.id],
             draggingFighter: fighter
@@ -3481,8 +3618,16 @@ class MonsterBattle extends React.Component {
         })
     }
     onDrop = (tileIndex) => {
+        if (!this.state.draggingFighter) return;
         const selectedFighter = this.state.battleData[this.state.draggingFighter.id];
-        const tile = this.state.combatTiles[tileIndex]
+        if (!selectedFighter || selectedFighter.stationary || selectedFighter.isStationary || selectedFighter.type === 'turret' || selectedFighter.isWall) {
+            this.setState({
+                draggedOverCombatTileId: null,
+                draggingFighter: null
+            });
+            return;
+        }
+        const tile = this.state.combatTiles[tileIndex];
         this.props.combatManager.setFighterDestination(selectedFighter.id, { x: tile.x, y: tile.y });
         let arr = this.state.ghostPortraitMatrix;
         arr[tileIndex] = selectedFighter.portrait;
@@ -3491,7 +3636,6 @@ class MonsterBattle extends React.Component {
             draggingFighter: null,
             ghostPortraitMatrix: arr
         })
-
     }
     getMonsterWeaponAnimation = (monster) => {
         if (!monster.attacking || !monster.activeAbility) return ''
@@ -3555,7 +3699,7 @@ class MonsterBattle extends React.Component {
         };
 
         // Build consumable list from specialActions
-        const consumableTypes = new Set(['glyph', 'acid_bomb', 'spell']);
+        const consumableTypes = new Set(['glyph', 'acid_bomb', 'spell', 'spirit_vessel']);
         const consumableActions = (liveSelectedFighter.specialActions || []).filter(
             a => a && consumableTypes.has(a.type) && a.available
         );
@@ -3707,7 +3851,7 @@ class MonsterBattle extends React.Component {
         };
 
         const renderConsumableTile = (a, idx) => {
-            const rawIcon = a.iconUrl || (a.type === 'acid_bomb' ? (images['ranger_acid_bomb'] || '') : '') || (a.type === 'glyph' ? (images[`${a.glyphTier || 'minor'}_glyph`] || images['glyph_inverted'] || '') : '');
+            const rawIcon = a.iconUrl || (a.type === 'acid_bomb' ? (images['ranger_acid_bomb'] || '') : '') || (a.type === 'glyph' ? (images[`${a.glyphTier || 'minor'}_glyph`] || images['glyph_inverted'] || '') : '') || (a.type === 'spirit_vessel' ? (a.vesselTier === 'obsidian_phylactery' ? images['hounskull'] : a.vesselTier === 'clay_effigy' ? images['demonskull_charm'] : images['whiteskull']) || '' : '');
             let resolvedIconUrl = '';
             if (rawIcon) {
                 if (typeof rawIcon === 'string') {
@@ -3721,9 +3865,9 @@ class MonsterBattle extends React.Component {
                 resolvedIconUrl = rawIcon;
             }
 
-            const name = a.name || (a.type === 'acid_bomb' ? 'Acid Bomb' : a.type === 'glyph' ? `${a.glyphTier || 'Minor'} Glyph` : 'Spell');
+            const name = a.name || (a.type === 'acid_bomb' ? 'Acid Bomb' : a.type === 'glyph' ? `${a.glyphTier || 'Minor'} Glyph` : a.type === 'spirit_vessel' ? (a.name || 'Spirit Vessel') : 'Spell');
             const isAcidActive = a.type === 'acid_bomb' && this.state.acidBombMode;
-            const consumableKey = `consumable-${a.type}-${a.glyphTier || a.subtype || idx}`;
+            const consumableKey = `consumable-${a.type}-${a.glyphTier || a.vesselTier || a.subtype || idx}`;
             const isHovered = hoveredKey === consumableKey;
 
             const fireConsumable = () => {
@@ -3733,6 +3877,8 @@ class MonsterBattle extends React.Component {
                     this.fireGlyph(a);
                 } else if (a.type === 'spell') {
                     this.fireSpell(a);
+                } else if (a.type === 'spirit_vessel') {
+                    this.fireSpiritVessel(a);
                 }
             };
 
@@ -4564,43 +4710,50 @@ class MonsterBattle extends React.Component {
                         const mainMonster = this.state.battleData && Object.values(this.state.battleData).find(c => c && c.isMonster && !c.isMinion);
                         if (mainMonster && mainMonster.coordinates) {
                             // Main monster is 2x scale or 3x scale (occupies coordinates.x, coordinates.y anchor).
-                            // Compute visual center X/Y using tilePos style logic.
+                            // Mirror CombatGrid's renderMonsterUnit geometry so the bubble is anchored to the
+                            // portrait's *visual* rectangle (incl. greeting enlargement), not a guessed offset.
                             const mx = mainMonster.coordinates.x;
                             const my = mainMonster.coordinates.y;
 
-                            const isHuge = mainMonster.huge === true || mainMonster.isHuge === true || mainMonster.tier === 4 || mainMonster.type === 'dragon' || mainMonster.key === 'dragon' || mainMonster.size === 3 || mainMonster.scale === 3;
+                            const isHuge = !mainMonster.isShrineGuardian && (mainMonster.huge === true || mainMonster.isHuge === true || mainMonster.tier === 4 || mainMonster.type === 'dragon' || mainMonster.key === 'dragon' || mainMonster.size === 3 || mainMonster.scale === 3);
+                            const span = isHuge ? 3 : 2;
+                            const border = SHOW_TILE_BORDERS ? 2 : 0;
+                            const tilePx = (c) => c * currentTileSize + c * border;
+                            const unitSize = currentTileSize * span + (span - 1) * border;
+                            const boardWidthPx = currentTileSize * this.state.numBoardColumns + (SHOW_TILE_BORDERS ? this.state.numBoardColumns * 2 : 0);
 
-                            let bubbleCenterX = 0;
-                            let bubbleCenterY = 0;
+                            const baseLeft = tilePx(mx) + (mx >= 4 ? -(currentTileSize + border) * (span - 1) : 0);
+                            const baseTop = tilePx(my) - (currentTileSize + border) * (span - 1);
 
-                            if (isHuge) {
-                                // 3x3 footprint: top row is my - 2, middle column is mx + hDir
-                                const hDir = (mx >= 4) ? -1 : 1;
-                                const middleCol = mx + hDir;
-                                const topRow = my - 2;
-
-                                bubbleCenterX = middleCol * currentTileSize + currentTileSize / 2;
-                                bubbleCenterY = topRow * currentTileSize;
-                            } else {
-                                // 2x2 footprint
-                                const hOffset = (mx >= 4) ? -currentTileSize : 0;
-                                const leftPos = mx * currentTileSize + hOffset;
-                                const topPos = my * currentTileSize - currentTileSize; // Top row of the 2x2
-
-                                bubbleCenterX = leftPos + currentTileSize;
-                                bubbleCenterY = topPos; // Directly above the top row
+                            // Visual rect of the portrait
+                            let rectLeft = baseLeft;
+                            let rectTop = baseTop;
+                            let rectWidth = unitSize;
+                            const isEnlargedGreeting = this.state.greetingInProcess && !this.state.isMobileLandscape && !mainMonster.dead;
+                            if (isEnlargedGreeting) {
+                                // CombatGrid pins the unit to the right edge and applies scale(1.5) with origin 'right center'
+                                const s = 1.5;
+                                rectWidth = unitSize * s;
+                                rectLeft = boardWidthPx - rectWidth;
+                                rectTop = baseTop + unitSize / 2 - (unitSize * s) / 2;
                             }
 
-                            // 3x3 monsters enlarge vertically by 0.3 * currentTileSize during greeting, requiring higher yOffset so bubble floats cleanly above portrait
-                            const yOffset = isHuge ? 88 : ((mainMonster.isLarge || mainMonster.size === 2) ? 52 : 45);
+                            const portraitCenterX = rectLeft + rectWidth / 2;
+                            const gap = 16; // room for the pointer stem
+                            const bubbleBottomY = rectTop - gap;
+
+                            // Keep bubble on-board horizontally; shift the pointer to still aim at the portrait
+                            const halfMax = 130;
+                            const bubbleCenterX = Math.max(halfMax, Math.min(boardWidthPx - halfMax, portraitCenterX));
+                            const pointerShift = portraitCenterX - bubbleCenterX;
 
                             return (
                                 <React.Fragment key="esoteric-dialogue-banner">
                                     <style>{`
                                         @keyframes esoteric-bubble-float {
-                                            0% { transform: translateX(-50%) translateY(0px); filter: drop-shadow(0 0 12px rgba(255, 84, 0, 0.3)); }
-                                            50% { transform: translateX(-50%) translateY(-4px); filter: drop-shadow(0 0 20px rgba(255, 84, 0, 0.55)); }
-                                            100% { transform: translateX(-50%) translateY(0px); filter: drop-shadow(0 0 12px rgba(255, 84, 0, 0.3)); }
+                                            0% { transform: translate(-50%, -100%) translateY(0px); filter: drop-shadow(0 0 12px rgba(255, 84, 0, 0.3)); }
+                                            50% { transform: translate(-50%, -100%) translateY(-4px); filter: drop-shadow(0 0 20px rgba(255, 84, 0, 0.55)); }
+                                            100% { transform: translate(-50%, -100%) translateY(0px); filter: drop-shadow(0 0 12px rgba(255, 84, 0, 0.3)); }
                                         }
                                     `}</style>
                                     <div
@@ -4608,8 +4761,8 @@ class MonsterBattle extends React.Component {
                                         style={{
                                             position: 'absolute',
                                             left: `${bubbleCenterX}px`,
-                                            top: `${bubbleCenterY - yOffset}px`,
-                                            transform: 'translateX(-50%)',
+                                            top: `${bubbleBottomY}px`,
+                                            transform: 'translate(-50%, -100%)',
                                             width: 'max-content',
                                             maxWidth: '260px',
                                             height: 'auto',
@@ -4646,7 +4799,7 @@ class MonsterBattle extends React.Component {
                                         <div style={{
                                             position: 'absolute',
                                             bottom: '-11px',
-                                            left: '50%',
+                                            left: `calc(50% + ${pointerShift}px)`,
                                             transform: 'translateX(-50%)',
                                             width: '0',
                                             height: '0',
@@ -5670,7 +5823,8 @@ class MonsterBattle extends React.Component {
                                 const legacySpells = specialActions.filter(a => a && a.type === 'spell' && a.available);
                                 const readyGlyphs = specialActions.filter(a => a && a.type === 'glyph' && a.available);
                                 const readyAcidBombs = specialActions.filter(a => a && a.type === 'acid_bomb' && a.available);
-                                const hasSpells = legacySpells.length > 0 || readyGlyphs.length > 0 || readyAcidBombs.length > 0;
+                                const readySpiritVessels = specialActions.filter(a => a && a.type === 'spirit_vessel' && a.available);
+                                const hasSpells = legacySpells.length > 0 || readyGlyphs.length > 0 || readyAcidBombs.length > 0 || readySpiritVessels.length > 0;
                                 const isExpanded = this.state.glyphTrayExpanded || hasSpells;
 
                                 return (
@@ -5793,7 +5947,47 @@ class MonsterBattle extends React.Component {
                                                     )];
                                                 })() : [];
 
-                                                return [...legacyTiles, ...glyphTiles, ...acidBombTiles];
+                                                // ── Spirit Vessel tiles (Summoner) ───────────────────────
+                                                const vesselGrouped = {};
+                                                readySpiritVessels.forEach(v => {
+                                                    const tier = v.vesselTier || 'bone_fetish';
+                                                    if (!vesselGrouped[tier]) vesselGrouped[tier] = [];
+                                                    vesselGrouped[tier].push(v);
+                                                });
+                                                const vesselTiles = Object.keys(vesselGrouped).map((tier, idx) => {
+                                                    const group = vesselGrouped[tier];
+                                                    const representative = group[0];
+                                                    const count = group.length;
+                                                    const rawIcon = representative.iconUrl || (tier === 'obsidian_phylactery' ? images['hounskull'] : tier === 'clay_effigy' ? images['demonskull_charm'] : images['whiteskull']) || '';
+                                                    let resolvedIconUrl = '';
+                                                    if (rawIcon) {
+                                                        if (typeof rawIcon === 'string') {
+                                                            const mapped = images[rawIcon.trim()];
+                                                            resolvedIconUrl = mapped ? (mapped.default || mapped) : rawIcon;
+                                                        } else if (typeof rawIcon === 'object') {
+                                                            resolvedIconUrl = rawIcon.default || String(rawIcon);
+                                                        }
+                                                    }
+                                                    const spiritNames = (representative.spiritDefs || []).map(s => s.name).join(', ');
+                                                    const tooltip = `${representative.name}${spiritNames ? ': ' + spiritNames : ''}`;
+                                                    return (
+                                                        <div key={`vessel-${tier}`} className='interaction-tile-wrapper' style={{ position: 'relative' }}>
+                                                            <div
+                                                                style={{ backgroundImage: resolvedIconUrl ? `url(${resolvedIconUrl}), radial-gradient(white 0%, black 60%)` : 'none', cursor: 'pointer' }}
+                                                                className={`interaction-tile special glyph-tile vessel-tile--${tier}`}
+                                                                onClick={() => this.fireSpiritVessel(representative)}
+                                                                onMouseEnter={() => this.spellTileHovered({ subtype: tier, name: tooltip })}
+                                                                onMouseLeave={() => this.spellTileHovered(null)}
+                                                                title={tooltip}>
+                                                            </div>
+                                                            {count > 0 && (
+                                                                <div className={`stack-badge small glyph-badge--${tier}`}>{romanNumerals[Math.min(count, 5)]}</div>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                });
+
+                                                return [...legacyTiles, ...glyphTiles, ...acidBombTiles, ...vesselTiles];
                                             })()}
                                         </div>
                                     </div>

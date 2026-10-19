@@ -52,6 +52,52 @@ export function computeGlyphPrepTime(spellDefs) {
   }, 0);
 }
 
+// ── Tiered Spirit Vessel Definitions (Summoner) ───────────────────────────
+// Crafting Bone Fetishes / Effigies / Phylacteries with slotted soul matrixes
+// that auto-deploy at combat start (mirroring the Wizard's Etch Glyph).
+export const SPIRIT_VESSELS = {
+  bone_fetish: {
+    key: 'bone_fetish',
+    name: 'Bone Fetish',
+    slots: 2,
+    icon: 'whiteskull',
+    description: 'Carved osteomantic charm. Holds up to 2 spirit matrices that auto-deploy at combat start.',
+  },
+  clay_effigy: {
+    key: 'clay_effigy',
+    name: 'Clay Effigy',
+    slots: 3,
+    icon: 'demonskull_charm',
+    description: 'Occult figurine sculpted with graveyard clay. Holds up to 3 spirit matrices.',
+  },
+  obsidian_phylactery: {
+    key: 'obsidian_phylactery',
+    name: 'Obsidian Phylactery',
+    slots: 5,
+    icon: 'hounskull',
+    description: 'Impenetrable dark stone housing great spirits. Holds up to 5 spirit matrices.',
+  },
+};
+
+// How many vessel slots a spirit/summon costs, indexed by tier (1–4).
+export const VESSEL_SPIRIT_SLOT_COST = { 1: 1, 2: 2, 3: 3, 4: 4 };
+
+// Prep time (ms) contributed by each slotted spirit, by tier.
+// T1 = 5 min, T2 = 20 min, T3 = 60 min, T4 = 120 min.
+export const VESSEL_SPIRIT_PREP_TIME = { 1: 5 * 60 * 1000, 2: 20 * 60 * 1000, 3: 60 * 60 * 1000, 4: 120 * 60 * 1000 };
+
+/**
+ * Compute total spirit vessel preparation time given an array of spirit definitions
+ * (each with a `tier` property). Returns milliseconds.
+ */
+export function computeVesselPrepTime(spiritDefs) {
+  return spiritDefs.reduce((sum, s) => {
+    const tier = s.tier || 1;
+    return sum + (VESSEL_SPIRIT_PREP_TIME[tier] || VESSEL_SPIRIT_PREP_TIME[1]);
+  }, 0);
+}
+
+
 // Ritual definitions — each has a stable key, display name, description, and prep time.
 // Shortest ritual is 1 hour (3 600 000 ms); others are 3h and 6h.
 export const RITUALS = {

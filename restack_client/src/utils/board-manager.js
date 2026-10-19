@@ -162,6 +162,14 @@ export function BoardManager(){
     this.establishGetWanderingEyeRevealsCallback = (callback) => {
         this.getWanderingEyeReveals = callback;
     }
+    this.walkerRevealedTiles = new Map();
+    this.establishGetWalkerRevealsCallback = (callback) => {
+        this.getWalkerReveals = callback;
+    }
+    this.farSightMoves = 0;
+    this.establishGetFarSightMovesCallback = (callback) => {
+        this.getFarSightMoves = callback;
+    }
     this.establishSaveCrewCallback = (callback) => {
         this.saveCrew = callback;
     }
@@ -327,73 +335,107 @@ export function BoardManager(){
         return false;
     };
 
+    this.isPortalTile = (t) => {
+        if (!t) return false;
+        if (t.portalId || t.targetPortalId || t.portal || t.isPortal || t['data-portal-id']) return true;
+        const c = t.contains;
+        if (c && typeof c === 'object') {
+            if (c.portalId || c.targetPortalId || c.portal || c.isPortal || c['data-portal-id']) return true;
+        }
+        const cType = typeof c === 'string' ? c : (c ? (c.type || c.subtype || c.building || c.image || c.key || c.name) : null);
+        const allStr = `${t.type || ''} ${t.image || ''} ${t.imageOverride || ''} ${t.optionType || ''} ${t.building || ''} ${cType || ''}`.toLowerCase();
+        return allStr.includes('portal') || allStr.includes('teleporter');
+    };
+
     this.isVoidTile = (tile) => {
         if (!tile) return false;
 
         // Explicitly marked as NOT void
         if (tile.isVoid === false) return false;
 
+        // Portals/teleporters are NEVER void tiles!
+        if (this.isPortalTile(tile)) return false;
+        const boardTile = this.currentBoard && this.currentBoard.tiles && this.currentBoard.tiles[tile.id];
+        if (boardTile && this.isPortalTile(boardTile)) return false;
+
+        // Explicitly marked as void
+        if (tile.isVoid === true || (boardTile && boardTile.isVoid === true)) {
+            return true;
+        }
+
         const contains = tile.contains;
-        let cType = typeof contains === 'string' ? contains : (contains ? contains.type : null);
+        let cType = typeof contains === 'string' ? contains : (contains ? (contains.type || contains.subtype) : null);
         if (typeof cType === 'string') cType = cType.toLowerCase().replace(/\s+/g, '_');
 
-        // Connecting paths, passages, paths, inscriptions, empty_space, obscured_space are NEVER void!
-        if (cType === 'empty_space' || cType === 'obscured_space' || cType === 'connecting_path' || cType === 'passage' || cType === 'path' || cType === 'inscription' ||
-            tile.type === 'empty_space' || tile.type === 'connecting_path' || tile.type === 'passage' || tile.type === 'path' || tile.type === 'inscription') {
+        // Connecting paths, passages, paths, inscriptions, empty_space, obscured_space, floor are NEVER void!
+        if (cType === 'empty_space' || cType === 'obscured_space' || cType === 'connecting_path' || cType === 'passage' || cType === 'path' || cType === 'inscription' || cType === 'floor' ||
+            tile.type === 'empty_space' || tile.type === 'connecting_path' || tile.type === 'passage' || tile.type === 'path' || tile.type === 'inscription' || tile.type === 'floor' ||
+            tile.optionType === 'obscured space' || (boardTile && boardTile.optionType === 'obscured space')) {
             return false;
         }
 
         // Connecting path tiles and passages are NEVER void tiles!
-        if (this.isConnectingPathTile(tile)) return false;
+        if (this.isConnectingPathTile(tile) || (boardTile && this.isConnectingPathTile(boardTile))) return false;
+        if (tile.isConnectingPath || tile.isPassage || (boardTile && (boardTile.isConnectingPath || boardTile.isPassage))) return false;
 
         // Buildings, structures, monsters, items, vendors, shrines, loci, doors, stairs, spawn points are NEVER void
         if (tile.building || tile.isBuilding || this.isImpassableBuildingTile(tile)) return false;
+        if (boardTile && (boardTile.building || boardTile.isBuilding || this.isImpassableBuildingTile(boardTile))) return false;
         if (contains && cType && cType !== 'empty' && cType !== 'void') {
             return false;
         }
 
         // Terrain check: non-void terrain makes it a non-void tile
         if (tile.terrain && tile.terrain !== 'void') return false;
+        if (tile.terrain === 'void') return true;
 
-        // Explicitly marked as void
-        if (tile.isVoid === true || cType === 'void' || cType === 'void_fill' || cType === 'voidfill') {
-            return true;
-        }
+        // Inscriptions and traps are never void
+        if (tile.inscriptions || tile.hasTrap) return false;
 
-        // Mapmaker empty tiles (unpainted void space in Dungeon Builder)
-        if (cType === 'empty') {
+        // Explicit void types or mapmaker unpainted empty tiles (contains: 'empty') on tile itself
+        if (cType === 'void' || cType === 'void_fill' || cType === 'voidfill' || cType === 'empty' || tile.original === 'void') {
             return true;
         }
 
         // Check persistent boardTile properties
-        const boardTile = this.currentBoard && this.currentBoard.tiles && this.currentBoard.tiles[tile.id];
         if (boardTile) {
-            if (boardTile.isVoid === false || boardTile.type === 'empty_space' || boardTile.type === 'path' || boardTile.type === 'connecting_path' || boardTile.type === 'passage') return false;
-            if (this.isConnectingPathTile(boardTile)) return false;
+            if (boardTile.isVoid === false || boardTile.type === 'empty_space' || boardTile.type === 'floor' || boardTile.type === 'path' || boardTile.type === 'connecting_path' || boardTile.type === 'passage') return false;
             const bContains = boardTile.contains;
-            let bType = typeof bContains === 'string' ? bContains : (bContains ? bContains.type : null);
+            let bType = typeof bContains === 'string' ? bContains : (bContains ? (bContains.type || bContains.subtype) : null);
             if (typeof bType === 'string') bType = bType.toLowerCase().replace(/\s+/g, '_');
-            if (bType === 'empty_space' || bType === 'obscured_space' || bType === 'connecting_path' || bType === 'passage' || bType === 'path' || bType === 'inscription') return false;
-            if (boardTile.isVoid === true || boardTile.type === 'void' || bType === 'void' || bType === 'void_fill' || bType === 'voidfill' || bType === 'empty') {
-                return true;
-            }
+            if (bType === 'empty_space' || bType === 'obscured_space' || bType === 'connecting_path' || bType === 'passage' || bType === 'path' || bType === 'inscription' || bType === 'floor') return false;
+            if (bContains && bType && bType !== 'empty' && bType !== 'void') return false;
+            if (boardTile.terrain && boardTile.terrain !== 'void') return false;
+            if (boardTile.inscriptions || boardTile.hasTrap) return false;
+
+            if (boardTile.terrain === 'void' || boardTile.original === 'void') return true;
+            if (boardTile.type === 'void' || bType === 'void' || bType === 'void_fill' || bType === 'voidfill' || bType === 'empty') return true;
+
+            const isBlackColor = (c) => c === 'black' || c === '#000000' || c === '#000';
+            if (isBlackColor(boardTile.color) && (!bContains || bType === 'empty' || bType === 'void')) return true;
         }
 
-        if (tile.type === 'void' && (!contains || cType === 'empty' || cType === 'void')) return true;
-        if (tile.original === 'void' && (!contains || cType === 'empty' || cType === 'void')) return true;
+        if (tile.type === 'void' && (!contains || cType === 'empty' || cType === 'void')) {
+            return true;
+        }
 
         return false;
     };
     this.isImpassableBuildingTile = (tile) => {
         if (!tile) return false;
+
+        if (this.isPortalTile(tile)) return false;
+        const boardTile = this.currentBoard && this.currentBoard.tiles && this.currentBoard.tiles[tile.id];
+        if (boardTile && this.isPortalTile(boardTile)) return false;
+
         const containsType = this.getContainsType(tile.contains) || tile.contains?.type;
         const containsSubtype = this.getContainsSubtype(tile.contains) || tile.contains?.subtype;
         const bldg = tile.building || tile.contains?.building;
         const img = tile.image || tile.contains?.image;
-        const sKey = String(containsSubtype || bldg || img || containsType || (tile.contains && typeof tile.contains === 'object' ? (tile.contains.key || tile.contains.name || tile.contains.type) : '') || '').toLowerCase();
+        const sKey = String(containsSubtype || bldg || img || containsType || tile.type || (tile.contains && typeof tile.contains === 'object' ? (tile.contains.key || tile.contains.name || tile.contains.type) : '') || '').toLowerCase();
 
-        // 'hut', 'buildable_hut', 'healing_circle', and 'archaic' structures/tiles are EXPLICITLY passable
-        if (sKey.includes('hut') || sKey.includes('healing_circle') || sKey.includes('archaic')) {
+        // 'hut', 'buildable_hut', 'healing_circle', 'archaic', and teleporters/portals are EXPLICITLY passable
+        if (sKey.includes('hut') || sKey.includes('healing_circle') || sKey.includes('archaic') || sKey.includes('portal') || sKey.includes('teleporter') || !!tile.portalId || !!tile.portal || !!tile.contains?.portalId || !!tile.contains?.portal) {
             return false;
         }
 
@@ -424,7 +466,7 @@ export function BoardManager(){
                 const aImg = aTile.image || aTile.contains?.image;
                 const aKey = String(aContainsSub || aBldg || aImg || aContainsType || '').toLowerCase();
                 const vendorKeys = ['fungal_nursery', 'alchemist', 'merchant', 'dream_den'];
-                if (!vendorKeys.some(k => aKey.includes(k)) && !aKey.includes('hut') && !aKey.includes('healing_circle') && !aKey.includes('archaic')) {
+                if (!vendorKeys.some(k => aKey.includes(k)) && !aKey.includes('hut') && !aKey.includes('healing_circle') && !aKey.includes('archaic') && !aKey.includes('portal') && !aKey.includes('teleporter') && !this.isPortalTile(aTile)) {
                     const aIsDestroyed = aTile.contains && typeof aTile.contains === 'object' && (aTile.contains.hp <= 0 || !!aTile.contains.destroyedAt);
                     if (!aIsDestroyed) return true;
                 }
@@ -444,8 +486,8 @@ export function BoardManager(){
                         const aContainsSub = this.getContainsSubtype(aTile.contains) || aTile.contains?.subtype;
                         const aBldg = aTile.building || aTile.contains?.building;
                         const aImg = aTile.image || aTile.contains?.image;
-                        const aKey = String(aContainsSub || aBldg || aImg || aContainsType || '').toLowerCase();
-                        if (aKey.includes('hut') || aKey.includes('healing_circle') || aKey.includes('archaic')) continue;
+                        const aKey = String(aContainsSub || aBldg || aImg || aContainsType || aTile.type || '').toLowerCase();
+                        if (this.isPortalTile(aTile) || aKey.includes('hut') || aKey.includes('healing_circle') || aKey.includes('archaic') || aKey.includes('portal') || aKey.includes('teleporter') || !!aTile.portalId || !!aTile.portal || !!aTile.contains?.portalId) continue;
 
                         const aIsDestroyed = aTile.contains && typeof aTile.contains === 'object' && (aTile.contains.hp <= 0 || !!aTile.contains.destroyedAt);
                         if (aIsDestroyed) continue;
@@ -480,8 +522,8 @@ export function BoardManager(){
                     if (cRow >= dRow && cCol >= dCol) {
                         const aTile = boardTiles[cId - (dRow * 15 + dCol)];
                         if (aTile && aTile !== tile) {
-                            const aKey = String(aTile.contains?.subtype || aTile.building || aTile.contains?.building || aTile.contains?.type || '').toLowerCase();
-                            if (aKey.includes('hut') || aKey.includes('healing_circle')) continue;
+                            const aKey = String(aTile.contains?.subtype || aTile.building || aTile.contains?.building || aTile.contains?.type || aTile.type || '').toLowerCase();
+                            if (this.isPortalTile(aTile) || aKey.includes('hut') || aKey.includes('healing_circle') || aKey.includes('archaic') || aKey.includes('portal') || aKey.includes('teleporter') || !!aTile.portalId || !!aTile.portal || !!aTile.contains?.portalId) continue;
                             const aIsDestroyed = aTile.contains && typeof aTile.contains === 'object' && (aTile.contains.hp <= 0 || !!aTile.contains.destroyedAt);
                             if (aIsDestroyed) continue;
 
@@ -508,8 +550,8 @@ export function BoardManager(){
             return false;
         }
 
-        // 'hut', 'buildable_hut', 'healing_circle', and 'archaic' are EXPLICITLY passable
-        if (sKey.includes('hut') || sKey.includes('healing_circle') || sKey.includes('archaic')) {
+        // 'hut', 'buildable_hut', 'healing_circle', 'archaic', and teleporters/portals are EXPLICITLY passable
+        if (sKey.includes('hut') || sKey.includes('healing_circle') || sKey.includes('archaic') || sKey.includes('portal') || sKey.includes('teleporter') || !!tile.portalId || !!tile.portal || !!tile.contains?.portalId || !!tile.contains?.portal) {
             return false;
         }
 
@@ -583,7 +625,12 @@ export function BoardManager(){
     };
     this.getContainsSubtype = (contains) => {
         if (!contains && contains !== null) return null;
-        if (typeof contains === 'object' && contains !== null) return contains.subtype || null;
+        if (typeof contains === 'object' && contains !== null) {
+            if (typeof contains.subtype === 'object' && contains.subtype !== null) {
+                return contains.subtype.key || contains.subtype.type || contains.subtype.id || null;
+            }
+            return contains.subtype || null;
+        }
         if (typeof contains === 'string') return contains;
         return null;
     }
@@ -612,19 +659,27 @@ export function BoardManager(){
 
         const combinedStr = `${cType} ${cSub} ${vGroup} ${anchorSub} ${anchorGroup}`;
 
-        if (combinedStr.includes('archaic')) {
+        const NON_VENDOR_STRUCTURE_KEYS = [
+            'sawmill', 'lumber_mill', 'larder', 'ore_mine', 'slate_mine', 'dust_collector',
+            'cultivation_vat', 'domain_monolith', 'dark_domain_monolith', 'domain_node', 'dark_domain_node',
+            'monolith', 'shrine', 'archaic', 'outpost', 'earthen_fort', 'war_fort', 'keep', 'fortress',
+            'house', 'farm', 'hut', 'windmill', 'healing_circle'
+        ];
+        if (NON_VENDOR_STRUCTURE_KEYS.some(k => combinedStr.includes(k))) {
             return { isVendor: false, vendorType: null };
         }
 
-        const vendorKeys = ['alchemist', 'fungal_nursery', 'dream_den', 'dream den', 'merchant', 'vendor'];
-        const isVendor = vendorKeys.some(k => combinedStr.includes(k)) || !!vCell || vAnchorId !== null || !!vGroup;
+        const vendorKeys = ['war_camp', 'war camp', 'alchemist', 'fungal_nursery', 'dream_den', 'dream den', 'merchant', 'vendor'];
+        const isVendor = vendorKeys.some(k => combinedStr.includes(k));
 
         if (!isVendor) {
             return { isVendor: false, vendorType: null };
         }
 
         let vendorType = 'merchant';
-        if (combinedStr.includes('alchemist')) {
+        if (combinedStr.includes('war_camp') || combinedStr.includes('war camp')) {
+            vendorType = 'war_camp';
+        } else if (combinedStr.includes('alchemist')) {
             vendorType = 'alchemist';
         } else if (combinedStr.includes('fungal_nursery')) {
             vendorType = 'fungal_nursery';
@@ -998,19 +1053,25 @@ export function BoardManager(){
                 }
             };
 
+            const fromIsPortal = this.isPortalTile(fromTile) || (fromBoardTile && this.isPortalTile(fromBoardTile));
+            const toIsPortal = this.isPortalTile(toTile) || (toBoardTile && this.isPortalTile(toBoardTile));
+
             // If movement is perpendicular to a corridor's open path direction into its solid side wall, ALWAYS block movement!
-            if (isCorridorSideWall(fromTile, fromSide) || isCorridorSideWall(fromBoardTile, fromSide) ||
-                isCorridorSideWall(toTile, toSide) || isCorridorSideWall(toBoardTile, toSide)) {
-                return true;
+            // (Unless moving into or out of a portal)
+            if (!fromIsPortal && !toIsPortal) {
+                if (isCorridorSideWall(fromTile, fromSide) || isCorridorSideWall(fromBoardTile, fromSide) ||
+                    isCorridorSideWall(toTile, toSide) || isCorridorSideWall(toBoardTile, toSide)) {
+                    return true;
+                }
             }
 
-            // Connecting path tiles pierce room borders and board perimeters:
-            // if either tile is a connecting path, passage is open unless stepping into pure void dropoff
+            // Connecting path tiles and portals pierce room borders and board perimeters:
+            // if either tile is a connecting path or portal, passage is open unless stepping into pure void dropoff
             const fromIsConnecting = this.isConnectingPathTile(fromTile) || (fromBoardTile && this.isConnectingPathTile(fromBoardTile));
             const toIsConnecting = this.isConnectingPathTile(toTile) || (toBoardTile && this.isConnectingPathTile(toBoardTile));
-            if (fromIsConnecting || toIsConnecting) {
-                const destIsVoidDropoff = !toIsConnecting && (this.isVoidTile(toTile) || (toBoardTile && this.isVoidTile(toBoardTile)));
-                const fromIsVoidDropoff = !fromIsConnecting && (this.isVoidTile(fromTile) || (fromBoardTile && this.isVoidTile(fromBoardTile)));
+            if (fromIsConnecting || toIsConnecting || fromIsPortal || toIsPortal) {
+                const destIsVoidDropoff = !toIsConnecting && !toIsPortal && (this.isVoidTile(toTile) || (toBoardTile && this.isVoidTile(toBoardTile)));
+                const fromIsVoidDropoff = !fromIsConnecting && !fromIsPortal && (this.isVoidTile(fromTile) || (fromBoardTile && this.isVoidTile(fromBoardTile)));
                 if (destIsVoidDropoff || fromIsVoidDropoff) return true;
                 return false;
             }
@@ -1475,21 +1536,36 @@ export function BoardManager(){
                 if ((this.monstersArr && this.monstersArr.includes(raw)) || (this.knownMonsterKeys && this.knownMonsterKeys.includes(raw))) {
                     t.contains = { type: 'monster', subtype: raw };
                     changedIds.push(t.id);
-                } else if (raw === 'monster') {
-                    t.contains = { type: 'monster', subtype: this.getRandomMonster() };
+                } else if (raw === 'monster' || (raw.includes('tier_') && raw.includes('monster'))) {
+                    const fallback = typeof this.getRandomMonster === 'function' ? this.getRandomMonster() : 'skeleton';
+                    const key = (fallback && typeof fallback === 'object') ? (fallback.key || fallback.type) : fallback;
+                    t.contains = { type: 'monster', subtype: key || 'skeleton' };
                     changedIds.push(t.id);
                 }
             } else if (raw && typeof raw === 'object') {
-                if ((!raw.type || raw.type === null) && raw.subtype && ((this.monstersArr && this.monstersArr.includes(raw.subtype)) || (this.knownMonsterKeys && this.knownMonsterKeys.includes(raw.subtype)))) {
-                    t.contains = { type: 'monster', subtype: raw.subtype };
-                    changedIds.push(t.id);
+                let sub = raw.subtype;
+                if (typeof sub === 'object' && sub !== null) {
+                    sub = sub.key || sub.type || sub.id;
                 }
-                if (raw.type === 'monster' && (!raw.subtype || raw.subtype === null)) {
-                    t.contains = { type: 'monster', subtype: this.getRandomMonster() };
+                const isKnownSub = sub && typeof sub === 'string' && sub !== 'monster' && ((this.monstersArr && this.monstersArr.includes(sub)) || (this.knownMonsterKeys && this.knownMonsterKeys.includes(sub)));
+
+                if (raw.type === 'monster') {
+                    if (isKnownSub) {
+                        if (raw.subtype !== sub) {
+                            raw.subtype = sub;
+                            changedIds.push(t.id);
+                        }
+                    } else {
+                        const fallback = typeof this.getRandomMonster === 'function' ? this.getRandomMonster() : 'skeleton';
+                        const key = (fallback && typeof fallback === 'object') ? (fallback.key || fallback.type) : fallback;
+                        t.contains = { ...raw, type: 'monster', subtype: key || 'skeleton' };
+                        changedIds.push(t.id);
+                    }
+                } else if ((!raw.type || raw.type === null) && isKnownSub) {
+                    t.contains = { ...raw, type: 'monster', subtype: sub };
                     changedIds.push(t.id);
-                }
-                if (raw.type && typeof raw.type === 'string' && ((this.monstersArr && this.monstersArr.includes(raw.type)) || (this.knownMonsterKeys && this.knownMonsterKeys.includes(raw.type)))) {
-                    t.contains = { type: 'monster', subtype: raw.type };
+                } else if (raw.type && typeof raw.type === 'string' && ((this.monstersArr && this.monstersArr.includes(raw.type)) || (this.knownMonsterKeys && this.knownMonsterKeys.includes(raw.type)))) {
+                    t.contains = { ...raw, type: 'monster', subtype: raw.type };
                     changedIds.push(t.id);
                 }
             }
@@ -1523,10 +1599,17 @@ export function BoardManager(){
         if (isNaN(tierNum)) return null;
 
         if (category === 'monster') {
-            const monsterSubtype = (this.monsterManager && typeof this.monsterManager.getRandomMonsterByTier === 'function')
+            const monsterChoice = (this.monsterManager && typeof this.monsterManager.getRandomMonsterByTier === 'function')
                 ? this.monsterManager.getRandomMonsterByTier(tierNum)
                 : (typeof this.getRandomMonster === 'function' ? this.getRandomMonster() : 'beholder_minion');
-            return { type: 'monster', subtype: monsterSubtype };
+            let monsterKey = (monsterChoice && typeof monsterChoice === 'object')
+                ? (monsterChoice.key || monsterChoice.type || monsterChoice.id)
+                : monsterChoice;
+            if (typeof monsterKey !== 'string' || !monsterKey || monsterKey === 'monster' || monsterKey === '[object Object]') {
+                const fallback = typeof this.getRandomMonster === 'function' ? this.getRandomMonster() : 'skeleton';
+                monsterKey = (fallback && typeof fallback === 'object') ? (fallback.key || fallback.type) : fallback;
+            }
+            return { type: 'monster', subtype: monsterKey || 'skeleton' };
         } else if (['weapon', 'armor', 'magical'].includes(category)) {
             const itemKey = this.getRandomItemKeyForTier(tierNum, category);
             if (itemKey) {
@@ -2013,16 +2096,16 @@ export function BoardManager(){
 
                 // assign a monster object shape — prefer the template's subtype when available
                 let monsterSubtype = this.getContainsSubtype(templateTile.contains) || null;
-                // Validate subtype: prefer knownMonsterKeys or this.monstersArr; fallback to random
-                const subtypeIsKnown = monsterSubtype && (this.monstersArr.includes(monsterSubtype) || (Array.isArray(this.knownMonsterKeys) && this.knownMonsterKeys.includes(monsterSubtype)));
-                if (!subtypeIsKnown) {
-                    if (Array.isArray(this.knownMonsterKeys) && this.knownMonsterKeys.length) {
-                        monsterSubtype = this.knownMonsterKeys.includes(monsterSubtype) ? monsterSubtype : this.getRandomMonster();
-                    } else {
-                        monsterSubtype = this.getRandomMonster();
-                    }
+                if (typeof monsterSubtype === 'object' && monsterSubtype !== null) {
+                    monsterSubtype = monsterSubtype.key || monsterSubtype.type || monsterSubtype.id || null;
                 }
-                equivalentTile.contains = { type: 'monster', subtype: monsterSubtype };
+                // Validate subtype: prefer knownMonsterKeys or this.monstersArr; fallback to random
+                const subtypeIsKnown = monsterSubtype && typeof monsterSubtype === 'string' && monsterSubtype !== 'monster' && (this.monstersArr.includes(monsterSubtype) || (Array.isArray(this.knownMonsterKeys) && this.knownMonsterKeys.includes(monsterSubtype)));
+                if (!subtypeIsKnown) {
+                    const fallback = typeof this.getRandomMonster === 'function' ? this.getRandomMonster() : 'skeleton';
+                    monsterSubtype = (fallback && typeof fallback === 'object') ? (fallback.key || fallback.type) : fallback;
+                }
+                equivalentTile.contains = { type: 'monster', subtype: monsterSubtype || 'skeleton' };
                 equivalentTile.image = this.getImageForContains(equivalentTile.contains, equivalentTile);
                 respawnedCount += 1;
                 // Determine a color for the respawned tile. Prefer the template's color, then
@@ -2564,6 +2647,7 @@ export function BoardManager(){
                 const t = board.tiles[idx];
                 if (!t) return true;
                 if (this.isConnectingPathTile(t)) return false;
+                if (this.isPortalTile(t)) return false;
                 if (this.isVoidTile(t)) return true;
                 const cType = this.getContainsType(t.contains);
                 const cSub = this.getContainsSubtype(t.contains);
@@ -2655,8 +2739,12 @@ export function BoardManager(){
                 const normalized = raw.replace(/\s+/g, '_');
                 if (normalized === 'void' || normalized === 'empty') {
                     tile.contains = { type: 'void', subtype: null };
-                } else if (normalized === 'monster') {
-                    tile.contains = { type: 'monster', subtype: this.getRandomMonster() };
+                } else if (normalized === 'monster' || (this.monstersArr && this.monstersArr.includes(normalized)) || (this.knownMonsterKeys && this.knownMonsterKeys.includes(normalized))) {
+                    const validKey = ((this.monstersArr && this.monstersArr.includes(normalized)) || (this.knownMonsterKeys && this.knownMonsterKeys.includes(normalized)))
+                        ? normalized
+                        : (typeof this.getRandomMonster === 'function' ? this.getRandomMonster() : 'skeleton');
+                    const finalKey = (validKey && typeof validKey === 'object') ? (validKey.key || validKey.type) : validKey;
+                    tile.contains = { type: 'monster', subtype: finalKey || 'skeleton' };
                 } else if (normalized === 'portal' || normalized === 'teleporter' || normalized === 'dungeon_portal') {
                     tile.contains = { type: 'dungeon_portal', subtype: null };
                 } else if (normalized.indexOf('key') !== -1) {
@@ -2665,9 +2753,20 @@ export function BoardManager(){
                     tile.contains = { type: normalized, subtype: null };
                 }
             }
-            // for monster entries with missing subtype, assign one
-            if (tile.contains && tile.contains.type === 'monster' && !tile.contains.subtype) {
-                tile.contains.subtype = this.getRandomMonster();
+            // for monster entries with missing or invalid subtype, assign a valid one
+            if (tile.contains && (tile.contains.type === 'monster' || this.isMonster(tile))) {
+                let sub = tile.contains.subtype;
+                if (typeof sub === 'object' && sub !== null) {
+                    sub = sub.key || sub.type || sub.id;
+                }
+                const isKnown = sub && typeof sub === 'string' && sub !== 'monster' && ((this.monstersArr && this.monstersArr.includes(sub)) || (this.knownMonsterKeys && this.knownMonsterKeys.includes(sub)));
+                if (!isKnown) {
+                    const fallback = typeof this.getRandomMonster === 'function' ? this.getRandomMonster() : 'skeleton';
+                    const finalKey = (fallback && typeof fallback === 'object') ? (fallback.key || fallback.type) : fallback;
+                    tile.contains = { ...tile.contains, type: 'monster', subtype: finalKey || 'skeleton' };
+                } else if (tile.contains.subtype !== sub) {
+                    tile.contains.subtype = sub;
+                }
             }
             // Defensive: if this tile is the configured spawn tile (where the player will be placed),
             // do not spawn a monster here. This prevents both a player and a monster occupying the same
@@ -2757,6 +2856,14 @@ export function BoardManager(){
                 }
             } catch (e) {}
 
+            const isConnectingOrPassage = !!(tile.isConnectingPath || tile.isPassage || this.isConnectingPathTile(tile) || (tileContains && (tileContains.type === 'connecting_path' || tileContains.type === 'passage' || tileContains.type === 'connecting path')));
+            const isTileExplicitVoid = !isConnectingOrPassage && (
+                tile.isVoid === true ||
+                ((tile.color === 'black' || tileColor === 'black' || tile.color === '#000000') && !tile.building && !this.isMonster(tile) && !this.isPortalTile(tile) && (!tileContains || tileContains === 'empty' || tileContains === 'void' || tileContains?.type === 'empty' || tileContains?.type === 'void' || tileContains?.type === 'void_fill')) ||
+                tile.contains === 'empty' || tile.contains === 'void' || (tileContains && (tileContains === 'empty' || tileContains === 'void' || tileContains.type === 'empty' || tileContains.type === 'void' || tileContains.type === 'void_fill')) ||
+                (tile.type === 'void' && (tileColor === 'black' || tile.color === 'black' || tile.color === '#000000' || tile.contains === 'empty' || tileContains === 'empty' || tileContains?.type === 'empty' || tile.contains === 'void' || tileContains === 'void' || tileContains?.type === 'void'))
+            );
+
             this.tiles.push({
                 type: 'board-tile',
                 id: tile.id,
@@ -2774,7 +2881,8 @@ export function BoardManager(){
                 original: tile.original || null,
                 borders: tile.borders || null,
                 hasTrap: hasTrapFlag,
-                trapRevealed: trapRevealedFlag
+                trapRevealed: trapRevealedFlag,
+                isVoid: isTileExplicitVoid ? true : (tile.isVoid === false ? false : undefined)
             })
             this.overlayTiles.push({
                 type: 'board-tile',
@@ -2944,8 +3052,10 @@ export function BoardManager(){
                 // legacy string form: either a monster key, a key/item, or a type name
                 if (this.monstersArr.includes(raw) || (this.knownMonsterKeys && this.knownMonsterKeys.includes(raw))) {
                     destinationTile.contains = { type: 'monster', subtype: raw };
-                } else if (raw === 'monster') {
-                    destinationTile.contains = { type: 'monster', subtype: this.getRandomMonster() };
+                } else if (raw === 'monster' || (raw.includes('tier_') && raw.includes('monster'))) {
+                    const fallback = typeof this.getRandomMonster === 'function' ? this.getRandomMonster() : 'skeleton';
+                    const finalKey = (fallback && typeof fallback === 'object') ? (fallback.key || fallback.type) : fallback;
+                    destinationTile.contains = { type: 'monster', subtype: finalKey || 'skeleton' };
                 } else if (raw.includes('key') || raw.includes('shard') || raw.includes('rune') || raw.includes('potion') || raw.includes('jewel')) {
                     // treat any key/shard/rune string as an item (so it can be picked up)
                     destinationTile.contains = { type: 'item', subtype: raw };
@@ -2953,13 +3063,25 @@ export function BoardManager(){
                     destinationTile.contains = { type: raw, subtype: null };
                 }
             } else if (raw && typeof raw === 'object') {
+                let sub = raw.subtype;
+                if (typeof sub === 'object' && sub !== null) {
+                    sub = sub.key || sub.type || sub.id;
+                    raw.subtype = sub;
+                }
                 const cType = raw.type ? String(raw.type).toLowerCase() : '';
                 const cSubtype = raw.subtype ? String(raw.subtype) : '';
                 const isItemKind = ['item', 'key', 'rune', 'jewel', 'shard', 'consumable', 'weapon', 'armor', 'magical', 'potion', 'spellbook', 'book', 'tome', 'grimoire', 'folio', 'manual', 'engine', 'tablet'].includes(cType) ||
                     cType.includes('key') || cType.includes('shard') || cType.includes('rune') || cType.includes('book') || cType.includes('tome') || cType.includes('grimoire') ||
                     cSubtype.includes('key') || cSubtype.includes('shard') || cSubtype.includes('rune') || cSubtype.includes('book') || cSubtype.includes('tome') || cSubtype.includes('grimoire') || cSubtype.includes('folio') || cSubtype.includes('manual');
 
-                if ((!raw.type || raw.type === null) && raw.subtype) {
+                if (raw.type === 'monster') {
+                    const isKnown = sub && typeof sub === 'string' && sub !== 'monster' && ((this.monstersArr.includes(sub)) || (this.knownMonsterKeys && this.knownMonsterKeys.includes(sub)));
+                    if (!isKnown) {
+                        const fallback = typeof this.getRandomMonster === 'function' ? this.getRandomMonster() : 'skeleton';
+                        const finalKey = (fallback && typeof fallback === 'object') ? (fallback.key || fallback.type) : fallback;
+                        destinationTile.contains = { ...raw, type: 'monster', subtype: finalKey || 'skeleton' };
+                    }
+                } else if ((!raw.type || raw.type === null) && raw.subtype) {
                     if (this.monstersArr.includes(raw.subtype) || (this.knownMonsterKeys && this.knownMonsterKeys.includes(raw.subtype))) {
                         destinationTile.contains = { ...raw, type: 'monster', subtype: raw.subtype };
                     } else if (isItemKind) {
@@ -2988,6 +3110,10 @@ export function BoardManager(){
         const subtype = this.getContainsSubtype(destinationTile.contains);
         const isShiftBypass = !!(opts.shiftKey || opts.ignoreBuilding || opts.bypassBuilding);
         
+        if (this.isPortalTile(destinationTile)) {
+            return 'portal';
+        }
+
         const { isVendor: isVendorTile, vendorType: detectedVendorType } = this.getVendorInfo(destinationTile);
 
         if (isVendorTile) {
@@ -3300,6 +3426,11 @@ export function BoardManager(){
                 this.treasurePickupInProgress = false;
                 this.removeTileFromBoard(destinationTile)
             break;
+            case 'portal':
+            case 'teleporter':
+            case 'dungeon_portal':
+            case 'dungeon portal':
+                return 'portal';
             case 'shrine':
                 // Shrine: trigger messaging and return 'shrine' so DungeonPage can launch the shrine UI
                 try {
@@ -3954,6 +4085,8 @@ export function BoardManager(){
             const stepDistance = Math.abs(destinationCoords[0] - currentCoords[0]) + Math.abs(destinationCoords[1] - currentCoords[1]);
             if (stepDistance !== 1) return true;
 
+            if (this.isPortalTile(destTile)) return false;
+
             const currentIndex = this.getIndexFromCoordinates(currentCoords);
             if (this.isPassageWallBlockingBetween(currentIndex, destIndex)) return true;
             
@@ -3996,7 +4129,10 @@ export function BoardManager(){
         const tile = this.tiles[this.getIndexFromCoordinates(this.playerTile.location)];
         const destinationIndex = this.getIndexFromCoordinates(destinationCoords);
         const destinationTile = this.tiles[destinationIndex];
-        if (!destinationTile || typeof destinationTile.contains === 'undefined') return;
+        if (!destinationTile) return;
+        if (typeof destinationTile.contains === 'undefined') {
+            destinationTile.contains = destinationTile.type === 'void' ? 'void' : null;
+        }
         // Check for side-specific inscriptions on the CURRENT tile (wall as a border, not a void tile)
         const sideMap = { up: 'top', down: 'bottom', left: 'left', right: 'right' };
         const destSideMap = { up: 'bottom', down: 'top', left: 'right', right: 'left' };
@@ -4007,12 +4143,22 @@ export function BoardManager(){
 
         const destType = this.getContainsType(destinationTile.contains);
         const destSubtype = this.getContainsSubtype(destinationTile.contains);
-        const isBuildingTile = ['building', 'outpost', 'generator', 'war_camp', 'war_fort', 'alchemist', 'merchant', 'shrine', 'observer_platform', 'earthen_fort'].includes(destType) ||
+        const isDestPortal = this.isPortalTile(destinationTile) ||
+                             (destType && (destType.includes('portal') || destType.includes('teleporter'))) ||
+                             (destSubtype && (destSubtype.includes('portal') || destSubtype.includes('teleporter'))) ||
+                             (destinationTile.type && (String(destinationTile.type).includes('portal') || String(destinationTile.type).includes('teleporter'))) ||
+                             (destinationTile.image && (String(destinationTile.image).includes('portal') || String(destinationTile.image).includes('teleporter'))) ||
+                             (destinationTile.imageOverride && (String(destinationTile.imageOverride).includes('portal') || String(destinationTile.imageOverride).includes('teleporter'))) ||
+                             (destinationTile.optionType && (String(destinationTile.optionType).includes('portal') || String(destinationTile.optionType).includes('teleporter'))) ||
+                             !!destinationTile.portalId || !!destinationTile.portal || !!destinationTile.isPortal ||
+                             (destinationTile.contains && typeof destinationTile.contains === 'object' && (destinationTile.contains.portalId || destinationTile.contains.portal || destinationTile.contains.isPortal)) ||
+                             (typeof destinationTile.building === 'string' && (destinationTile.building.includes('portal') || destinationTile.building.includes('teleporter')));
+        const isBuildingTile = !isDestPortal && (['building', 'outpost', 'generator', 'war_camp', 'war_fort', 'alchemist', 'merchant', 'shrine', 'observer_platform', 'earthen_fort'].includes(destType) ||
                                ['outpost', 'outpost_under_construction', 'observer_platform', 'observer_platform_under_construction', 'earthen_fort', 'earthen_fort_under_construction', 'war_camp', 'war_camp_under_construction', 'war_fort', 'war_fort_under_construction'].includes(destSubtype) ||
                                ['outpost', 'outpost_under_construction', 'observer_platform', 'observer_platform_under_construction', 'earthen_fort', 'earthen_fort_under_construction', 'war_camp', 'war_camp_under_construction', 'war_fort', 'war_fort_under_construction'].includes(destinationTile.building) ||
-                               !!destinationTile.generatorData;
+                               !!destinationTile.generatorData);
 
-        if (destType === 'void' && !this.isConnectingPathTile(destinationTile)) {
+        if (destType === 'void' && !this.isConnectingPathTile(destinationTile) && !isDestPortal) {
             const anyDestInscription = destinationTile.inscriptions && Object.values(destinationTile.inscriptions).find(v => !!v);
             if (destTileInscription) {
                 this.handleInscriptionRead(destTileInscription);
@@ -4121,6 +4267,16 @@ export function BoardManager(){
         if (interaction === 'archaic_tunnel_endpoint') {
             this.handlePassingThroughArchaicTunnel(destinationTile);
         }
+        if (this.isConnectingPathTile(destinationTile)) {
+            const transitionDir = this.getConnectingPathTransitionDirection(destinationCoords, direction);
+            if (transitionDir) {
+                if (transitionDir === 'right') this.moveBoardRight();
+                else if (transitionDir === 'left') this.moveBoardLeft();
+                else if (transitionDir === 'up') this.moveBoardUp();
+                else if (transitionDir === 'down') this.moveBoardDown();
+                return;
+            }
+        }
         // If the destination contained a monster, initiate the encounter AFTER
         // the player has been moved onto the tile so the UI/game state shows
         // the player standing on the monster tile before combat begins.
@@ -4143,6 +4299,36 @@ export function BoardManager(){
         this.overlayTiles.forEach(t=>t.image = null)
         // Player image now rendered as floating overlay, not in overlayTiles
         this.checkAdjacency(visibleTileIds);
+
+        // Far Sight movement countdown
+        try {
+            const currentFarSightMoves = (typeof this.farSightMoves === 'number' && this.farSightMoves > 0)
+                ? this.farSightMoves
+                : (typeof getMeta === 'function' && getMeta()?.farSightMoves > 0 ? getMeta().farSightMoves : 0);
+
+            if (currentFarSightMoves > 0) {
+                this.farSightMoves = currentFarSightMoves - 1;
+                try {
+                    const meta = (typeof getMeta === 'function' && getMeta()) || {};
+                    meta.farSightMoves = this.farSightMoves;
+                    if (typeof storeMeta === 'function') storeMeta(meta);
+                } catch (e) {}
+
+                if (this.farSightMoves === 0) {
+                    try {
+                        if (this.messaging) this.messaging('👁️ Far Sight has faded. Vision radius returned to normal.');
+                    } catch (e) {}
+                    try {
+                        const pIdx = this.getIndexFromCoordinates(this.playerTile.location);
+                        const pTile = this.tiles[pIdx] || (this.currentBoard && this.currentBoard.tiles && this.currentBoard.tiles[pIdx]);
+                        if (pTile) {
+                            this.handleFogOfWar(pTile);
+                            if (typeof this.refreshTiles === 'function') this.refreshTiles();
+                        }
+                    } catch (e) {}
+                }
+            }
+        } catch (e) {}
 
         if (interaction === 'narrative') {
             try {
@@ -4175,6 +4361,91 @@ export function BoardManager(){
             }
         }
     }
+    this.canTransitionBoard = (direction, fromCoords = null) => {
+        const coords = fromCoords || (this.playerTile && this.playerTile.location);
+        if (!coords) return false;
+
+        const currentTileIdx = this.getIndexFromCoordinates(coords);
+        const currentTile = (this.tiles && this.tiles[currentTileIdx]) || (this.currentBoard && this.currentBoard.tiles && this.currentBoard.tiles[currentTileIdx]);
+
+        if (!currentTile || !this.isConnectingPathTile(currentTile)) {
+            return false;
+        }
+
+        const currentBoardIndex = Number(this.playerTile ? this.playerTile.boardIndex : 0);
+        if (isNaN(currentBoardIndex)) return false;
+
+        let level = this.currentLevel || (this.dungeon && this.dungeon.levels && this.dungeon.levels[0]);
+        let plane = this.currentOrientation === 'F' ? (level && level.front) : (level && level.back);
+        if (!plane && level) plane = level.front || level.back || level;
+        if (!plane || !plane.miniboards) return false;
+
+        let targetIndex = null;
+        let targetTileIdx = null;
+
+        if (direction === 'up') {
+            if (coords[0] !== 15) return false;
+            if (currentTile.inscriptions && currentTile.inscriptions.top) return false;
+            if (currentBoardIndex < 3) return false;
+            targetIndex = currentBoardIndex - 3;
+            const col = coords[1] - 15;
+            targetTileIdx = 14 * 15 + col;
+        } else if (direction === 'down') {
+            if (coords[0] !== 29) return false;
+            if (currentTile.inscriptions && currentTile.inscriptions.bottom) return false;
+            if (currentBoardIndex >= 6) return false;
+            targetIndex = currentBoardIndex + 3;
+            const col = coords[1] - 15;
+            targetTileIdx = 0 * 15 + col;
+        } else if (direction === 'left') {
+            if (coords[1] !== 15) return false;
+            if (currentTile.inscriptions && currentTile.inscriptions.left) return false;
+            if (currentBoardIndex % 3 === 0) return false;
+            targetIndex = currentBoardIndex - 1;
+            const row = coords[0] - 15;
+            targetTileIdx = row * 15 + 14;
+        } else if (direction === 'right') {
+            if (coords[1] !== 29) return false;
+            if (currentTile.inscriptions && currentTile.inscriptions.right) return false;
+            if (currentBoardIndex % 3 === 2) return false;
+            targetIndex = currentBoardIndex + 1;
+            const row = coords[0] - 15;
+            targetTileIdx = row * 15 + 0;
+        } else {
+            return false;
+        }
+
+        const targetBoard = plane.miniboards[targetIndex] || (Array.isArray(plane.miniboards) && plane.miniboards.find(b => b && (b.id === targetIndex || b._id === targetIndex)));
+        if (!targetBoard) return false;
+
+        const targetTile = targetBoard.tiles && targetBoard.tiles[targetTileIdx];
+        if (targetTile && this.isVoidTile(targetTile) && !this.isConnectingPathTile(targetTile)) {
+            return false;
+        }
+
+        return true;
+    };
+
+    this.getConnectingPathTransitionDirection = (coords, preferredDirection = null) => {
+        if (!coords) return null;
+        if (preferredDirection && this.canTransitionBoard(preferredDirection, coords)) {
+            return preferredDirection;
+        }
+        if (coords[1] === 29 && this.canTransitionBoard('right', coords)) {
+            return 'right';
+        }
+        if (coords[1] === 15 && this.canTransitionBoard('left', coords)) {
+            return 'left';
+        }
+        if (coords[0] === 15 && this.canTransitionBoard('up', coords)) {
+            return 'up';
+        }
+        if (coords[0] === 29 && this.canTransitionBoard('down', coords)) {
+            return 'down';
+        }
+        return null;
+    };
+
     this.moveUp = (options = {}) => {
         if (this.playerTile.location[0] === 15) {
             const currentTileIdx = this.getIndexFromCoordinates(this.playerTile.location);
@@ -4185,35 +4456,12 @@ export function BoardManager(){
                 return;
             }
 
-            if (!this.isConnectingPathTile(currentTile)) {
-                try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
+            if (this.canTransitionBoard('up')) {
+                this.moveBoardUp();
                 return;
             }
 
-            const currentBoardIndex = Number(this.playerTile.boardIndex);
-            if (isNaN(currentBoardIndex) || currentBoardIndex < 3) {
-                try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
-                return;
-            }
-
-            let plane = this.currentOrientation === 'F' ? this.currentLevel.front : this.currentLevel.back;
-            if (!plane) plane = this.currentLevel.front || this.currentLevel.back || this.currentLevel;
-            const targetIndex = currentBoardIndex - 3;
-            const targetBoard = plane && plane.miniboards && (plane.miniboards[targetIndex] || (Array.isArray(plane.miniboards) && plane.miniboards.find(b => b && (b.id === targetIndex || b._id === targetIndex))));
-            if (!targetBoard) {
-                try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
-                return;
-            }
-
-            const col = this.playerTile.location[1] - 15;
-            const targetTileIdx = 14 * 15 + col;
-            const targetTile = targetBoard.tiles && targetBoard.tiles[targetTileIdx];
-            if (targetTile && this.isVoidTile(targetTile) && !this.isConnectingPathTile(targetTile)) {
-                try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
-                return;
-            }
-
-            this.moveBoardUp();
+            try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
             return;
         }
         const destinationCoords = [(this.playerTile.location[0] - 1), this.playerTile.location[1]];
@@ -4229,35 +4477,12 @@ export function BoardManager(){
                 return;
             }
 
-            if (!this.isConnectingPathTile(currentTile)) {
-                try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
+            if (this.canTransitionBoard('down')) {
+                this.moveBoardDown();
                 return;
             }
 
-            const currentBoardIndex = Number(this.playerTile.boardIndex);
-            if (isNaN(currentBoardIndex) || currentBoardIndex >= 6) {
-                try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
-                return;
-            }
-
-            let plane = this.currentOrientation === 'F' ? this.currentLevel.front : this.currentLevel.back;
-            if (!plane) plane = this.currentLevel.front || this.currentLevel.back || this.currentLevel;
-            const targetIndex = currentBoardIndex + 3;
-            const targetBoard = plane && plane.miniboards && (plane.miniboards[targetIndex] || (Array.isArray(plane.miniboards) && plane.miniboards.find(b => b && (b.id === targetIndex || b._id === targetIndex))));
-            if (!targetBoard) {
-                try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
-                return;
-            }
-
-            const col = this.playerTile.location[1] - 15;
-            const targetTileIdx = 0 * 15 + col;
-            const targetTile = targetBoard.tiles && targetBoard.tiles[targetTileIdx];
-            if (targetTile && this.isVoidTile(targetTile) && !this.isConnectingPathTile(targetTile)) {
-                try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
-                return;
-            }
-
-            this.moveBoardDown();
+            try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
             return;
         }
         const destinationCoords = [(this.playerTile.location[0] + 1), this.playerTile.location[1]];
@@ -4273,35 +4498,12 @@ export function BoardManager(){
                 return;
             }
 
-            if (!this.isConnectingPathTile(currentTile)) {
-                try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
+            if (this.canTransitionBoard('left')) {
+                this.moveBoardLeft();
                 return;
             }
 
-            const currentBoardIndex = Number(this.playerTile.boardIndex);
-            if (isNaN(currentBoardIndex) || currentBoardIndex % 3 === 0) {
-                try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
-                return;
-            }
-
-            let plane = this.currentOrientation === 'F' ? this.currentLevel.front : this.currentLevel.back;
-            if (!plane) plane = this.currentLevel.front || this.currentLevel.back || this.currentLevel;
-            const targetIndex = currentBoardIndex - 1;
-            const targetBoard = plane && plane.miniboards && (plane.miniboards[targetIndex] || (Array.isArray(plane.miniboards) && plane.miniboards.find(b => b && (b.id === targetIndex || b._id === targetIndex))));
-            if (!targetBoard) {
-                try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
-                return;
-            }
-
-            const row = this.playerTile.location[0] - 15;
-            const targetTileIdx = row * 15 + 14;
-            const targetTile = targetBoard.tiles && targetBoard.tiles[targetTileIdx];
-            if (targetTile && this.isVoidTile(targetTile) && !this.isConnectingPathTile(targetTile)) {
-                try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
-                return;
-            }
-
-            this.moveBoardLeft();
+            try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
             return;
         }
         const destinationCoords = [this.playerTile.location[0], (this.playerTile.location[1] - 1)];
@@ -4317,63 +4519,44 @@ export function BoardManager(){
                 return;
             }
 
-            if (!this.isConnectingPathTile(currentTile)) {
-                try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
+            if (this.canTransitionBoard('right')) {
+                this.moveBoardRight();
                 return;
             }
 
-            const currentBoardIndex = Number(this.playerTile.boardIndex);
-            if (isNaN(currentBoardIndex) || currentBoardIndex % 3 === 2) {
-                try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
-                return;
-            }
-
-            let plane = this.currentOrientation === 'F' ? this.currentLevel.front : this.currentLevel.back;
-            if (!plane) plane = this.currentLevel.front || this.currentLevel.back || this.currentLevel;
-            const targetIndex = currentBoardIndex + 1;
-            const targetBoard = plane && plane.miniboards && (plane.miniboards[targetIndex] || (Array.isArray(plane.miniboards) && plane.miniboards.find(b => b && (b.id === targetIndex || b._id === targetIndex))));
-            if (!targetBoard) {
-                try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
-                return;
-            }
-
-            const row = this.playerTile.location[0] - 15;
-            const targetTileIdx = row * 15 + 0;
-            const targetTile = targetBoard.tiles && targetBoard.tiles[targetTileIdx];
-            if (targetTile && this.isVoidTile(targetTile) && !this.isConnectingPathTile(targetTile)) {
-                try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
-                return;
-            }
-
-            this.moveBoardRight();
+            try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
             return;
         }
         const destinationCoords = [this.playerTile.location[0], (this.playerTile.location[1] + 1)];
         this.move(destinationCoords, 'right', options);
     }
     this.moveBoardLeft = () => {
-        this.boardTransition('left')
+        if (typeof this.boardTransition === 'function') this.boardTransition('left');
         this.tiles = [];
         const bIdx = Number(this.playerTile.boardIndex);
-        this.initializeTilesFromMap(bIdx - 1, this.getIndexFromCoordinates([this.playerTile.location[0], this.playerTile.location[1] + 14]))
+        this.initializeTilesFromMap(bIdx - 1, this.getIndexFromCoordinates([this.playerTile.location[0], this.playerTile.location[1] + 14]));
+        if (typeof this.refreshTiles === 'function') this.refreshTiles();
     }
     this.moveBoardRight = () => {
-        this.boardTransition('right')
+        if (typeof this.boardTransition === 'function') this.boardTransition('right');
         this.tiles = [];
         const bIdx = Number(this.playerTile.boardIndex);
-        this.initializeTilesFromMap(bIdx + 1, this.getIndexFromCoordinates([this.playerTile.location[0], this.playerTile.location[1] - 14]))
+        this.initializeTilesFromMap(bIdx + 1, this.getIndexFromCoordinates([this.playerTile.location[0], this.playerTile.location[1] - 14]));
+        if (typeof this.refreshTiles === 'function') this.refreshTiles();
     }
     this.moveBoardUp = () => {
-        this.boardTransition('up')
+        if (typeof this.boardTransition === 'function') this.boardTransition('up');
         this.tiles = [];
         const bIdx = Number(this.playerTile.boardIndex);
-        this.initializeTilesFromMap(bIdx - 3, this.getIndexFromCoordinates([this.playerTile.location[0] + 14, this.playerTile.location[1]]))
+        this.initializeTilesFromMap(bIdx - 3, this.getIndexFromCoordinates([this.playerTile.location[0] + 14, this.playerTile.location[1]]));
+        if (typeof this.refreshTiles === 'function') this.refreshTiles();
     }
     this.moveBoardDown = () => {
-        this.boardTransition('down')
+        if (typeof this.boardTransition === 'function') this.boardTransition('down');
         this.tiles = [];
         const bIdx = Number(this.playerTile.boardIndex);
-        this.initializeTilesFromMap(bIdx + 3, this.getIndexFromCoordinates([this.playerTile.location[0] - 14, this.playerTile.location[1]]))
+        this.initializeTilesFromMap(bIdx + 3, this.getIndexFromCoordinates([this.playerTile.location[0] - 14, this.playerTile.location[1]]));
+        if (typeof this.refreshTiles === 'function') this.refreshTiles();
     }
     this.getImage = (key) => {
         switch(key){
@@ -4527,6 +4710,18 @@ export function BoardManager(){
             const activeChem = inv.find(item => item && (item.name === 'chemical lantern' || item._im_key === 'chemical_lantern') && item.active);
             if (activeChem) {
                 fogRadius += 1;
+            }
+        } catch (e) {}
+
+        // Far Sight: Wizard expedition skill extends vision radius by +2 tiles for 5 movement units
+        try {
+            const farSightRemaining = (typeof this.farSightMoves === 'number' && this.farSightMoves > 0)
+                ? this.farSightMoves
+                : (typeof this.getFarSightMoves === 'function' && this.getFarSightMoves() > 0
+                    ? this.getFarSightMoves()
+                    : ((typeof getMeta === 'function' && getMeta()?.farSightMoves) || 0));
+            if (farSightRemaining > 0) {
+                fogRadius += 2;
             }
         } catch (e) {}
 
@@ -4818,6 +5013,10 @@ export function BoardManager(){
             ? this.getWanderingEyeReveals()
             : this.wanderingEyeRevealedTiles;
         const eyeNow = Date.now();
+        const walkerRevealsMap = (typeof this.getWalkerReveals === 'function')
+            ? this.getWalkerReveals()
+            : this.walkerRevealedTiles;
+        const walkerNow = Date.now();
 
         this.tiles.forEach((e) => {
             try {
@@ -4864,6 +5063,20 @@ export function BoardManager(){
                         inWanderingEyeReveal = true;
                     }
                 }
+
+                let inWalkerReveal = false;
+                if (walkerRevealsMap) {
+                    const bIdx = (this.playerTile?.boardIndex != null) ? this.playerTile.boardIndex : ((this.currentBoard?.id != null) ? this.currentBoard.id : 0);
+                    const lvlId = this.currentLevel?.id ?? 0;
+                    const orient = this.currentOrientation ?? 'front';
+                    const key = `${lvlId}:${orient}:${bIdx}:${e.id}`;
+                    const exp = (walkerRevealsMap instanceof Map
+                        ? (walkerRevealsMap.get(key) ?? walkerRevealsMap.get(e.id))
+                        : (walkerRevealsMap[key] ?? walkerRevealsMap[e.id]));
+                    if (exp && walkerNow < exp) {
+                        inWalkerReveal = true;
+                    }
+                }
                 
                 let inLanternTerritory = false;
                 if (lanternTerritory) {
@@ -4900,8 +5113,8 @@ export function BoardManager(){
                     return (dr * dr + dc * dc <= 100) || (dr <= 10 && dc <= 10);
                 });
 
-                const isVoid = this.isVoidTile(e);
-                const isRevealed = inMonolithTerritory || inLanternTerritory || inObsPlatformVision || revealByDebugPygmies || inScoutedArea || inRatRevealArea || (manhattan <= fogRadius && visibleTileIds.has(e.id)) || inBreadcrumbPassiveReveal || inWanderingEyeReveal;
+                const isVoid = this.isVoidTile(e) || (this.currentBoard && this.currentBoard.tiles && this.currentBoard.tiles[e.id] && this.isVoidTile(this.currentBoard.tiles[e.id]));
+                const isRevealed = inMonolithTerritory || inLanternTerritory || inObsPlatformVision || revealByDebugPygmies || inScoutedArea || inRatRevealArea || (manhattan <= fogRadius && visibleTileIds.has(e.id)) || inBreadcrumbPassiveReveal || inWanderingEyeReveal || inWalkerReveal;
 
                 if (isRevealed && !isVoid) {
 

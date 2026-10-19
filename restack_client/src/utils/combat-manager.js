@@ -1070,6 +1070,7 @@ export function CombatManager() {
     }
     this.setFighterDestination = (id, coordinates) => {
         const fighter = this.combatants[id];
+        if (!fighter || fighter.dead || fighter.stationary || fighter.isStationary || fighter.type === 'turret' || fighter.isWall) return;
         fighter.targetId = null;
         const action = {
             name: 'Move to',
@@ -1085,10 +1086,10 @@ export function CombatManager() {
         fighter.action_queue.push(action)
     }
     this.goToDestination = (caller) => {
-        // Defensive: if the caller is already dead (killed just before moving),
-        // abort the move so dead units don't appear to reposition.
-        if (!caller || caller.dead) {
-            console.warn('goToDestination aborted for dead or missing caller:', caller && caller.id);
+        // Defensive: if the caller is already dead (killed just before moving) or stationary,
+        // abort the move so dead or stationary units don't appear to reposition.
+        if (!caller || caller.dead || caller.stationary || caller.isStationary || caller.type === 'turret' || caller.isWall) {
+            if (caller) caller.destinationCoordinates = null;
             return;
         }
         // Defensive: check if move is legal before moving
@@ -1302,8 +1303,8 @@ export function CombatManager() {
     this.moveFighterOneSpace = (direction) => {
         let pendingCoordinates;
 
-        if (!this.selectedFighter || !this.combatants[this.selectedFighter.id] || this.combatants[this.selectedFighter.id].dead) {
-            const firstLive = Object.values(this.combatants).find(c => c && !c.isMonster && !c.isMinion && !c.dead && (typeof c.hp !== 'number' || c.hp > 0));
+        if (!this.selectedFighter || !this.combatants[this.selectedFighter.id] || this.combatants[this.selectedFighter.id].dead || this.combatants[this.selectedFighter.id].stationary || this.combatants[this.selectedFighter.id].isStationary || this.combatants[this.selectedFighter.id].type === 'turret' || this.combatants[this.selectedFighter.id].isWall) {
+            const firstLive = Object.values(this.combatants).find(c => c && !c.isMonster && !c.isMinion && !c.stationary && !c.isStationary && c.type !== 'turret' && !c.isWall && !c.dead && (typeof c.hp !== 'number' || c.hp > 0));
             if (firstLive) {
                 this.selectedFighter = firstLive;
             } else {
@@ -1318,8 +1319,8 @@ export function CombatManager() {
             try { console.warn('moveFighterOneSpace: selected fighter not found in combatants'); } catch (e) { }
             return;
         }
-        if (fighter.dead) {
-            try { console.warn('moveFighterOneSpace: fighter is dead, move aborted'); } catch (e) { }
+        if (fighter.dead || fighter.stationary || fighter.isStationary || fighter.type === 'turret' || fighter.isWall) {
+            try { console.warn('moveFighterOneSpace: fighter is dead or stationary, move aborted'); } catch (e) { }
             return;
         }
         if (fighter.locked) {

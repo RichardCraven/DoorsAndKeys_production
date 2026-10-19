@@ -74,4 +74,64 @@ describe('CardDuel Victory & Defeat Esoteric Modals', () => {
         fireEvent.click(returnBtn);
         expect(onFinishMock).toHaveBeenCalledWith(expect.objectContaining({ winner: 'reaper' }));
     });
+
+    test('renders victory modal when Banishment Aura (auto-win) triggers', () => {
+        const onFinishMock = jest.fn();
+        let cardDuelRef = null;
+        const { container } = render(
+            <CardDuel
+                ref={el => { cardDuelRef = el; }}
+                onFinish={onFinishMock}
+            />
+        );
+
+        // Simulate Banishment Aura auto-win state
+        cardDuelRef.setState({
+            gameOver: 'victory',
+            winner: 'player',
+            bannerText: 'BANISHMENT AURA! THE REAPER BANISHED!'
+        });
+
+        const card = container.querySelector('.ambush-popup-card');
+        expect(card).toBeInTheDocument();
+
+        expect(card.querySelector('.ambush-eyebrow')).toHaveTextContent(/DUEL CONQUERED/i);
+        expect(card.querySelector('.ambush-title')).toHaveTextContent(/VICTORY/i);
+        expect(card.querySelector('.ambush-subtitle')).toHaveTextContent(/BANISHMENT AURA!/i);
+
+        const claimBtn = card.querySelector('.ambush-fight-btn');
+        expect(claimBtn).toHaveTextContent(/CLAIM VICTORY/i);
+
+        fireEvent.click(claimBtn);
+        expect(onFinishMock).toHaveBeenCalledWith(expect.objectContaining({ winner: 'player' }));
+    });
+
+    test('renders victory modal even if legacy gameOver boolean true is passed with winner player', () => {
+        const onFinishMock = jest.fn();
+        let cardDuelRef = null;
+        const { container } = render(
+            <CardDuel
+                ref={el => { cardDuelRef = el; }}
+                onFinish={onFinishMock}
+            />
+        );
+
+        cardDuelRef.setState({
+            gameOver: true,
+            winner: 'player',
+            bannerText: 'BANISHMENT AURA! THE PRINCIPALITIES BANISHED!'
+        });
+
+        const card = container.querySelector('.ambush-popup-card');
+        expect(card).toBeInTheDocument();
+        expect(card.querySelector('.ambush-eyebrow')).toHaveTextContent(/DUEL CONQUERED/i);
+        expect(card.querySelector('.ambush-title')).toHaveTextContent(/VICTORY/i);
+
+        const claimBtn = card.querySelector('.ambush-fight-btn');
+        expect(claimBtn).toHaveTextContent(/CLAIM VICTORY/i);
+
+        fireEvent.click(claimBtn);
+        expect(onFinishMock).toHaveBeenCalledWith(expect.objectContaining({ winner: 'player' }));
+    });
 });
+

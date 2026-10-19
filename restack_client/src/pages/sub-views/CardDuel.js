@@ -702,7 +702,7 @@ export default class CardDuel extends React.Component {
             if (autoWin) {
                 this.addLog(`✨ Banishment Aura (User Perk): You banished ${enemyName} instantly!`);
                 this.setState({
-                    gameOver: true,
+                    gameOver: 'victory',
                     winner: 'player',
                     bannerText: `BANISHMENT AURA! ${enemyName.toUpperCase()} BANISHED!`
                 });
@@ -3567,125 +3567,128 @@ export default class CardDuel extends React.Component {
                 )}
 
                 {/* Victory / Defeat Modal (Esoteric Styling) */}
-                {gameOver && (
-                    <div
-                        className="ambush-popup-overlay"
-                        style={{ zIndex: 100000 }}
-                    >
+                {gameOver && (() => {
+                    const isVictory = gameOver === 'victory' || this.state.winner === 'player';
+                    return (
                         <div
-                            className="ambush-popup-card"
-                            style={{
-                                maxWidth: '440px',
-                                borderColor: gameOver === 'victory' ? 'rgba(212, 163, 89, 0.6)' : 'rgba(239, 68, 68, 0.45)',
-                                boxShadow: gameOver === 'victory'
-                                    ? '0 16px 50px rgba(0, 0, 0, 0.9), 0 0 35px rgba(212, 163, 89, 0.25), inset 0 0 25px rgba(0, 0, 0, 0.7)'
-                                    : '0 16px 50px rgba(0, 0, 0, 0.9), 0 0 35px rgba(180, 30, 30, 0.35), inset 0 0 25px rgba(0, 0, 0, 0.7)'
-                            }}
-                            onClick={e => e.stopPropagation()}
+                            className="ambush-popup-overlay"
+                            style={{ zIndex: 100000 }}
                         >
-                            <div className="card-corner top-left" />
-                            <div className="card-corner top-right" />
-                            <div className="card-corner bottom-left" />
-                            <div className="card-corner bottom-right" />
-
-                            <div className="ambush-eyebrow">
-                                <span className="glyph">◆</span> {gameOver === 'victory' ? 'DUEL CONQUERED' : 'TRIAL FAILED'} <span className="glyph">◆</span>
-                            </div>
-
-                            <h2
-                                className="ambush-title"
-                                style={{
-                                    color: gameOver === 'victory' ? '#f5dfa8' : '#fca5a5',
-                                    textShadow: gameOver === 'victory'
-                                        ? '0 0 15px rgba(229, 181, 79, 0.5)'
-                                        : '0 0 15px rgba(239, 68, 68, 0.6)'
-                                }}
-                            >
-                                {gameOver === 'victory' ? 'VICTORY' : 'DEFEATED'}
-                            </h2>
-
-                            <div className="ambush-divider">
-                                <div className="divider-line" />
-                                <span className="divider-glyph">❖</span>
-                                <div className="divider-line" />
-                            </div>
-
                             <div
+                                className="ambush-popup-card"
                                 style={{
-                                    width: '76px',
-                                    height: '76px',
-                                    margin: '0 auto 16px',
-                                    borderRadius: '50%',
-                                    background: gameOver === 'victory'
-                                        ? 'radial-gradient(circle, #2a2012 0%, #0c0a06 100%)'
-                                        : 'radial-gradient(circle, #2a1215 0%, #0c090c 100%)',
-                                    border: gameOver === 'victory'
-                                        ? '1px solid rgba(212, 163, 89, 0.5)'
-                                        : '1px solid rgba(239, 68, 68, 0.4)',
-                                    boxShadow: gameOver === 'victory'
-                                        ? '0 0 25px rgba(229, 181, 79, 0.35), inset 0 0 12px rgba(0,0,0,0.8)'
-                                        : '0 0 25px rgba(220, 38, 38, 0.35), inset 0 0 12px rgba(0,0,0,0.8)',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center'
+                                    maxWidth: '440px',
+                                    borderColor: isVictory ? 'rgba(212, 163, 89, 0.6)' : 'rgba(239, 68, 68, 0.45)',
+                                    boxShadow: isVictory
+                                        ? '0 16px 50px rgba(0, 0, 0, 0.9), 0 0 35px rgba(212, 163, 89, 0.25), inset 0 0 25px rgba(0, 0, 0, 0.7)'
+                                        : '0 16px 50px rgba(0, 0, 0, 0.9), 0 0 35px rgba(180, 30, 30, 0.35), inset 0 0 25px rgba(0, 0, 0, 0.7)'
                                 }}
+                                onClick={e => e.stopPropagation()}
                             >
-                                <span
-                                    style={{
-                                        fontSize: '2rem',
-                                        color: gameOver === 'victory' ? '#f5dfa8' : '#ef4444',
-                                        filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.8))'
-                                    }}
-                                >
-                                    {gameOver === 'victory' ? '⚔' : '☠'}
-                                </span>
-                            </div>
+                                <div className="card-corner top-left" />
+                                <div className="card-corner top-right" />
+                                <div className="card-corner bottom-left" />
+                                <div className="card-corner bottom-right" />
 
-                            <div className="ambush-subtitle" style={{ marginBottom: '20px' }}>
-                                {gameOver === 'victory'
-                                    ? 'You have dominated the battlefield and claimed victory in the duel.'
-                                    : "Your crew's vitality was depleted under relentless tactical pressure."}
-                                <br />
-                                <span
-                                    style={{
-                                        fontFamily: "'Cinzel', serif",
-                                        fontSize: '11px',
-                                        color: gameOver === 'victory' ? '#d4a359' : '#e05d5d',
-                                        textTransform: 'uppercase',
-                                        letterSpacing: '1.5px',
-                                        marginTop: '10px',
-                                        display: 'inline-block'
-                                    }}
-                                >
-                                    {gameOver === 'victory' ? '✦ Spoils of Combat Claimed ✦' : '✦ Regroup and Recover ✦'}
-                                </span>
-                            </div>
+                                <div className="ambush-eyebrow">
+                                    <span className="glyph">◆</span> {isVictory ? 'DUEL CONQUERED' : 'TRIAL FAILED'} <span className="glyph">◆</span>
+                                </div>
 
-                            <div style={{ display: 'flex', justifyContent: 'center', marginTop: '16px' }}>
-                                <button
-                                    type="button"
-                                    className="ambush-fight-btn"
-                                    onClick={() => this.props.onFinish && this.props.onFinish({ winner: gameOver === 'victory' ? 'player' : 'reaper' })}
+                                <h2
+                                    className="ambush-title"
                                     style={{
-                                        minWidth: '180px',
-                                        background: gameOver === 'victory'
-                                            ? 'linear-gradient(180deg, #3d2a14 0%, #1c1409 100%)'
-                                            : 'linear-gradient(180deg, #3d1417 0%, #1a0a0c 100%)',
-                                        border: gameOver === 'victory'
-                                            ? '1px solid rgba(229, 181, 79, 0.7)'
-                                            : '1px solid rgba(239, 68, 68, 0.6)',
-                                        color: gameOver === 'victory' ? '#f5dfa8' : '#fca5a5',
-                                        boxShadow: gameOver === 'victory'
-                                            ? '0 0 16px rgba(229, 181, 79, 0.3)'
-                                            : '0 0 16px rgba(220, 38, 38, 0.3)'
+                                        color: isVictory ? '#f5dfa8' : '#fca5a5',
+                                        textShadow: isVictory
+                                            ? '0 0 15px rgba(229, 181, 79, 0.5)'
+                                            : '0 0 15px rgba(239, 68, 68, 0.6)'
                                     }}
                                 >
-                                    {gameOver === 'victory' ? 'CLAIM VICTORY' : 'RETURN'}
-                                </button>
+                                    {isVictory ? 'VICTORY' : 'DEFEATED'}
+                                </h2>
+
+                                <div className="ambush-divider">
+                                    <div className="divider-line" />
+                                    <span className="divider-glyph">❖</span>
+                                    <div className="divider-line" />
+                                </div>
+
+                                <div
+                                    style={{
+                                        width: '76px',
+                                        height: '76px',
+                                        margin: '0 auto 16px',
+                                        borderRadius: '50%',
+                                        background: isVictory
+                                            ? 'radial-gradient(circle, #2a2012 0%, #0c0a06 100%)'
+                                            : 'radial-gradient(circle, #2a1215 0%, #0c090c 100%)',
+                                        border: isVictory
+                                            ? '1px solid rgba(212, 163, 89, 0.5)'
+                                            : '1px solid rgba(239, 68, 68, 0.4)',
+                                        boxShadow: isVictory
+                                            ? '0 0 25px rgba(229, 181, 79, 0.35), inset 0 0 12px rgba(0,0,0,0.8)'
+                                            : '0 0 25px rgba(220, 38, 38, 0.35), inset 0 0 12px rgba(0,0,0,0.8)',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center'
+                                    }}
+                                >
+                                    <span
+                                        style={{
+                                            fontSize: '2rem',
+                                            color: isVictory ? '#f5dfa8' : '#ef4444',
+                                            filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.8))'
+                                        }}
+                                    >
+                                        {isVictory ? '⚔' : '☠'}
+                                    </span>
+                                </div>
+
+                                <div className="ambush-subtitle" style={{ marginBottom: '20px' }}>
+                                    {isVictory
+                                        ? (this.state.bannerText ? this.state.bannerText : 'You have dominated the battlefield and claimed victory in the duel.')
+                                        : "Your crew's vitality was depleted under relentless tactical pressure."}
+                                    <br />
+                                    <span
+                                        style={{
+                                            fontFamily: "'Cinzel', serif",
+                                            fontSize: '11px',
+                                            color: isVictory ? '#d4a359' : '#e05d5d',
+                                            textTransform: 'uppercase',
+                                            letterSpacing: '1.5px',
+                                            marginTop: '10px',
+                                            display: 'inline-block'
+                                        }}
+                                    >
+                                        {isVictory ? '✦ Spoils of Combat Claimed ✦' : '✦ Regroup and Recover ✦'}
+                                    </span>
+                                </div>
+
+                                <div style={{ display: 'flex', justifyContent: 'center', marginTop: '16px' }}>
+                                    <button
+                                        type="button"
+                                        className="ambush-fight-btn"
+                                        onClick={() => this.props.onFinish && this.props.onFinish({ winner: isVictory ? 'player' : 'reaper' })}
+                                        style={{
+                                            minWidth: '180px',
+                                            background: isVictory
+                                                ? 'linear-gradient(180deg, #3d2a14 0%, #1c1409 100%)'
+                                                : 'linear-gradient(180deg, #3d1417 0%, #1a0a0c 100%)',
+                                            border: isVictory
+                                                ? '1px solid rgba(229, 181, 79, 0.7)'
+                                                : '1px solid rgba(239, 68, 68, 0.6)',
+                                            color: isVictory ? '#f5dfa8' : '#fca5a5',
+                                            boxShadow: isVictory
+                                                ? '0 0 16px rgba(229, 181, 79, 0.3)'
+                                                : '0 0 16px rgba(220, 38, 38, 0.3)'
+                                        }}
+                                    >
+                                        {isVictory ? 'CLAIM VICTORY' : 'RETURN'}
+                                    </button>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                )}
+                    );
+                })()}
 
                 {/* Forfeit Modal (Esoteric Styling) */}
                 {this.state.showForfeitModal && (

@@ -1,6 +1,6 @@
 
 import * as images from '../utils/images'
-import { SPELLS, RITUALS, GLYPHS, GLYPH_SPELL_SLOT_COST, computeGlyphPrepTime, BATTLE_TACTICS, INNER_DISCIPLINES, SCRY_OPTIONS } from './spells-table'
+import { SPELLS, RITUALS, GLYPHS, GLYPH_SPELL_SLOT_COST, computeGlyphPrepTime, SPIRIT_VESSELS, VESSEL_SPIRIT_SLOT_COST, computeVesselPrepTime, BATTLE_TACTICS, INNER_DISCIPLINES, SCRY_OPTIONS } from './spells-table'
 import { getMeta, storeMeta } from './session-handler'
 import { dischargeFromInfirmary } from './infirmary-manager'
 
@@ -213,6 +213,7 @@ export function CrewManager() {
     this.initializeCrew = (crew) => {
         //called everytime game loads, not just first time
         this.crew = [];
+        crew = Array.isArray(crew) ? crew : [];
         const colors = ['#7b5e8c', '#506e86', '#5f7055', '#b88d4c'];
 
         const normalizeSpecialName = (value) => String(value || '').replace(/_/g, ' ').trim().toLowerCase();
@@ -286,21 +287,36 @@ export function CrewManager() {
 
             // Expedition skills default initialization
             const defaultExpeditionSkills = {
-                wizard: ['astral_conduit', 'ley_tap', 'scry'],
+                wizard: ['astral_conduit', 'ley_tap', 'scry', 'far_sight'],
                 sage: ['healing_ground', 'sing'],
                 ranger: ['sneak_attack', 'spike_trap'],
                 soldier: ['soldier_shield', 'breacher'],
                 horologist: ['rewind_step', 'stopwatch'],
-                summoner: ['wandering_eye'],
-                glitterburn: ['blinding_beacon', 'prismatic_flare']
+                summoner: ['wandering_eye', 'shadow_effigy', 'void_fetch'],
+                glitterburn: ['blinding_beacon', 'prismatic_flare'],
+                engineer: ['engineer_salvage', 'engineer_grapple_winch', 'engineer_forward_emplacement']
             };
-            const mClass = (member.type || member.image || '').toLowerCase();
+            const rawMClass = (member.type || member.class || member.image || '').toLowerCase();
+            const mClass = (rawMClass.includes('summoner') || rawMClass === 'vaelis' || rawMClass === 'morwenna')
+                ? 'summoner'
+                : (member.type || member.image || '').toLowerCase();
             if (!Array.isArray(member.expeditionSkills) || member.expeditionSkills.length === 0) {
                 if (defaultExpeditionSkills[mClass]) {
                     member.expeditionSkills = [...defaultExpeditionSkills[mClass]];
                 }
-            } else if (mClass === 'wizard' && !member.expeditionSkills.includes('astral_conduit')) {
-                member.expeditionSkills.unshift('astral_conduit');
+            } else if (mClass === 'wizard') {
+                if (!member.expeditionSkills.includes('astral_conduit')) {
+                    member.expeditionSkills.unshift('astral_conduit');
+                }
+                if (!member.expeditionSkills.includes('far_sight')) {
+                    member.expeditionSkills.push('far_sight');
+                }
+            } else if (mClass === 'summoner' || mClass === 'engineer') {
+                defaultExpeditionSkills[mClass].forEach(sk => {
+                    if (!member.expeditionSkills.includes(sk)) {
+                        member.expeditionSkills.push(sk);
+                    }
+                });
             }
 
             member.specialActions.forEach(a => {
@@ -513,15 +529,21 @@ export function CrewManager() {
 
     this.addExperience = (memberArray, experienceValue) => {
         if (!Array.isArray(memberArray)) return;
+        const safeAward = (typeof experienceValue === 'number' && Number.isFinite(experienceValue) && experienceValue > 0)
+            ? Math.round(experienceValue)
+            : 0;
         memberArray.forEach(m => {
             if (!m) return;
             let member = this._findMatchingCrewMember(m);
             if (member) {
                 member.stats = member.stats || {};
-                const currentLevel = (typeof member.level === 'number' && member.level >= 0) ? member.level : 1;
+                const currentLevel = (typeof member.level === 'number' && Number.isFinite(member.level) && member.level >= 0) ? member.level : 1;
                 const minExpForLevel = currentLevel > 1 ? (EXP_TABLE[currentLevel - 1] || 0) : 0;
-                const curExp = Math.max(typeof member.stats.experience === 'number' ? member.stats.experience : 0, minExpForLevel);
-                member.stats.experience = curExp + experienceValue;
+                const rawExp = (typeof member.stats.experience === 'number' && Number.isFinite(member.stats.experience))
+                    ? member.stats.experience
+                    : minExpForLevel;
+                const curExp = Math.max(rawExp, minExpForLevel);
+                member.stats.experience = curExp + safeAward;
             } else {
                 console.warn('addExperience: could not match crew member', m);
             }
@@ -890,13 +912,17 @@ export function CrewManager() {
             if (!crewMember) return 0;
             let foundMember = this._findMatchingCrewMember(crewMember);
             if (!foundMember || !foundMember.stats) return 0;
-            const level = (typeof foundMember.level === 'number' && foundMember.level >= 0) ? foundMember.level : 1;
+            const level = (typeof foundMember.level === 'number' && Number.isFinite(foundMember.level) && foundMember.level >= 0) ? foundMember.level : 1;
             const nextLevelExp = (typeof EXP_TABLE[level] !== 'undefined') ? EXP_TABLE[level] : EXP_TABLE[EXP_TABLE.length - 1];
             const prevLevelExp = level > 1 ? (EXP_TABLE[level - 1] || 0) : 0;
-            const rawExp = typeof foundMember.stats.experience === 'number' ? foundMember.stats.experience : 0;
+            const rawExp = (typeof foundMember.stats.experience === 'number' && Number.isFinite(foundMember.stats.experience)) ? foundMember.stats.experience : prevLevelExp;
+            if (typeof foundMember.stats.experience !== 'number' || !Number.isFinite(foundMember.stats.experience)) {
+                foundMember.stats.experience = prevLevelExp;
+            }
             const experience = Math.max(rawExp, prevLevelExp);
             const denom = (nextLevelExp - prevLevelExp) || 1;
             let percentage = Math.ceil(((experience - prevLevelExp) / denom) * 100);
+            if (!Number.isFinite(percentage) || isNaN(percentage)) percentage = 0;
             if (percentage > 100) percentage = 100;
             if (percentage < 0) percentage = 0;
             return percentage;
@@ -961,6 +987,31 @@ export function CrewManager() {
                         break;
                 }
                 break;
+            case 'spirit_vessel': {
+                // ── Tiered Spirit Vessel system (Summoner) ───────────────────────
+                // actionSubtype shape: { vesselTier, spiritDefs: [{id, tier, name}] }
+                if (actionSubtype.vesselTier && SPIRIT_VESSELS[actionSubtype.vesselTier]) {
+                    const vesselDef = SPIRIT_VESSELS[actionSubtype.vesselTier];
+                    const spiritDefs = actionSubtype.spiritDefs || [];
+                    const prepTime = computeVesselPrepTime(spiritDefs) || (5 * 60 * 1000);
+                    endDate = new Date(Date.now() + prepTime);
+
+                    member.specialActions.push({
+                        type: 'spirit_vessel',
+                        vesselTier: actionSubtype.vesselTier,
+                        name: vesselDef.name,
+                        iconUrl: images[vesselDef.icon] || '',
+                        spirits: spiritDefs.map(s => s.id),
+                        spiritDefs: spiritDefs.map(s => ({ id: s.id, tier: s.tier, name: s.name })),
+                        slotsUsed: spiritDefs.reduce((sum, s) => sum + (VESSEL_SPIRIT_SLOT_COST[s.tier] || 1), 0),
+                        available: false,
+                        startDate,
+                        endDate,
+                        notified: false,
+                    });
+                }
+                break;
+            }
             case 'ritual': {
                 const ritualDef = RITUALS[actionSubtype.ritualKey];
                 const prepareTime = ritualDef ? ritualDef.prepareTime : 60 * 60 * 1000;
@@ -1324,7 +1375,7 @@ export function CrewManager() {
             inventory: [],
             skills: ['magic_missile', 'fireball', 'ice_blast'],
             passives: ['magic_affinity', 'arcane_sense'],
-            expeditionSkills: ['astral_conduit', 'ley_tap', 'dimensional_pocket', 'scry'],
+            expeditionSkills: ['astral_conduit', 'ley_tap', 'scry', 'far_sight'],
             weaknesses: ['ice', 'fire', 'electricity', 'blood_magic'],
             description: "Hailing from the magister's college, Zildjikan was the dean of transmutation. A powerful magic user, he has been known to linger for long periods in the silent realm, searching for secret truths.",
             specialActions: [],
@@ -1488,7 +1539,7 @@ export function CrewManager() {
                 'summon_imp',
                 'summoner_duplicate'
             ],
-            expeditionSkills: ['wandering_eye'],
+            expeditionSkills: ['wandering_eye', 'shadow_effigy', 'void_fetch'],
             passives: ['magic_affinity'],
             weaknesses: ['crushing', 'blood_magic'],
             description: 'A conduit for unstable arcana who overwhelms enemies with elemental pressure by opening rifts and summoning minions.',

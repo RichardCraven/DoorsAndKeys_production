@@ -406,7 +406,7 @@ describe('DungeonPage: Collapsible Resources & Expedition Skills', () => {
 
       const timerItems = respawnContainer.querySelectorAll('.hud-timer-item');
       expect(timerItems[0]).toBe(saveIndicator);
-      expect(timerItems.length).toBe(5); // 1 save indicator + 4 respawn timers
+      expect(timerItems.length).toBe(7); // 1 save indicator + 6 hud timer items
     });
 
     test('does not render hud-save-indicator when showSaveIndicator is false', () => {
@@ -418,7 +418,7 @@ describe('DungeonPage: Collapsible Resources & Expedition Skills', () => {
       expect(respawnContainer.querySelector('.hud-save-indicator')).toBeNull();
 
       const timerItems = respawnContainer.querySelectorAll('.hud-timer-item');
-      expect(timerItems.length).toBe(4); // 4 respawn timers (Monster, Item, Key, Relock)
+      expect(timerItems.length).toBe(6); // 6 hud timer items
     });
 
     test('displayMessage with "progress saved" sets showSaveIndicator to true and updates text', () => {

@@ -740,7 +740,41 @@ function Tile(props) {
         return false;
     })();
 
-    const isStructureTile = sKey.includes('spawn_point') || sKey.includes('portal') || sKey.includes('teleporter') || sKey.includes('war_camp') || sKey.includes('war_fort') || sKey.includes('earthen_fort') || sKey.includes('outpost') || sKey.includes('observer') || sKey.includes('observation') || sKey.includes('dream_den') || sKey.includes('monolith') || sKey.includes('vat') || sKey.includes('generator') || sKey.includes('ore_mine') || sKey.includes('slate_mine') || sKey.includes('sawmill') || sKey.includes('lumber_mill') || sKey.includes('larder') || sKey.includes('dust_collector') || sKey.includes('fungal_nursery') || sKey.includes('cultivation_vat') || sKey.includes('mine') || sKey.includes('hut') || sKey.includes('tower') || sKey.includes('windmill') || sKey.includes('farm') || sKey.includes('house') || sKey.includes('manor') || sKey.includes('estate') || sKey.includes('town') || sKey.includes('graveyard') || sKey.includes('blacksmith') || sKey.includes('under_construction') || sKey.includes('construction') || sKey.includes('rift_embers') || sKey.includes('healing_circle') || sKey.includes('gate') || sKey.includes('door') || sKey.includes('vendor') || !!props.vendorCell || !!containsObj?.vendorCell || isArchaicEndpoint || is3x3Structure || isLocusTile;
+    const isPortalTileCheck = sKey.includes('portal') || sKey.includes('teleporter') ||
+        String(props.image || '').toLowerCase().includes('portal') ||
+        String(props.image || '').toLowerCase().includes('teleporter') ||
+        String(props.imageOverride || '').toLowerCase().includes('portal') ||
+        String(props.imageOverride || '').toLowerCase().includes('teleporter') ||
+        String(props.type || '').toLowerCase().includes('portal') ||
+        String(props.type || '').toLowerCase().includes('teleporter') ||
+        String(props.optionType || '').toLowerCase().includes('portal') ||
+        String(props.optionType || '').toLowerCase().includes('teleporter') ||
+        String(props.building || '').toLowerCase().includes('portal') ||
+        String(props.building || '').toLowerCase().includes('teleporter') ||
+        String(containsObj?.subtype || '').toLowerCase().includes('portal') ||
+        String(containsObj?.subtype || '').toLowerCase().includes('teleporter') ||
+        String(containsObj?.type || '').toLowerCase().includes('portal') ||
+        String(containsObj?.type || '').toLowerCase().includes('teleporter') ||
+        String(containsObj?.building || '').toLowerCase().includes('portal') ||
+        String(containsObj?.building || '').toLowerCase().includes('teleporter') ||
+        String(currentTileForContains?.type || '').toLowerCase().includes('portal') ||
+        String(currentTileForContains?.type || '').toLowerCase().includes('teleporter') ||
+        String(currentTileForContains?.image || '').toLowerCase().includes('portal') ||
+        String(currentTileForContains?.image || '').toLowerCase().includes('teleporter') ||
+        String(currentTileForContains?.imageOverride || '').toLowerCase().includes('portal') ||
+        String(currentTileForContains?.imageOverride || '').toLowerCase().includes('teleporter') ||
+        String(currentTileForContains?.building || '').toLowerCase().includes('portal') ||
+        String(currentTileForContains?.building || '').toLowerCase().includes('teleporter') ||
+        String(currentTileForContains?.contains?.type || '').toLowerCase().includes('portal') ||
+        String(currentTileForContains?.contains?.type || '').toLowerCase().includes('teleporter') ||
+        String(currentTileForContains?.contains?.subtype || '').toLowerCase().includes('portal') ||
+        String(currentTileForContains?.contains?.subtype || '').toLowerCase().includes('teleporter') ||
+        !!props['data-portal-id'] || !!props.portalId || !!props.targetPortalId || !!containsObj?.portalId || !!containsObj?.targetPortalId ||
+        !!props.portal || !!containsObj?.portal || !!props.isPortal || !!containsObj?.isPortal ||
+        !!currentTileForContains?.portalId || !!currentTileForContains?.targetPortalId || !!currentTileForContains?.portal || !!currentTileForContains?.isPortal ||
+        !!currentTileForContains?.contains?.portalId || !!currentTileForContains?.contains?.targetPortalId || !!currentTileForContains?.contains?.portal || !!currentTileForContains?.contains?.isPortal;
+
+    const isStructureTile = !isPortalTileCheck && (sKey.includes('spawn_point') || sKey.includes('war_camp') || sKey.includes('war_fort') || sKey.includes('earthen_fort') || sKey.includes('outpost') || sKey.includes('observer') || sKey.includes('observation') || sKey.includes('dream_den') || sKey.includes('monolith') || sKey.includes('vat') || sKey.includes('generator') || sKey.includes('ore_mine') || sKey.includes('slate_mine') || sKey.includes('sawmill') || sKey.includes('lumber_mill') || sKey.includes('larder') || sKey.includes('dust_collector') || sKey.includes('fungal_nursery') || sKey.includes('cultivation_vat') || sKey.includes('mine') || sKey.includes('hut') || sKey.includes('tower') || sKey.includes('windmill') || sKey.includes('farm') || sKey.includes('house') || sKey.includes('manor') || sKey.includes('estate') || sKey.includes('town') || sKey.includes('graveyard') || sKey.includes('blacksmith') || sKey.includes('under_construction') || sKey.includes('construction') || sKey.includes('rift_embers') || sKey.includes('healing_circle') || sKey.includes('gate') || sKey.includes('door') || sKey.includes('vendor') || !!props.vendorCell || !!containsObj?.vendorCell || isArchaicEndpoint || is3x3Structure || isLocusTile);
 
     const containsObjForHp = (currentTileForContains && typeof currentTileForContains.contains !== 'undefined')
         ? (typeof currentTileForContains.contains === 'object' ? currentTileForContains.contains : null)
@@ -940,13 +974,13 @@ function Tile(props) {
         if (!val) return false;
         if (typeof val === 'object' && val !== null) {
             const sub = String(val.subtype || val.building || val.key || val.name || val.type || '').toLowerCase();
-            if (sub.includes('domain_node') || sub.includes('dark_domain_node') || sub.includes('node') || sub.includes('earthen_fort') || sub.includes('outpost') || sub.includes('observer') || sub.includes('hut') || sub.includes('farm') || sub.includes('house') || sub.includes('locus')) {
+            if (sub.includes('domain_node') || sub.includes('dark_domain_node') || sub.includes('node') || sub.includes('earthen_fort') || sub.includes('outpost') || sub.includes('observer') || sub.includes('hut') || sub.includes('farm') || sub.includes('house') || sub.includes('locus') || sub.includes('archaic_tunnel') || sub.includes('archaic tunnel')) {
                 return false;
             }
             return !!val.isMultiTile || !!val.isLarge || !!val.vendorCell || (val.vendorAnchorId !== undefined && val.vendorAnchorId !== null) || isVendorType(val.type) || isVendorType(val.subtype) || isVendorType(val.building) || isVendorType(val.key) || isVendorType(val.name);
         }
         const s = String(val).toLowerCase();
-        if (s.includes('domain_node') || s.includes('dark_domain_node') || s.includes('node') || s.includes('earthen_fort') || s.includes('outpost') || s.includes('observer') || s.includes('hut') || s.includes('farm') || s.includes('house') || s.includes('locus')) {
+        if (s.includes('domain_node') || s.includes('dark_domain_node') || s.includes('node') || s.includes('earthen_fort') || s.includes('outpost') || s.includes('observer') || s.includes('hut') || s.includes('farm') || s.includes('house') || s.includes('locus') || s.includes('archaic_tunnel') || s.includes('archaic tunnel')) {
             return false;
         }
         const multiKeys = [
@@ -964,8 +998,7 @@ function Tile(props) {
             'naked_mountains_2', 'terrain_naked_mountains_2',
             'fractured_monolith', 'pocket_litter_fractured_monolith',
             'rift_embers', 'pocket_litter_rift_embers',
-            'healing_circle', 'pocket_healing_circle',
-            'archaic_tunnel', 'pocket_litter_archaic_tunnel', 'archaic tunnel'
+            'healing_circle', 'pocket_healing_circle'
         ];
         if (multiKeys.includes(s)) return true;
         return multiKeys.some(k => s.includes(k));
@@ -995,7 +1028,6 @@ function Tile(props) {
 
     const is2x2StructureSelf = !isPaletteTile && !isSingleTile && (
         thisKey.includes('healing_circle') ||
-        isArchaicEndpoint ||
         thisKey.includes('war_camp') || thisKey.includes('war_fort') || thisKey.includes('dream_den') ||
         thisKey.includes('domain_monolith') || thisKey.includes('dark_domain_monolith') || (thisKey.includes('monolith') && !thisKey.includes('shrine') && !thisKey.includes('fractured_monolith')) ||
         thisKey.includes('cultivation_vat') || thisKey.includes('dust_collector') || thisKey.includes('larder') ||
@@ -1007,7 +1039,7 @@ function Tile(props) {
 
     // Check if this tile is a quadrant of an adjacent 2x2 multi-tile structure anchor in boardTiles
     const findNearbyStructureAnchor = () => {
-        if (isPaletteTile || !boardTilesForContains || isDarkColor || color === 'black' || isSingleTile) return null;
+        if (isPaletteTile || !boardTilesForContains || isDarkColor || color === 'black' || isSingleTile || isArchaicTunnel || isArchaicEndpoint) return null;
         const cId = props.id !== undefined && props.id !== null ? props.id : props.index;
         if (cId === null || cId === undefined) return null;
         const cRow = Math.floor(cId / 15);
@@ -1029,7 +1061,7 @@ function Tile(props) {
                 if (aTile && aTile.color !== 'black' && (aTile.contains || aTile.building || aTile.image)) {
                     const aContains = typeof aTile.contains === 'object' && aTile.contains ? aTile.contains : { type: aTile.contains };
                     const aKey = String(aContains.subtype || aContains.building || aContains.type || aTile.building || aTile.image || '').toLowerCase();
-                    if (aKey.includes('observer') || aKey.includes('outpost') || aKey.includes('earthen_fort') || aKey.includes('hut') || aKey.includes('domain_node') || aKey.includes('dark_domain_node') || aKey.includes('node') || aKey.includes('farm') || aKey.includes('house') || aKey.includes('locus')) continue;
+                    if (aKey.includes('observer') || aKey.includes('outpost') || aKey.includes('earthen_fort') || aKey.includes('hut') || aKey.includes('domain_node') || aKey.includes('dark_domain_node') || aKey.includes('node') || aKey.includes('farm') || aKey.includes('house') || aKey.includes('locus') || aKey.includes('archaic_tunnel') || aKey.includes('archaic tunnel')) continue;
                     
                     const aIs2x2 = (aKey.includes('domain_monolith') || aKey.includes('dark_domain_monolith') || (aKey.includes('monolith') && !aKey.includes('shrine')) || isVendorType(aKey));
                     if (aIs2x2) {
@@ -1376,8 +1408,14 @@ function Tile(props) {
     ];
 
     const resolvedPortraitUrl = (() => {
-        if (isArchaicTunnel && !isArchaicEndpoint) {
-            return images.archaic_tunnel_tile || images['archaic_tunnel_tile'];
+        if (isArchaicTunnel || isArchaicEndpoint) {
+            if (!isArchaicEndpoint) {
+                return images.archaic_tunnel_tile || images['archaic_tunnel_tile'];
+            }
+            if (isPaletteTile) {
+                return images.archaic_tunnel_endpoint || images.archaic_tunnel || images['archaic_tunnel'];
+            }
+            return null;
         }
         if (props.building) {
             const key = String(props.building).trim().toLowerCase().replace(/[\s-]+/g, '_');
@@ -1455,6 +1493,9 @@ function Tile(props) {
             const aTile = nearbyAnchorInfo.anchorTile;
             const aContains = typeof aTile.contains === 'object' && aTile.contains ? aTile.contains : {};
             const key = String(aContains.subtype || aContains.building || aTile.building || aContains.type || aTile.image || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+            if (key.includes('archaic_tunnel') || key.includes('archaic tunnel')) {
+                return null;
+            }
             if (images[key]) return images[key];
             if (images[`buildable_${key}`]) return images[`buildable_${key}`];
             if (images[`${key}_portrait`]) return images[`${key}_portrait`];
@@ -1867,8 +1908,22 @@ function Tile(props) {
                     (props.type === 'inventory-tile' ? (props.isActiveInventory ? 'lightgreen' : 'transparent') : color))),
             fontSize: '0.7em',
             position: 'relative',
-            overflow: isPaletteTile ? 'hidden' : ((isSpawnPoint || isArchEnlarged || isAggroAttacking || isStructureTile || isAutomatonUnit || hasConvertingMonolith || hasConvertingTarget || isIlluminatedGlow || isBumpingAttack || isGliding || isSpawnFlashing || isRevealedBySpiritSight || props.connectedEdge || (props.inscriptions && Object.values(props.inscriptions).some(v => !!v)) || isEnlargedStructureActive || isUnderConstruction || (props.sabotageProgress !== null && props.sabotageProgress !== undefined) || (props.monolithActivationProgress !== null && props.monolithActivationProgress !== undefined) || (props.upgradeProgress !== null && props.upgradeProgress !== undefined) || props.isTargetedByRanged) ? 'visible' : 'hidden'),
-            zIndex: (isArchEnlarged || isEnlargedStructureActive) ? 300 : (props.isTargetedByRanged ? 50 : (isAggroAttacking ? 150 : (isDimensionDebrisOrLitter ? 120 : ((props.upgradeProgress !== null && props.upgradeProgress !== undefined) ? 60 : ((hasConvertingMonolith || hasConvertingTarget) ? 40 : (isBumpingAttack || isSpawnFlashing ? 100 : (isGliding ? 90 : (isAutomatonUnit ? 45 : (isStructureTile || isUnderConstruction ? ((!isVendorCell || getVendorCellRole() === 'anchor') ? 30 : 8) : (isRevealedBySpiritSight ? 15 : ((props.inscriptions && Object.values(props.inscriptions).some(v => !!v)) ? 10 : (isIlluminatedGlow ? ((!isVendorCell || getVendorCellRole() === 'anchor') ? 9 : 8) : (isEnlargedStructureActive ? 300 : undefined))))))))))))),
+            overflow: isPaletteTile ? 'hidden' : ((isSpawnPoint || isArchaicEndpoint || isArchaicTunnel || isArchEnlarged || isAggroAttacking || isStructureTile || isAutomatonUnit || hasConvertingMonolith || hasConvertingTarget || isIlluminatedGlow || isBumpingAttack || isGliding || isSpawnFlashing || isRevealedBySpiritSight || props.connectedEdge || (props.inscriptions && Object.values(props.inscriptions).some(v => !!v)) || isEnlargedStructureActive || isUnderConstruction || (props.sabotageProgress !== null && props.sabotageProgress !== undefined) || (props.monolithActivationProgress !== null && props.monolithActivationProgress !== undefined) || (props.upgradeProgress !== null && props.upgradeProgress !== undefined) || props.isTargetedByRanged) ? 'visible' : 'hidden'),
+            zIndex: (isArchEnlarged || isEnlargedStructureActive) ? 300 :
+                    isSpawnPoint ? 150 :
+                    props.isTargetedByRanged ? 50 :
+                    isAggroAttacking ? 150 :
+                    isDimensionDebrisOrLitter ? 120 :
+                    (props.upgradeProgress !== null && props.upgradeProgress !== undefined) ? 60 :
+                    (hasConvertingMonolith || hasConvertingTarget) ? 40 :
+                    (isBumpingAttack || isSpawnFlashing) ? 100 :
+                    isGliding ? 90 :
+                    isAutomatonUnit ? 45 :
+                    (isStructureTile || isUnderConstruction) ? ((!isVendorCell || getVendorCellRole() === 'anchor') ? 30 : 8) :
+                    isRevealedBySpiritSight ? 15 :
+                    (props.inscriptions && Object.values(props.inscriptions).some(v => !!v)) ? 10 :
+                    isIlluminatedGlow ? ((!isVendorCell || getVendorCellRole() === 'anchor') ? 9 : 8) :
+                    isEnlargedStructureActive ? 300 : undefined,
             boxShadow: isRevealedBySpiritSight ? 'inset 0 0 10px rgba(0, 243, 255, 0.6), 0 0 10px rgba(0, 243, 255, 0.6)' : undefined,
             border: isRevealedBySpiritSight ? '1px solid rgba(0, 243, 255, 0.8)' : vctBorder,
             borderLeft: isRevealedBySpiritSight ? '1px solid rgba(0, 243, 255, 0.8)' : (isBoardGridTile ? 'none' : (vctBorder ? undefined : (vendorBorderless || ((isDarkColor || color === 'black' || isBlackRenderedTile(currentContains, currentTileColor)) ? 'none' : (props.borders && props.borders.left ? props.borders.left : ((props.type === 'palette-tile' && !props.hovered) ? '2px solid transparent' : 
@@ -1876,7 +1931,7 @@ function Tile(props) {
             borderRight: isRevealedBySpiritSight ? '1px solid rgba(0, 243, 255, 0.8)' : (isBoardGridTile ? 'none' : (vctBorder ? undefined : (vendorBorderless || ((isDarkColor || color === 'black' || isBlackRenderedTile(currentContains, currentTileColor)) ? 'none' : ((props.borders && props.borders.right) ? props.borders.right : 'none'))))),
             borderTop: isRevealedBySpiritSight ? '1px solid rgba(0, 243, 255, 0.8)' : (isBoardGridTile ? 'none' : (vctBorder ? undefined : (vendorBorderless || ((isDarkColor || color === 'black' || isBlackRenderedTile(currentContains, currentTileColor)) ? 'none' : ((props.borders && props.borders.top) ? props.borders.top : 'none'))))),
             borderBottom: isRevealedBySpiritSight ? '1px solid rgba(0, 243, 255, 0.8)' : (isBoardGridTile ? 'none' : (vctBorder ? undefined : (vendorBorderless || ((isDarkColor || color === 'black' || isBlackRenderedTile(currentContains, currentTileColor)) ? 'none' : ((props.borders && props.borders.bottom) ? props.borders.bottom : 'none'))))),
-            clipPath: (props.showOrganicEdges && !isBlackTile && !props.inSuperboard && isBoardGridTile && !isPaletteTile && typeof cId === 'number') ? getOrganicTileClipPath(cId, props.boardTiles || boardTilesForContains, isVendorCell, vendorCellRole) : undefined
+            clipPath: (props.showOrganicEdges && !isBlackTile && !props.inSuperboard && isBoardGridTile && !isPaletteTile && typeof cId === 'number' && !isSpawnPoint && !isArchaicEndpoint && !isArchaicTunnel) ? getOrganicTileClipPath(cId, props.boardTiles || boardTilesForContains, isVendorCell, vendorCellRole) : undefined
             }}
             onMouseEnter={() => {
                 beginDelayedHoverLabel();
@@ -1917,7 +1972,7 @@ function Tile(props) {
                 }
             }}
             onDragStart={(e) => e.preventDefault()}
-            className={`tile ${props.className || ''} ${props.type || ''} ${isArchTile ? 'archway-tile' : ''} ${isArchEnlarged ? 'enlarged-arch-tile' : ''} ${(isArchEnlarged || isEnlargedStructureActive) ? 'enlarged-structure-tile' : ''} ${isPickupObject ? (isPlayerApproaching ? 'pickup-tile-hovering' : 'pickup-tile-grounded') : ''} ${isAggroAttacking ? 'aggro-attack-lunge' : (isBumpingAttack ? 'pygmy-bump-hit' : (isBumpedBack ? 'pygmy-bump-absorb' : (isGliding ? 'pygmy-glide' : (isSpawnFlashing ? 'pygmy-spawn-flash' : ''))))} ${isDimensionDebrisOrLitter ? 'foreground-zindex' : ''}`.trim()}
+            className={`tile ${props.className || ''} ${props.type || ''} ${isSpawnPoint ? 'spawn-point-tile' : ''} ${isArchaicEndpoint ? 'archaic-endpoint-tile' : ''} ${isArchaicTunnel ? 'archaic-tunnel-tile' : ''} ${isArchTile ? 'archway-tile' : ''} ${isArchEnlarged ? 'enlarged-arch-tile' : ''} ${(isArchEnlarged || isEnlargedStructureActive) ? 'enlarged-structure-tile' : ''} ${isPickupObject ? (isPlayerApproaching ? 'pickup-tile-hovering' : 'pickup-tile-grounded') : ''} ${isAggroAttacking ? 'aggro-attack-lunge' : (isBumpingAttack ? 'pygmy-bump-hit' : (isBumpedBack ? 'pygmy-bump-absorb' : (isGliding ? 'pygmy-glide' : (isSpawnFlashing ? 'pygmy-spawn-flash' : ''))))} ${isDimensionDebrisOrLitter ? 'foreground-zindex' : ''}`.trim()}
             data-tile-id={props.index}
         >
            {props.isMobileTouchHover && (
@@ -2058,16 +2113,45 @@ function Tile(props) {
                 // cannot be claimed with domain or activated, and must NOT have a colored ring around them.
                 if (isDimensionDebrisOrLitter) return null;
 
-                // Healing circle and Archaic tunnel do not need an affiliation colored-circle
+                // Healing circle, Archaic tunnel, Spawn Point, and Portals/Teleporters do not need an affiliation colored-circle
                 if (isHealingCircle || sKey.includes('healing_circle')) return null;
                 if (isArchaicTunnel || sKey.includes('archaic_tunnel') || sKey.includes('archaic tunnel')) return null;
-
-                const isGenerator = sKey.includes('ore_mine') || sKey.includes('slate_mine') || sKey.includes('sawmill') || sKey.includes('lumber_mill') || sKey.includes('larder') || sKey.includes('dust_collector') || sKey.includes('fungal_nursery') || sKey.includes('cultivation_vat') || sKey.includes('generator') || sKey.includes('mine');
-                let gData = props.generatorData || containsObj?.generatorData;
+                if (isSpawnPoint || sKey.includes('spawn_point') || sKey.includes('spawn point')) return null;
 
                 const boardTiles = Array.isArray(props.boardTiles) ? props.boardTiles : null;
                 const currentIdx = props.id !== undefined ? props.id : props.index;
                 const currentTileObj = (currentIdx !== null && currentIdx !== undefined && boardTiles) ? boardTiles[currentIdx] : null;
+
+                const isPortalStructure = isPortalTileCheck ||
+                    sKey.includes('portal') || sKey.includes('teleporter') ||
+                    imageString.includes('portal') || imageString.includes('teleporter') ||
+                    allKeys.includes('portal') || allKeys.includes('teleporter') ||
+                    rawContainsType.includes('portal') || rawContainsType.includes('teleporter') ||
+                    String(containsObj?.type || '').toLowerCase().includes('portal') ||
+                    String(containsObj?.type || '').toLowerCase().includes('teleporter') ||
+                    String(containsObj?.subtype || '').toLowerCase().includes('portal') ||
+                    String(containsObj?.subtype || '').toLowerCase().includes('teleporter') ||
+                    String(props.type || '').toLowerCase().includes('portal') ||
+                    String(props.type || '').toLowerCase().includes('teleporter') ||
+                    String(props.optionType || '').toLowerCase().includes('portal') ||
+                    String(props.optionType || '').toLowerCase().includes('teleporter') ||
+                    String(props.image || '').toLowerCase().includes('portal') ||
+                    String(props.image || '').toLowerCase().includes('teleporter') ||
+                    String(currentTileObj?.contains?.type || '').toLowerCase().includes('portal') ||
+                    String(currentTileObj?.contains?.type || '').toLowerCase().includes('teleporter') ||
+                    String(currentTileObj?.contains?.subtype || '').toLowerCase().includes('portal') ||
+                    String(currentTileObj?.contains?.subtype || '').toLowerCase().includes('teleporter') ||
+                    String(currentTileObj?.type || '').toLowerCase().includes('portal') ||
+                    String(currentTileObj?.type || '').toLowerCase().includes('teleporter') ||
+                    String(currentTileObj?.image || '').toLowerCase().includes('portal') ||
+                    String(currentTileObj?.image || '').toLowerCase().includes('teleporter') ||
+                    !!props['data-portal-id'] || !!props.portalId || !!props.targetPortalId || !!containsObj?.portalId || !!containsObj?.targetPortalId ||
+                    !!props.portal || !!containsObj?.portal || !!props.isPortal || !!containsObj?.isPortal ||
+                    !!currentTileObj?.portalId || !!currentTileObj?.targetPortalId || !!currentTileObj?.portal || !!currentTileObj?.contains?.portalId || !!currentTileObj?.contains?.targetPortalId || !!currentTileObj?.contains?.portal;
+                if (isPortalStructure) return null;
+
+                const isGenerator = sKey.includes('ore_mine') || sKey.includes('slate_mine') || sKey.includes('sawmill') || sKey.includes('lumber_mill') || sKey.includes('larder') || sKey.includes('dust_collector') || sKey.includes('fungal_nursery') || sKey.includes('cultivation_vat') || sKey.includes('generator') || sKey.includes('mine') || sKey.includes('farm') || sKey.includes('windmill') || sKey.includes('house') || sKey.includes('manor') || sKey.includes('estate') || !!props.generatorData || !!containsObj?.generatorData;
+                let gData = props.generatorData || containsObj?.generatorData || currentTileObj?.generatorData || null;
 
                 let isMemberOwnedByPlayer = false;
                 let isMemberOwnedByEnemy = false;
@@ -3005,23 +3089,27 @@ function Tile(props) {
                 const workerScale = isWorkerPygmyUnit ? 0.75 : 1.0;
                 const autoUnitScale = isAutomatonUnit ? 1.85 : workerScale;
 
+                const isSpawnPointActive = isSpawnPoint && isOccupied && !isPaletteTile;
                 const baseTransform = isPaletteTile ? 'none' : (isUnderConstruction 
                     ? `scale(${1.5 * obsScale * autoUnitScale}) rotate(${rotationDeg}deg)` 
-                    : (isEnlargedStructureActive 
-                        ? `scale(${2.0 * obsScale * autoUnitScale}) rotate(${rotationDeg}deg)` 
-                        : (isLocusActiveOrAdjacent
-                            ? `scale(${locusScale * autoUnitScale})`
-                            : (isEncompassedByFriendlyDomain 
-                                ? `scale(${1.5 * autoUnitScale}) ${rotationDeg ? `rotate(${rotationDeg}deg)` : ''}`.trim() 
-                                : (isAutomatonUnit
-                                    ? `scale(${autoUnitScale})`
-                                    : (rotationDeg ? `rotate(${rotationDeg}deg)` : 'none'))))));
+                    : (isSpawnPointActive
+                        ? 'none'
+                        : (isEnlargedStructureActive 
+                            ? `scale(${2.0 * obsScale * autoUnitScale}) rotate(${rotationDeg}deg)` 
+                            : (isLocusActiveOrAdjacent
+                                ? `scale(${locusScale * autoUnitScale})`
+                                : (isEncompassedByFriendlyDomain 
+                                    ? `scale(${1.5 * autoUnitScale}) ${rotationDeg ? `rotate(${rotationDeg}deg)` : ''}`.trim() 
+                                    : (isAutomatonUnit
+                                        ? `scale(${autoUnitScale})`
+                                        : (rotationDeg ? `rotate(${rotationDeg}deg)` : 'none')))))));
                 const portraitTransform = flipTransform ? `${baseTransform} ${flipTransform}`.trim() : baseTransform;
                 const isUnitDying = !!(props.isDying || containsObj?.isDying || props.contains?.isDying || currentContains?.isDying);
 
                 const isRiftEmbers = sKey.includes('rift_embers');
+                const isUnifiedStructure = !isPaletteTile && (sKey.includes('sawmill') || sKey.includes('lumber_mill'));
 
-                if (isRiftEmbers && !isPaletteTile && vendorCellRole !== 'anchor') {
+                if ((isRiftEmbers || isUnifiedStructure) && !isPaletteTile && vendorCellRole !== 'anchor') {
                     return null;
                 }
 
@@ -3041,32 +3129,33 @@ function Tile(props) {
                         )}
                         <div
                             key={activeRecoil ? activeRecoil.key : 'recoil-rest'}
-                            className={`iso-upright-sprite ${isArchTile ? 'iso-archway-sprite' : ''} ${isPickupObject ? (isPlayerApproaching ? 'iso-pickup-sprite hovering' : 'iso-pickup-sprite grounded') : ''} unit-damaged-recoil-wrapper${activeRecoil ? ` damaged-jerk-${activeRecoil.direction}` : ''}`}
+                            className={`iso-upright-sprite ${isUnifiedStructure ? 'multi-tile-structure-sprite' : ''} ${isArchTile ? 'iso-archway-sprite' : ''} ${isPickupObject ? (isPlayerApproaching ? 'iso-pickup-sprite hovering' : 'iso-pickup-sprite grounded') : ''} unit-damaged-recoil-wrapper${activeRecoil ? ` damaged-jerk-${activeRecoil.direction}` : ''}`}
                             data-testid={isPickupObject ? (isPlayerApproaching ? 'pickup-sprite-hovering' : 'pickup-sprite-grounded') : undefined}
                             style={{
                                 position: 'absolute',
                                 top: 0,
                                 left: 0,
-                                right: 0,
-                                bottom: 0,
+                                right: (isUnifiedStructure && !isPaletteTile) ? '-100%' : 0,
+                                bottom: (isUnifiedStructure && !isPaletteTile) ? '-100%' : 0,
                                 overflow: 'visible',
                                 pointerEvents: 'none',
-                                zIndex: (isArchEnlarged || isEnlargedStructureActive) ? 300 : (isDimensionDebrisOrLitter ? 120 : ((isVendorCell || is2x2StructureSelf) ? 40 : (isLocusActiveOrAdjacent ? 35 : (isObsPlatform || isStructureTile || isUnderConstruction || isEncompassedByFriendlyDomain ? 30 : portraitZIndex))))
+                                zIndex: (isArchEnlarged || isEnlargedStructureActive) ? 300 : (isSpawnPoint ? 150 : (isDimensionDebrisOrLitter ? 120 : (isUnifiedStructure ? 45 : ((isVendorCell || is2x2StructureSelf) ? 40 : (isLocusActiveOrAdjacent ? 35 : (isObsPlatform || isStructureTile || isUnderConstruction || isEncompassedByFriendlyDomain ? 30 : portraitZIndex))))))
                             }}
                         >
-                            <div className={`portrait ${isUnitDying ? 'automaton-death-anim' : ''} ${isRiftEmbers ? 'spin-slow' : ''} ${(isSpawnPoint && isOccupied) ? 'spawn-point-spinning' : ''}`.trim()} style={{
+                            <div className={`portrait ${isUnitDying ? 'automaton-death-anim' : ''} ${isRiftEmbers ? 'spin-slow' : ''} ${isSpawnPointActive ? 'spawn-point-spinning' : ''}`.trim()} style={{
                                  position: 'absolute',
-                                 top: 0, left: 0,
-                                 right: (isRiftEmbers && !isPaletteTile) ? '-100%' : 0,
-                                 bottom: (isRiftEmbers && !isPaletteTile) ? '-100%' : 0,
+                                 top: (isUnifiedStructure && !isPaletteTile) ? '-25%' : (isSpawnPointActive ? '-150%' : 0),
+                                 left: (isUnifiedStructure && !isPaletteTile) ? '-5%' : (isSpawnPointActive ? '-150%' : 0),
+                                 right: (isUnifiedStructure && !isPaletteTile) ? '-5%' : ((isRiftEmbers && !isPaletteTile) ? '-100%' : (isSpawnPointActive ? '-150%' : 0)),
+                                 bottom: (isUnifiedStructure && !isPaletteTile) ? 0 : ((isRiftEmbers && !isPaletteTile) ? '-100%' : (isSpawnPointActive ? '-150%' : 0)),
                                  backgroundImage: toCssUrl(resolvedPortraitUrl),
-                                 backgroundSize: isRiftEmbers ? (isPaletteTile ? 'contain' : '100% 100%') : ((isVendorCell || is2x2StructureSelf) ? (is3x3Structure ? '300% 300%' : '200% 200%') : ((isItemCell || isPaletteTile) ? 'contain' : '100% 100%')),
-                                 backgroundPosition: (isArchTile || isStructureTile || isHut) ? 'center bottom' : (isRiftEmbers ? 'center' : ((isVendorCell || is2x2StructureSelf) ? vendorBackgroundPosition : ((isItemCell || isPaletteTile) ? 'center' : 'center bottom'))),
+                                 backgroundSize: isPaletteTile ? 'contain' : ((isUnifiedStructure && !isPaletteTile) ? 'contain' : (isSpawnPointActive ? '50% 50%' : (isRiftEmbers ? '100% 100%' : ((isVendorCell || is2x2StructureSelf) ? (is3x3Structure ? '300% 300%' : '200% 200%') : ((isItemCell || isPaletteTile) ? 'contain' : '100% 100%'))))),
+                                 backgroundPosition: isPaletteTile ? 'center' : ((isUnifiedStructure && !isPaletteTile) ? 'center bottom' : (isSpawnPointActive ? 'center center' : (isRiftEmbers ? 'center' : (((isVendorCell || is2x2StructureSelf) && !isPaletteTile) ? vendorBackgroundPosition : ((isArchTile || isStructureTile || isHut) ? 'center bottom' : ((isItemCell || isPaletteTile) ? 'center' : (isSpawnPoint ? 'center center' : 'center bottom'))))))),
                                  backgroundRepeat: 'no-repeat',
-                                 zIndex: (isArchEnlarged || isEnlargedStructureActive) ? 300 : (isDimensionDebrisOrLitter ? 120 : ((isVendorCell || is2x2StructureSelf) ? 40 : (isLocusActiveOrAdjacent ? 35 : (isObsPlatform || isStructureTile || isUnderConstruction || isEncompassedByFriendlyDomain ? 30 : portraitZIndex)))),
+                                 zIndex: (isArchEnlarged || isEnlargedStructureActive) ? 300 : (isDimensionDebrisOrLitter ? 120 : (isUnifiedStructure ? 45 : ((isVendorCell || is2x2StructureSelf) ? 40 : (isSpawnPointActive ? 150 : (isLocusActiveOrAdjacent ? 35 : (isObsPlatform || isStructureTile || isUnderConstruction || isEncompassedByFriendlyDomain ? 30 : portraitZIndex)))))),
                                  opacity: ((color === 'black' || isDarkColor) || props.isFadingOut) ? 0 : 1,
                                  transform: portraitTransform,
-                                 transformOrigin: isSpawnPoint ? 'center center' : (isRiftEmbers ? 'center center' : ((isBumpedBack && (isVendorCell || is2x2StructureSelf)) ? (() => {
+                                 transformOrigin: isPaletteTile ? 'center center' : ((isUnifiedStructure && !isPaletteTile) ? 'center bottom' : (isSpawnPoint ? 'center center' : (isRiftEmbers ? 'center center' : ((isBumpedBack && (isVendorCell || is2x2StructureSelf)) ? (() => {
                                      switch (vendorCellRole) {
                                          case 'anchor': return isPaletteTile ? 'center center' : '100% 100%';
                                          case 'top_right': return '0% 100%';
@@ -3079,7 +3168,7 @@ function Tile(props) {
                                          case 'bottom_center': return '50% 0%';
                                          default: return 'center center';
                                      }
-                                 })() : ((isArchTile || isEnlargedStructureActive || isUnderConstruction || isObsPlatform || isLocusActiveOrAdjacent || isStructureTile || isHut) ? 'bottom center' : 'bottom center'))),
+                                 })() : ((isArchTile || isEnlargedStructureActive || isUnderConstruction || isObsPlatform || isLocusActiveOrAdjacent || isStructureTile || isHut) ? 'bottom center' : 'bottom center'))))),
                                  transition: 'opacity 0.35s ease-in-out, transform 0.3s ease-in-out',
                                  pointerEvents: 'none'
                             }} />
@@ -3221,7 +3310,7 @@ function Tile(props) {
 
             {/* Archaic Tunnel Complex: 1x2 circular Stargate portal seen from side angle with 4 directional variations */}
             {isArchaicEndpoint && !isPaletteTile && (() => {
-                const vRole = vendorCellRole || getVendorCellRole();
+                const vRole = props.vendorCell || containsObj?.vendorCell || vendorCellRole || getVendorCellRole();
                 if (vRole && vRole !== 'anchor') return null;
 
                 const cId = props.id !== undefined && props.id !== null ? props.id : props.index;

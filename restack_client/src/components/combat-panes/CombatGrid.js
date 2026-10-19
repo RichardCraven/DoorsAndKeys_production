@@ -1647,7 +1647,9 @@ export default function CombatGrid(props) {
         ].filter(Boolean).join(' ');
 
         const isBatFlying = activeAnimations.some(a => a.type === 'bat_fly_anim' && a.sourceUnitId === fighter.id);
-        const isEthereal = !!(liveFighter?.etherealSpeedActive || details?.etherealSpeedActive || fighter.etherealSpeedActive);
+        const isEthereal = !!(liveFighter?.etherealSpeedActive || details?.etherealSpeedActive || fighter.etherealSpeedActive || (typeof getLiveCombatant === 'function' && getLiveCombatant(fighter.id)?.etherealSpeedActive));
+        const isMonk = (fighter.type === 'monk' || details?.type === 'monk' || liveFighter?.type === 'monk' || fighter.image === 'monk' || fighter.class === 'monk' || details?.class === 'monk');
+        const isEtherealSpeed = isMonk && !isFighterDead && isEthereal;
 
         // Wizard glowing eyes logic
         const wizardAnims = activeAnimations.filter(a => a.sourceUnitId === fighter.id);
@@ -1837,6 +1839,26 @@ export default function CombatGrid(props) {
                                 animation: 'ultimateAuraPulse 0.5s ease-in-out infinite alternate',
                                 pointerEvents: 'none',
                                 zIndex: 390
+                            }}
+                        />
+                    )}
+                    {isEtherealSpeed && (
+                        <div
+                            className="monk-ethereal-speed-glow"
+                            data-testid="monk-ethereal-speed-glow"
+                            style={{
+                                position: 'absolute',
+                                top: '-10px',
+                                left: '-10px',
+                                right: '-10px',
+                                bottom: '-10px',
+                                zIndex: 290,
+                                border: '3px solid rgba(255, 221, 87, 0.95)',
+                                boxShadow: '0 0 25px 8px #ffdd57, inset 0 0 12px 4px #ffdd57',
+                                background: 'rgba(255, 221, 87, 0.15)',
+                                borderRadius: '60% 40% 30% 70% / 60% 30% 70% 40%',
+                                animation: 'organicGlow 4s linear infinite',
+                                pointerEvents: 'none'
                             }}
                         />
                     )}
@@ -2281,19 +2303,6 @@ export default function CombatGrid(props) {
                         }
                         return null;
                     })()}
-                    {fighter.type === 'monk' && getLiveCombatant(fighter.id)?.etherealSpeedActive && (
-                        <div style={{
-                            position: 'absolute',
-                            top: '-10px', left: '-10px', right: '-10px', bottom: '-10px',
-                            zIndex: 290,
-                            border: '3px solid rgba(255, 221, 87, 0.95)',
-                            boxShadow: '0 0 25px 8px #ffdd57, inset 0 0 12px 4px #ffdd57',
-                            background: 'rgba(255, 221, 87, 0.15)',
-                            borderRadius: '60% 40% 30% 70% / 60% 30% 70% 40%',
-                            animation: 'organicGlow 4s linear infinite',
-                            pointerEvents: 'none'
-                        }} />
-                    )}
                     </div>
                     {!details?.dead && fighter.type !== 'darkness_sphere' && (
                         <div className="indicators-wrapper" style={{
@@ -2741,7 +2750,9 @@ export default function CombatGrid(props) {
             }
         }
 
-        const isEthereal = !!(liveMonster?.etherealSpeedActive || unit.etherealSpeedActive);
+        const isEthereal = !!(liveMonster?.etherealSpeedActive || unit.etherealSpeedActive || (typeof getLiveCombatant === 'function' && getLiveCombatant(unit.id)?.etherealSpeedActive));
+        const isMonsterMonk = (unit.type === 'monk' || liveMonster?.type === 'monk' || unit.class === 'monk' || unit.image === 'monk');
+        const isMonsterEtherealSpeed = isMonsterMonk && !isDead && isEthereal;
 
         return (
             <div
@@ -2831,6 +2842,26 @@ export default function CombatGrid(props) {
                             <div className="reticle-corner bottom-left" />
                             <div className="reticle-corner bottom-right" />
                         </div>
+                    )}
+                    {isMonsterEtherealSpeed && (
+                        <div
+                            className="monk-ethereal-speed-glow"
+                            data-testid="monk-ethereal-speed-glow-monster"
+                            style={{
+                                position: 'absolute',
+                                top: '-10px',
+                                left: '-10px',
+                                right: '-10px',
+                                bottom: '-10px',
+                                zIndex: 290,
+                                border: '3px solid rgba(255, 221, 87, 0.95)',
+                                boxShadow: '0 0 25px 8px #ffdd57, inset 0 0 12px 4px #ffdd57',
+                                background: 'rgba(255, 221, 87, 0.15)',
+                                borderRadius: '60% 40% 30% 70% / 60% 30% 70% 40%',
+                                animation: 'organicGlow 4s linear infinite',
+                                pointerEvents: 'none'
+                            }}
+                        />
                     )}
                     <div
                         key={isDamagedMonster ? isDamagedMonster.key : 'rest'}
