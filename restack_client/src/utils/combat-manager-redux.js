@@ -1834,6 +1834,9 @@ export function CombatManagerRedux() {
 
     this.updateUnitCoordinates = (unit, nx, ny) => {
         if (!unit) return;
+        if (unit.stationary || unit.isStationary || unit.type === 'turret' || unit.isWall) {
+            return;
+        }
         if (unit.type === 'dragon_egg' || unit.type === 'trials_icon' || unit.isTrialIcon || unit.type === 'darkness_sphere') {
             return;
         }
@@ -3031,7 +3034,7 @@ export function CombatManagerRedux() {
                             unit.damageIndicators = unit.damageIndicators || [];
                             unit.damageIndicators.push({
                                 id: combatClock.now() + Math.random() + 200,
-                                value: `-${decay} STAM`,
+                                value: `-${decay} stamina`,
                                 type: 'damage'
                             });
                             
@@ -3345,7 +3348,7 @@ export function CombatManagerRedux() {
                         unit.damageIndicators = unit.damageIndicators || [];
                         unit.damageIndicators.push({
                             id: combatClock.now() + Math.random() + 99,
-                            value: `+${regenAmt} STAM`,
+                            value: `+${regenAmt} stamina`,
                             type: 'heal'
                         });
                     }
@@ -4068,7 +4071,10 @@ export function CombatManagerRedux() {
         // ── Manual Input override ──────────────────────────────────────────────
         // PC units only (not monsters / minions). Fires before class-AI so movement
         // and targeting are fully controlled by the player's drag orders.
-        const hasManualDest   = unit.manualDestination && !unit.isMonster && !unit.isMinion;
+        if (unit.stationary || unit.isStationary || unit.type === 'turret' || unit.isWall) {
+            unit.manualDestination = null;
+        }
+        const hasManualDest   = unit.manualDestination && !unit.isMonster && !unit.isMinion && !unit.stationary && !unit.isStationary && unit.type !== 'turret' && !unit.isWall;
         const hasManualTarget = unit.manualTargetId    && !unit.isMonster && !unit.isMinion;
 
         if (hasManualDest || hasManualTarget) {
@@ -4256,7 +4262,7 @@ export function CombatManagerRedux() {
         }
 
         // ── Wounded Monster Food Seeking ──────────────────────────
-        if ((unit.isMonster || unit.isMinion) && unit.movesTakenThisRound === 0 && Array.isArray(this.meatTiles) && this.meatTiles.length > 0) {
+        if ((unit.isMonster || unit.isMinion) && !unit.stationary && !unit.isStationary && unit.type !== 'turret' && !unit.isWall && unit.movesTakenThisRound === 0 && Array.isArray(this.meatTiles) && this.meatTiles.length > 0) {
             const maxHp = unit.starting_hp || (unit.stats && unit.stats.hp) || 100;
             if (maxHp > 0) {
                 const hpRatio = unit.hp / maxHp;
@@ -4501,7 +4507,7 @@ export function CombatManagerRedux() {
             seenKeys.add(key);
 
             if (key === 'barbarian_leap_attack' && target && this.targetInRange(unit, target, 'close')) return;
-            if (key === 'monk_ethereal_speed' && unit.etherealSpeedActive) return;
+            if ((key === 'monk_ethereal_speed' || key === 'ethereal_speed') && unit.etherealSpeedActive) return;
             if (key === 'monk_third_eye' && unit.thirdEyeActive) return;
             if (key === 'monk_astral_focus' && unit.astralBeingActive) return;
             if (key === 'regenerate' && (selfHpPct >= 0.50 || unit.regenerating)) return;
@@ -4650,8 +4656,8 @@ export function CombatManagerRedux() {
         });
 
         // Priority 0: Ethereal Speed (speed buff and yellow glow)
-        if (this._abilityReady(unit, 'monk_ethereal_speed') && !unit.etherealSpeedActive && hasEnemyNearby) {
-            const pick = this.resolveSpecial(unit, 'monk_ethereal_speed');
+        if ((this._abilityReady(unit, 'monk_ethereal_speed') || this._abilityReady(unit, 'ethereal_speed')) && !unit.etherealSpeedActive && hasEnemyNearby) {
+            const pick = this.resolveSpecial(unit, 'monk_ethereal_speed') || this.resolveSpecial(unit, 'ethereal_speed');
             if (pick) {
                 const dur = getDurationRounds(pick.duration || 'short');
                 const durMs = getDurationMsFromRounds(dur);
@@ -4662,6 +4668,7 @@ export function CombatManagerRedux() {
                 unit.etherealSpeedEndTimeMs = combatClock.now() + durMs;
                 this.appendCombatLog(`${this.getCombatantLogName(unit)} activates Ethereal Speed — glowing with power!`);
                 this._setCooldown(unit, 'monk_ethereal_speed', pick.cooldown || 15);
+                this._setCooldown(unit, 'ethereal_speed', pick.cooldown || 15);
                 if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
             }
         }
@@ -6336,14 +6343,15 @@ export function CombatManagerRedux() {
         return true; // Constructs in combat are governed by skill cooldowns
     };
 
-    this._executeEngineerSummon = (unit, ability, abilityKey) => {
+    this._executeEngineerSummon = (unit, ability, abilityKey, opts = {}) => {
+        const isFreeBuild = !!(opts && opts.free);
         let cost = 2;
         if (this.hasPassive(unit, 'master_builder')) {
             const lvl = this.getSkillLevel(unit, 'master_builder');
             if (lvl >= 2) cost = 1;
         }
 
-        if (!unit.isMonster && !this.isSimulator) {
+        if (!isFreeBuild && !unit.isMonster && !this.isSimulator) {
             const inventory = (typeof this.getCurrentInventory === 'function') ? this.getCurrentInventory() : [];
             if (inventory && inventory.length > 0) {
                 let woodItems = inventory.filter(i => i && (i._im_key === 'wood' || i.id === 'wood' || i.name === 'Wood'));
@@ -6400,6 +6408,9 @@ export function CombatManagerRedux() {
             id: constructId,
             type: isTurret ? 'turret' : 'walker',
             name: isTurret ? 'Mechanical Turret' : 'Mechanical Walker',
+            stationary: isTurret ? true : false,
+            isStationary: isTurret ? true : false,
+            immobile: isTurret ? true : false,
             isMinion: true,
             isConstruct: true,
             hasStamina: false,
@@ -6429,9 +6440,13 @@ export function CombatManagerRedux() {
 
         this.combatants[constructId] = newConstruct;
         this._setCombatantOccupiedCoords(newConstruct);
-        this._setCooldown(unit, abilityKey, ability.cooldown || 4);
-        unit.actionsTakenThisRound += 1;
-        this.appendCombatLog(`${this.getCombatantLogName(unit)} built a ${newConstruct.name}!`);
+        if (!isFreeBuild) {
+            this._setCooldown(unit, abilityKey, (ability && ability.cooldown) || 4);
+            unit.actionsTakenThisRound += 1;
+        }
+        this.appendCombatLog(isFreeBuild
+            ? `🏗️ ${this.getCombatantLogName(unit)}'s Forward Emplacement unfolds into a ${newConstruct.name}!`
+            : `${this.getCombatantLogName(unit)} built a ${newConstruct.name}!`);
 
         if (this.animManagerRedux && typeof this.animManagerRedux.triggerSummon === 'function') {
             this.animManagerRedux.triggerSummon(freeTile, newConstruct.type, isTurret ? images.terrain_1 : (images.walker_glowing_square || images.terrain_2));
@@ -10153,7 +10168,7 @@ export function CombatManagerRedux() {
             // Glynda's Wand: 50% chance to teleport target enemy to back line in round 3 or later
             const isEnemyTarget = target && (!!unit.isMonster !== !!target.isMonster);
             const currentRound = (typeof this.round === 'number' ? this.round : (typeof this.roundNumber === 'number' ? this.roundNumber : (this.eraIndex ? this.eraIndex + 1 : 1)));
-            if (isEnemyTarget && currentRound >= 3) {
+            if (isEnemyTarget && currentRound >= 3 && !target.stationary && !target.isStationary && target.type !== 'turret' && !target.isWall) {
                 const glyndasWand = this._getEquippedWand(unit, 'glyndas_wand');
                 if (glyndasWand && (typeof glyndasWand.currentCharges !== 'number' || glyndasWand.currentCharges > 0)) {
                     if (combatRng.random() < 0.50 && this._useWandCharge(unit, glyndasWand)) {
@@ -11521,7 +11536,7 @@ export function CombatManagerRedux() {
             this.appendCombatLog(`💥 ${this.getCombatantLogName(unit)} unleashes Dark Apotheosis! Strikes ${hitCount} enemies with necrotic energy!`);
 
             if (this.animManagerRedux && typeof this.animManagerRedux.triggerAbility === 'function') {
-                this.animManagerRedux.triggerAbility(unit.coordinates, target ? target.coordinates : unit.coordinates, 'dark_apotheosis', false, null, unit.id);
+                this.animManagerRedux.triggerAbility(unit.coordinates, target ? target.coordinates : unit.coordinates, 'dark_apotheosis', !!(target && target.isLarge), (target && target.occupiedCoords) || null, unit.id);
             }
             if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
             return;
@@ -12624,7 +12639,7 @@ export function CombatManagerRedux() {
             unit.inspiredActive = true;
             this.appendCombatLog(`${this.getCombatantLogName(unit)} Inspires the party! ${inspiredCount} allies are filled with resolve.`);
         }
-        if (abilityId === 'monk_ethereal_speed') {
+        if (abilityId === 'monk_ethereal_speed' || abilityId === 'ethereal_speed') {
             unit.etherealSpeedActive = true;
             unit.etherealSpeedRoundsLeft = selfBuffDuration;
             unit.etherealSpeedTotalRounds = selfBuffDuration;
@@ -12962,7 +12977,7 @@ export function CombatManagerRedux() {
                     }
                 }
 
-                if (selectedCorner) {
+                if (selectedCorner && !target.stationary && !target.isStationary && target.type !== 'turret' && !target.isWall) {
                     const targetOrigCoord = { ...target.coordinates };
                     if (this.animManagerRedux && typeof this.animManagerRedux.triggerAbility === 'function') {
                         const rayDuration = 500; // 500ms per link
@@ -14217,6 +14232,7 @@ export function CombatManagerRedux() {
     };
 
     this.moveCloser = (unit, target) => {
+        if (!unit || unit.stationary || unit.isStationary || unit.type === 'turret' || unit.isWall) return;
         if (this.isUnitInWeb(unit)) {
             this.appendCombatLog(`${this.getCombatantLogName(unit)} is trapped in spiderweb and cannot move!`);
             return;
@@ -14269,6 +14285,7 @@ export function CombatManagerRedux() {
     };
 
     this.moveCloserToCoord = (unit, targetX, targetY) => {
+        if (!unit || unit.stationary || unit.isStationary || unit.type === 'turret' || unit.isWall) return;
         if (this.isUnitInWeb(unit)) {
             this.appendCombatLog(`${this.getCombatantLogName(unit)} is trapped in spiderweb and cannot move!`);
             return;
@@ -14316,6 +14333,7 @@ export function CombatManagerRedux() {
 
     // Reposition: ranged units try to move away from close enemies
     this.repositionUnit = (unit, enemyTarget, mode = 'reposition') => {
+        if (!unit || unit.stationary || unit.isStationary || unit.type === 'turret' || unit.isWall) return;
         if (unit.ensnared) {
             this.appendCombatLog(`${this.getCombatantLogName(unit)} is ensnared and cannot move!`);
             return;
@@ -14584,8 +14602,30 @@ export function CombatManagerRedux() {
         if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
     };
 
+    // One-shot: consume an armed Forward Emplacement (set by DungeonPage) and
+    // give the player's Engineer a pre-built turret at the start of combat.
+    this._deployForwardEmplacementIfArmed = () => {
+        try {
+            const meta = getMeta() || {};
+            if (!meta.forwardEmplacementArmed) return false;
+            delete meta.forwardEmplacementArmed;
+            storeMeta(meta);
+            if (!this.combatants) return false;
+            const engineerUnit = Object.values(this.combatants).find(c =>
+                c && !c.dead && !c.isMonster && !c.isOpponent && !c.isMinion &&
+                String(c.type || c.image || '').toLowerCase() === 'engineer');
+            if (!engineerUnit || !engineerUnit.coordinates) return false;
+            this._executeEngineerSummon(engineerUnit, { cooldown: 0 }, 'build_turret', { free: true });
+            return true;
+        } catch (e) {
+            console.warn('Forward Emplacement deploy failed', e);
+            return false;
+        }
+    };
+
     this.startRoundTimer = () => {
         if (this.roundTimerInterval) combatClock.clearInterval(this.roundTimerInterval);
+        this._deployForwardEmplacementIfArmed();
 
         let lastTickTime = combatClock.now();
         this.roundTimeElapsedMs = 0;
@@ -15133,7 +15173,7 @@ export function CombatManagerRedux() {
         const target = fighter.targetId ? this.combatants[fighter.targetId] : null;
 
         // Some abilities (self utility) don't need a hostile target
-        const isSelfTarget = resolved.range === 'self' || resolved.id === 'notch' || resolved.id === 'monk_meditate' || resolved.id === 'monk_ethereal_speed' || (resolved.id && resolved.id.startsWith('summon_'));
+        const isSelfTarget = resolved.range === 'self' || resolved.id === 'notch' || resolved.id === 'monk_meditate' || resolved.id === 'monk_ethereal_speed' || resolved.id === 'ethereal_speed' || (resolved.id && resolved.id.startsWith('summon_')) || resolved.id === 'dark_apotheosis';
 
         const targetUnit = isSelfTarget ? fighter : target;
         if (!targetUnit) return;
@@ -15162,7 +15202,7 @@ export function CombatManagerRedux() {
     };
     this.setFighterDestination = (fighterId, coords) => {
         const fighter = this.combatants[fighterId];
-        if (!fighter) return;
+        if (!fighter || fighter.stationary || fighter.isStationary || fighter.type === 'turret' || fighter.isWall) return;
         if (!coords || typeof coords.x !== 'number' || typeof coords.y !== 'number') return;
         // Clamp to valid board bounds
         const clampedX = Math.max(0, Math.min((this._numBoardColumns || 8) - 1, coords.x));
@@ -15187,8 +15227,8 @@ export function CombatManagerRedux() {
     };
 
     this.moveFighterOneSpace = (direction) => {
-        if (!this.selectedFighter || !this.combatants[this.selectedFighter.id] || this.combatants[this.selectedFighter.id].dead) {
-            const firstLive = Object.values(this.combatants).find(c => c && !c.isMonster && !c.isMinion && !c.dead && (typeof c.hp !== 'number' || c.hp > 0));
+        if (!this.selectedFighter || !this.combatants[this.selectedFighter.id] || this.combatants[this.selectedFighter.id].dead || this.combatants[this.selectedFighter.id].stationary || this.combatants[this.selectedFighter.id].isStationary || this.combatants[this.selectedFighter.id].type === 'turret' || this.combatants[this.selectedFighter.id].isWall) {
+            const firstLive = Object.values(this.combatants).find(c => c && !c.isMonster && !c.isMinion && !c.stationary && !c.isStationary && c.type !== 'turret' && !c.isWall && !c.dead && (typeof c.hp !== 'number' || c.hp > 0));
             if (firstLive) {
                 this.selectedFighter = firstLive;
             } else {
@@ -15196,7 +15236,7 @@ export function CombatManagerRedux() {
             }
         }
         const fighter = this.combatants[this.selectedFighter.id];
-        if (!fighter || fighter.dead) return;
+        if (!fighter || fighter.dead || fighter.stationary || fighter.isStationary || fighter.type === 'turret' || fighter.isWall) return;
 
         let currentX = (fighter.manualDestination && typeof fighter.manualDestination.x === 'number')
             ? fighter.manualDestination.x

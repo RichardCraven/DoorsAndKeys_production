@@ -11,7 +11,13 @@ describe('Expedition Skills Codex Matrix Coverage', () => {
         'spike_trap',
         'soldier_shield',
         'breacher',
-        'wandering_eye'
+        'wandering_eye',
+        'far_sight',
+        'shadow_effigy',
+        'void_fetch',
+        'engineer_salvage',
+        'engineer_grapple_winch',
+        'engineer_forward_emplacement'
     ];
 
     expeditionSkills.forEach(skillKey => {

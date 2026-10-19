@@ -152,8 +152,7 @@ describe('Destroyed Enemy Domain Generator Territory Loss', () => {
             expect(t.contains.territoryMonolithId).toBeUndefined();
         });
 
-        // Verify the monolith itself had growthCycles and activated reset
-        expect(anchorTile.contains.growthCycles).toBe(0);
+        // Verify the monolith itself had activated reset
         expect(anchorTile.contains.activated).toBe(false);
     });
 
@@ -168,7 +167,6 @@ describe('Destroyed Enemy Domain Generator Territory Loss', () => {
             subtype: 'dark_domain_monolith',
             id: 'monolith_5_3',
             affiliation: 'hostile',
-            growthCycles: 2,
             hp: 0,
             destroyedAt: Date.now()
         };
@@ -192,7 +190,7 @@ describe('Destroyed Enemy Domain Generator Territory Loss', () => {
         expect(t1.territoryMonolithId).toBeUndefined();
         expect(t2.territory).toBeUndefined();
         expect(t2.territoryMonolithId).toBeUndefined();
-        expect(anchorTile.contains.growthCycles).toBe(0);
+        expect(anchorTile.contains.activated).toBe(false);
     });
 
     test('Walker cleave destroying a dark domain node clears its territory', () => {

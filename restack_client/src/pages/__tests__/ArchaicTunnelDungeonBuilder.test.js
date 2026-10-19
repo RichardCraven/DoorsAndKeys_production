@@ -466,4 +466,114 @@ describe('Archaic Tunnel & Archaic Tunnel Endpoint Dungeon Builder Suite', () =>
 
         jest.useRealTimers();
     });
+
+    test('Neighboring tiles adjacent to Archaic Tunnel Endpoint do not render sliced archaic tunnel portraits or become vendor cells', () => {
+        // Setup board with 1x2 ATE at (row 1, col 3) => id 18 (anchor) and (row 2, col 3) => id 33 (bottom)
+        const boardTiles = Array.from({ length: 225 }, (_, i) => ({
+            id: i,
+            contains: { type: 'empty_space' }
+        }));
+
+        boardTiles[18] = {
+            id: 18,
+            vendorGroupId: 'tunnel_ate',
+            vendorCell: 'anchor',
+            contains: {
+                type: 'archaic_tunnel_endpoint',
+                subtype: 'archaic_tunnel',
+                vendorGroupId: 'tunnel_ate',
+                vendorCell: 'anchor',
+                variation: 'facing_left'
+            },
+            image: 'archaic_tunnel'
+        };
+
+        boardTiles[33] = {
+            id: 33,
+            vendorGroupId: 'tunnel_ate',
+            vendorCell: 'bottom',
+            contains: {
+                type: 'archaic_tunnel_endpoint',
+                subtype: 'archaic_tunnel',
+                vendorGroupId: 'tunnel_ate',
+                vendorCell: 'bottom',
+                variation: 'facing_left'
+            },
+            image: 'archaic_tunnel'
+        };
+
+        // Render neighbor tile to the right of bottom: id 34 (row 2, col 4)
+        const { container: container34 } = render(
+            <Tile
+                id={34}
+                index={34}
+                tileSize={60}
+                contains={{ type: 'empty_space' }}
+                boardTiles={boardTiles}
+            />
+        );
+
+        // Tile 34 should NOT have any portrait containing archaic tunnel
+        const portrait34 = container34.querySelector('.portrait');
+        expect(portrait34).toBeNull();
+
+        // Render neighbor tile to the right of anchor: id 19 (row 1, col 4)
+        const { container: container19 } = render(
+            <Tile
+                id={19}
+                index={19}
+                tileSize={60}
+                contains={{ type: 'empty_space' }}
+                boardTiles={boardTiles}
+            />
+        );
+
+        const portrait19 = container19.querySelector('.portrait');
+        expect(portrait19).toBeNull();
+    });
+
+    test('Archaic tunnel endpoints, conduit tiles, and spawn points suppress organic edge clipPath', () => {
+        const boardTiles = Array.from({ length: 225 }, (_, i) => ({
+            id: i,
+            contains: { type: 'empty_space' }
+        }));
+
+        // Render spawn point tile with showOrganicEdges: true
+        const { container: spawnContainer } = render(
+            <Tile
+                id={31}
+                index={31}
+                tileSize={60}
+                isSpawnPoint={true}
+                contains={{ type: 'spawn_point' }}
+                showOrganicEdges={true}
+                boardTiles={boardTiles}
+            />
+        );
+        const spawnTile = spawnContainer.querySelector('.tile');
+        expect(spawnTile.style.clipPath).toBe('');
+        expect(spawnTile.classList.contains('spawn-point-tile')).toBe(true);
+        expect(spawnTile.style.zIndex).toBe('120');
+
+        // Render archaic tunnel endpoint anchor tile with showOrganicEdges: true
+        const { container: archaicContainer } = render(
+            <Tile
+                id={18}
+                index={18}
+                tileSize={60}
+                contains={{
+                    type: 'archaic_tunnel_endpoint',
+                    subtype: 'archaic_tunnel',
+                    vendorGroupId: 'tunnel_ate',
+                    vendorCell: 'anchor'
+                }}
+                showOrganicEdges={true}
+                boardTiles={boardTiles}
+            />
+        );
+        const archaicTile = archaicContainer.querySelector('.tile');
+        expect(archaicTile.style.clipPath).toBe('');
+        expect(archaicTile.classList.contains('archaic-endpoint-tile')).toBe(true);
+    });
 });
+

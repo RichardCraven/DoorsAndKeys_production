@@ -22,7 +22,9 @@ export default class ProjectileCanvas extends React.Component {
     shouldComponentUpdate(nextProps) {
         return this.props.boardSize !== nextProps.boardSize ||
                this.props.tileSize !== nextProps.tileSize ||
-               this.props.playerTileIdx !== nextProps.playerTileIdx;
+               this.props.playerTileIdx !== nextProps.playerTileIdx ||
+               this.props.isIsoView !== nextProps.isIsoView ||
+               this.props.tiles !== nextProps.tiles;
     }
 
     startLoop = () => {
@@ -75,7 +77,7 @@ export default class ProjectileCanvas extends React.Component {
     };
 
     fireProjectile = (startTileIdx, endTileIdx, onHit, type = 'fireball', meta = {}) => {
-        const { tileSize } = this.props;
+        const { tileSize, isIsoView } = this.props;
         if (!tileSize) return;
 
         // Calculate x, y centers of start and end tiles
@@ -86,10 +88,27 @@ export default class ProjectileCanvas extends React.Component {
         const endRow = Math.floor(endTileIdx / cols);
         const endCol = endTileIdx % cols;
 
-        const startX = startCol * tileSize + tileSize / 2;
-        const startY = startRow * tileSize + tileSize / 2;
+        let startX = startCol * tileSize + tileSize / 2;
+        let startY = startRow * tileSize + tileSize / 2;
         const endX = endCol * tileSize + tileSize / 2;
         const endY = endRow * tileSize + tileSize / 2;
+
+        const isOutpost = !!(meta && (meta.isOutpost || meta.fromOutpost)) || (() => {
+            const tile = this.props.tiles && this.props.tiles[startTileIdx];
+            if (!tile) return false;
+            const cObj = typeof tile.contains === 'object' ? tile.contains : null;
+            const sKey = String(cObj?.subtype || cObj?.key || cObj?.building || tile.building || cObj?.type || (typeof tile.contains === 'string' ? tile.contains : '')).toLowerCase();
+            return sKey.includes('outpost') || sKey.includes('watchtower') || sKey.includes('tower');
+        })();
+
+        if (isIsoView && isOutpost) {
+            // In 2.5D isometric view, outpost towers stand upright with their shooting cabin
+            // elevated above the ground and shifted slightly left in the isometric illustration.
+            // Adjust the projectile origin so it emerges directly from the elevated watchtower cabin
+            // rather than from the ground plane at the lower-right corner of the tower.
+            startX = startCol * tileSize + tileSize * 0.36;
+            startY = Math.max(4, startRow * tileSize - tileSize * 0.50);
+        }
 
         this.fireProjectileCoords(startX, startY, endX, endY, onHit, type, meta);
     };

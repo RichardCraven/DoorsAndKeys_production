@@ -258,4 +258,103 @@ describe('Connecting Path & Board Edge Transitions', () => {
         expect(transitionDirection).toBe('right');
         expect(bm.playerTile.boardIndex).toBe(1);
     });
+
+    it('enter connecting path tile should transport to the next board', () => {
+        // Player starts on interior tile (row 7, col 13: [22, 28])
+        const fromTile = {
+            id: 118,
+            contains: { type: 'empty_space' }
+        };
+        // Right edge connecting path tile (row 7, col 14: [22, 29])
+        const edgeConnectingTile = {
+            id: 119,
+            contains: { type: 'connecting_path' }
+        };
+
+        bm.tiles = new Array(225).fill(null).map((_, i) => ({ id: i, contains: { type: 'empty_space' } }));
+        bm.tiles[118] = fromTile;
+        bm.tiles[119] = edgeConnectingTile;
+
+        bm.playerTile = {
+            location: [22, 28],
+            boardIndex: 0
+        };
+
+        // Target miniboard 1 landing tile (row 7, col 0: idx 105) is passable
+        const targetBoardTiles = new Array(225).fill(null).map((_, i) => ({
+            id: i,
+            contains: { type: 'empty_space' }
+        }));
+        bm.dungeon.levels[0].front.miniboards[1].tiles = targetBoardTiles;
+
+        let transitionDirection = null;
+        bm.establishBoardTransitionCallback((dir) => {
+            transitionDirection = dir;
+        });
+
+        // Moving onto the edge connecting path tile immediately transports to the next board
+        bm.move([22, 29], 'right');
+
+        expect(transitionDirection).toBe('right');
+        expect(bm.playerTile.boardIndex).toBe(1);
+    });
+
+    it('enter connecting path tile on left edge transports to left miniboard', () => {
+        bm.currentBoard = bm.dungeon.levels[0].front.miniboards[1];
+        bm.playerTile = {
+            location: [22, 16], // row 7, col 1
+            boardIndex: 1
+        };
+
+        const edgeConnectingTile = {
+            id: 105, // row 7, col 0 (y = 15 + 0 = 15)
+            contains: { type: 'connecting_path' }
+        };
+
+        bm.tiles = new Array(225).fill(null).map((_, i) => ({ id: i, contains: { type: 'empty_space' } }));
+        bm.tiles[105] = edgeConnectingTile;
+
+        // Target miniboard 0 landing tile (row 7, col 14: idx 119) is passable
+        const targetBoardTiles = new Array(225).fill(null).map((_, i) => ({
+            id: i,
+            contains: { type: 'empty_space' }
+        }));
+        bm.dungeon.levels[0].front.miniboards[0].tiles = targetBoardTiles;
+
+        let transitionDirection = null;
+        bm.establishBoardTransitionCallback((dir) => {
+            transitionDirection = dir;
+        });
+
+        bm.move([22, 15], 'left');
+
+        expect(transitionDirection).toBe('left');
+        expect(bm.playerTile.boardIndex).toBe(0);
+    });
+
+    it('does NOT transport when entering an interior connecting path tile that is not at the board edge', () => {
+        const interiorConnectingTile = {
+            id: 112, // row 7, col 7
+            contains: { type: 'connecting_path' }
+        };
+
+        bm.tiles = new Array(225).fill(null).map((_, i) => ({ id: i, contains: { type: 'empty_space' } }));
+        bm.tiles[112] = interiorConnectingTile;
+
+        bm.playerTile = {
+            location: [22, 21], // row 7, col 6
+            boardIndex: 0
+        };
+
+        let transitionDirection = null;
+        bm.establishBoardTransitionCallback((dir) => {
+            transitionDirection = dir;
+        });
+
+        bm.move([22, 22], 'right');
+
+        expect(transitionDirection).toBeNull();
+        expect(bm.playerTile.boardIndex).toBe(0);
+        expect(bm.playerTile.location).toEqual([22, 22]);
+    });
 });

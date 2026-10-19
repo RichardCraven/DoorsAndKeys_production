@@ -9795,7 +9795,7 @@ class MapMakerPage extends React.Component {
                     onClick={this.deleteInscription}
                     style={{
                       padding: '8px 18px',
-                      borderRadius: '20px',
+                      borderRadius: '8px',
                       border: '1px solid rgba(220, 53, 69, 0.6)',
                       background: 'rgba(220, 53, 69, 0.15)',
                       color: '#ff6b6b',
@@ -9817,7 +9817,7 @@ class MapMakerPage extends React.Component {
                   onClick={this.cancelInscription}
                   style={{
                     padding: '8px 20px',
-                    borderRadius: '20px',
+                    borderRadius: '8px',
                     border: '1px solid rgba(255, 255, 255, 0.2)',
                     background: 'rgba(255, 255, 255, 0.06)',
                     color: '#ccc',
@@ -9837,7 +9837,7 @@ class MapMakerPage extends React.Component {
                   onClick={() => this.setState({ inscriptionTextInput: getRandomInscription() })}
                   style={{
                     padding: '8px 20px',
-                    borderRadius: '20px',
+                    borderRadius: '8px',
                     border: '1px solid rgba(229, 181, 79, 0.4)',
                     background: 'rgba(229, 181, 79, 0.12)',
                     color: '#e5b54f',
@@ -9857,7 +9857,7 @@ class MapMakerPage extends React.Component {
                   onClick={this.confirmInscription}
                   style={{
                     padding: '8px 20px',
-                    borderRadius: '20px',
+                    borderRadius: '8px',
                     border: 'none',
                     background: 'linear-gradient(135deg, rgba(201, 132, 10, 0.35) 0%, rgba(249, 177, 21, 0.5) 100%)',
                     outline: '1px solid rgba(249, 177, 21, 0.6)',

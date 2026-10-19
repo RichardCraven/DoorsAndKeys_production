@@ -1140,6 +1140,11 @@ import sparkling_aura_glitterburn from '../assets/icons/global skills/Glitterbur
 import blinding_beacon_glitterburn from '../assets/icons/global skills/Glitterburn/blinding beacon.png';
 import prismatic_flare_glitterburn from '../assets/icons/global skills/Glitterburn/prismatic flare.png';
 
+// engineer expedition skills
+import engineer_salvage from '../assets/icons/global skills/Engineer/engineer_salvage.jpg';
+import engineer_grapple_winch from '../assets/icons/global skills/Engineer/engineer_grapple_winch.jpg';
+import engineer_forward_emplacement from '../assets/icons/global skills/Engineer/engineer_forward_emplacement.jpg';
+
 
 //terrain
 import terrain_1 from '../assets/icons/terrain/stone-1.png'
@@ -2840,6 +2845,14 @@ export {
     dark_pact_summoner,
     wandering_eye_summoner,
     wandering_eye_summoner as wandering_eye,
+    engineer_salvage,
+    engineer_salvage as wrench,
+    engineer_salvage as salvage,
+    engineer_grapple_winch,
+    engineer_grapple_winch as grapple_winch,
+    engineer_grapple_winch as rope,
+    engineer_forward_emplacement,
+    engineer_forward_emplacement as forward_emplacement,
     codex,
     shrine,
 

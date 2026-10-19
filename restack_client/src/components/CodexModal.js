@@ -553,6 +553,58 @@ export const SPECIAL_ACTIONS = [
         desc: 'Releases a trained crow to fly above the dungeon plane and map out unexplored territory.',
         tags: ['ranger', 'crow', 'scout'],
         details: 'Returns after 2 minutes revealing fog of war on adjacent miniboards.'
+    },
+
+    // ── Summoner Actions ──
+    {
+        id: 'spirit_vessel',
+        name: 'Spirit Vessels',
+        category: 'summoner',
+        icon: images.whiteskull,
+        desc: 'Inscribes ethereal matrices into osteomantic vessels (Bone Fetishes, Clay Effigies, and Obsidian Phylacteries). Slotted spirit matrices auto-deploy at combat start without casting delay or energy cost.',
+        tags: ['summoner', 'spirit', 'vessel', 'fetish', 'phylactery', 'auto-deploy'],
+        details: 'Bone Fetishes hold 2 spirit slots; Clay Effigies hold 3 spirit slots; Obsidian Phylacteries hold 5 spirit slots. Slotted summons deploy automatically when battle begins.',
+        subEntries: [
+            { id: 'bone_fetish', name: 'Bone Fetish', desc: 'Lesser spirit vessel carved from osteomantic bone. Holds 2 spirit matrices.', details: '2 spirit slots · Auto-deploys at combat start.' },
+            { id: 'clay_effigy', name: 'Clay Effigy', desc: 'Greater spirit vessel sculpted with consecrated grave-clay. Holds 3 spirit matrices.', details: '3 spirit slots · Auto-deploys at combat start.' },
+            { id: 'obsidian_phylactery', name: 'Obsidian Phylactery', desc: 'Dread vessel carved from abyssal volcanic glass. Holds 5 spirit matrices.', details: '5 spirit slots · Auto-deploys at combat start.' },
+        ]
+    },
+    {
+        id: 'bone_fetish',
+        name: 'Bone Fetish',
+        category: 'summoner',
+        icon: images.whiteskull,
+        desc: 'A carved osteomantic bone charm storing up to 2 spirit matrices that auto-deploy upon entering combat.',
+        tags: ['summoner', 'spirit', 'vessel', 'bone'],
+        details: 'Holds 2 spirit slots · Automatically triggers and deploys minions at combat start.'
+    },
+    {
+        id: 'clay_effigy',
+        name: 'Clay Effigy',
+        category: 'summoner',
+        icon: images.demonskull_charm,
+        desc: 'A grave-clay occult effigy housing up to 3 spirit matrices for immediate combat engagement.',
+        tags: ['summoner', 'spirit', 'vessel', 'effigy'],
+        details: 'Holds 3 spirit slots · Unleashes all slotted summons simultaneously when battle starts.'
+    },
+    {
+        id: 'obsidian_phylactery',
+        name: 'Obsidian Phylactery',
+        category: 'summoner',
+        icon: images.hounskull,
+        desc: 'An abyssal phylactery housing up to 5 spirit matrices for overwhelming summon barrages.',
+        tags: ['summoner', 'spirit', 'vessel', 'phylactery'],
+        details: 'Holds 5 spirit slots · Releases a legion of slotted minions directly at combat start.'
+    },
+    {
+        id: 'homunculus_assembly',
+        name: 'Homunculus Assembly',
+        category: 'summoner',
+        icon: images.wide_skull || images.whiteskull,
+        desc: 'Long-term anatomical investment synthesizing an evolving companion across 8 anatomical graft slots (Skull, Spine, Ribcage, Abyssal Core, Wings, and Talons), granting permanent stat increases and passive augmentations.',
+        tags: ['summoner', 'homunculus', 'graft', 'permanent', 'stats', 'companion'],
+        details: 'Up to 8 anatomical slots (Skull, Spine, Ribcage, Core, Wings, Talons). Duration scales progressively per graft (30m, 3h, 2d, 5d, 8d, 12d, 15d, 20d).'
     }
 ];
 

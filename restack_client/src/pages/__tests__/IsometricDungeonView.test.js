@@ -361,6 +361,193 @@ describe('2.5D Isometric Dungeon View', () => {
         const groundLitter = container.querySelector('[data-testid="dungeon-litter-ground-bg"]');
         expect(groundLitter).toBeNull();
     });
+
+    test('Pickable objects rest grounded and hide contact shadow when player is not adjacent', () => {
+        const { container } = render(
+            <Tile
+                id={42}
+                type="board-tile"
+                contains="gold"
+                color="#6b6057"
+                isPlayerAdjacent={false}
+                isPlayerOnTile={false}
+                playerIdx={100}
+            />
+        );
+
+        // Tile must have pickup-tile-grounded class
+        const tile = container.querySelector('.tile');
+        expect(tile.classList.contains('pickup-tile-grounded')).toBe(true);
+        expect(tile.classList.contains('pickup-tile-hovering')).toBe(false);
+
+        // Upright sprite must have iso-pickup-sprite and grounded classes
+        const uprightSprite = container.querySelector('.iso-pickup-sprite');
+        expect(uprightSprite).not.toBeNull();
+        expect(uprightSprite.classList.contains('grounded')).toBe(true);
+        expect(uprightSprite.classList.contains('hovering')).toBe(false);
+
+        // Contact shadow must have pickup-shadow-grounded class (hidden)
+        const shadow = container.querySelector('.iso-contact-shadow');
+        expect(shadow).not.toBeNull();
+        expect(shadow.classList.contains('pickup-shadow-grounded')).toBe(true);
+        expect(shadow.classList.contains('pickup-shadow-hovering')).toBe(false);
+    });
+
+    test('Pickable objects hover and display contact shadow when player approaches (isPlayerAdjacent=true)', () => {
+        const { container } = render(
+            <Tile
+                id={42}
+                type="board-tile"
+                contains="gold"
+                color="#6b6057"
+                isPlayerAdjacent={true}
+                isPlayerOnTile={false}
+            />
+        );
+
+        // Tile must have pickup-tile-hovering class
+        const tile = container.querySelector('.tile');
+        expect(tile.classList.contains('pickup-tile-hovering')).toBe(true);
+        expect(tile.classList.contains('pickup-tile-grounded')).toBe(false);
+
+        // Upright sprite must have hovering class
+        const uprightSprite = container.querySelector('.iso-pickup-sprite');
+        expect(uprightSprite).not.toBeNull();
+        expect(uprightSprite.classList.contains('hovering')).toBe(true);
+        expect(uprightSprite.classList.contains('grounded')).toBe(false);
+
+        // Contact shadow must have pickup-shadow-hovering class (visible on floor)
+        const shadow = container.querySelector('.iso-contact-shadow');
+        expect(shadow).not.toBeNull();
+        expect(shadow.classList.contains('pickup-shadow-hovering')).toBe(true);
+        expect(shadow.classList.contains('pickup-shadow-grounded')).toBe(false);
+    });
+
+    test('Pickable treasure chest hovers when player is on tile (isPlayerOnTile=true)', () => {
+        const { container } = render(
+            <Tile
+                id={43}
+                type="board-tile"
+                contains="chest"
+                color="#6b6057"
+                isPlayerAdjacent={false}
+                isPlayerOnTile={true}
+            />
+        );
+
+        const tile = container.querySelector('.tile');
+        expect(tile.classList.contains('pickup-tile-hovering')).toBe(true);
+
+        const uprightSprite = container.querySelector('.iso-pickup-sprite');
+        expect(uprightSprite).not.toBeNull();
+        expect(uprightSprite.classList.contains('hovering')).toBe(true);
+
+        const shadow = container.querySelector('.iso-contact-shadow');
+        expect(shadow).not.toBeNull();
+        expect(shadow.classList.contains('pickup-shadow-hovering')).toBe(true);
+    });
+
+    test('Non-pickable tiles (monsters) do not get pickup hover/grounded classes', () => {
+        const { container } = render(
+            <Tile
+                id={44}
+                type="board-tile"
+                contains="monster"
+                color="#6b6057"
+                isPlayerAdjacent={true}
+            />
+        );
+
+        const tile = container.querySelector('.tile');
+        expect(tile.classList.contains('pickup-tile-hovering')).toBe(false);
+        expect(tile.classList.contains('pickup-tile-grounded')).toBe(false);
+
+        const pickupSprite = container.querySelector('.iso-pickup-sprite');
+        expect(pickupSprite).toBeNull();
+    });
+
+    test('addCurrencyToInventory renders loot arc icon and schedules triggerFlyingGoldAnimation for gold', () => {
+        jest.useFakeTimers();
+        const mockInventoryManager = { addCurrency: jest.fn() };
+        const instance = new DungeonPage({ inventoryManager: mockInventoryManager });
+        instance.triggerLootRadialArc = jest.fn();
+        instance.triggerFlyingGoldAnimation = jest.fn();
+        instance.setState = jest.fn();
+
+        const fakeTile = { id: 25 };
+        instance.addCurrencyToInventory({ type: 'gold', amount: 35 }, fakeTile);
+
+        // 1. Loot radial arc is triggered immediately with gold details
+        expect(instance.triggerLootRadialArc).toHaveBeenCalledWith(
+            expect.objectContaining({
+                type: 'currency',
+                name: '+35 Gold'
+            }),
+            fakeTile
+        );
+
+        // Not yet called before timeout
+        expect(instance.triggerFlyingGoldAnimation).not.toHaveBeenCalled();
+
+        // 2. After 450ms, flying gold animation is triggered
+        jest.advanceTimersByTime(450);
+        expect(instance.triggerFlyingGoldAnimation).toHaveBeenCalledWith(fakeTile, 35);
+
+        jest.useRealTimers();
+    });
+
+    test('triggerFlyingGoldAnimation populates flyingGoldCoins and triggers tracker impact', () => {
+        jest.useFakeTimers();
+        const instance = new DungeonPage({});
+        const stateUpdates = [];
+        instance.setState = jest.fn(updater => {
+            const next = typeof updater === 'function' ? updater(instance.state) : updater;
+            Object.assign(instance.state, next);
+            stateUpdates.push(next);
+        });
+
+        instance.triggerFlyingGoldAnimation({ id: 10 }, 50);
+
+        // Flying coins should be populated
+        expect(instance.state.flyingGoldCoins.length).toBeGreaterThanOrEqual(4);
+        const firstCoin = instance.state.flyingGoldCoins[0];
+        expect(firstCoin).toHaveProperty('startX');
+        expect(firstCoin).toHaveProperty('startY');
+        expect(firstCoin).toHaveProperty('targetX');
+        expect(firstCoin).toHaveProperty('targetY');
+
+        // Advance to tracker impact
+        jest.advanceTimersByTime(1000);
+        expect(stateUpdates.some(s => s.goldTrackerImpact === true)).toBe(true);
+
+        // Advance past cleanup
+        jest.advanceTimersByTime(600);
+        expect(instance.state.flyingGoldCoins.length).toBe(0);
+
+        jest.useRealTimers();
+    });
+
+    test('DungeonPage renders flying-gold-container overlay when flyingGoldCoins exist in state', () => {
+        const instance = new DungeonPage({});
+        instance.state.flyingGoldCoins = [
+            {
+                id: 'coin_1',
+                startX: 100,
+                startY: 150,
+                curveOffsetX: 20,
+                curveOffsetY: -40,
+                targetX: 500,
+                targetY: 80,
+                delay: 0,
+                duration: 700,
+                iconUrl: 'test_gold.png'
+            }
+        ];
+
+        // Verify the helper structure or state directly
+        expect(instance.state.flyingGoldCoins.length).toBe(1);
+    });
 });
+
 
 

@@ -53,8 +53,10 @@ import CIcon from '@coreui/icons-react';
 import { CButton, CFormSelect, CFormInput, CModal, CModalHeader, CModalTitle, CModalBody, CModalFooter } from '@coreui/react';
 import * as images from '../utils/images'
 import { resolveFloorTexture } from './dungonBuilderViews/BoardView';
+import VoidOrganicLayer from '../components/VoidOrganicLayer';
+import { getOrganicVoidPath, isTileVoid } from '../utils/organic-void';
 import { getRandomInscription } from '../utils/inscriptions-manager';
-import { RITUALS, GLYPHS, GLYPH_SPELL_SLOT_COST, computeGlyphPrepTime, BATTLE_TACTICS, INNER_DISCIPLINES, DISCIPLINE_CATEGORIES, SCRY_OPTIONS } from '../utils/spells-table'
+import { RITUALS, GLYPHS, GLYPH_SPELL_SLOT_COST, computeGlyphPrepTime, SPIRIT_VESSELS, VESSEL_SPIRIT_SLOT_COST, computeVesselPrepTime, BATTLE_TACTICS, INNER_DISCIPLINES, DISCIPLINE_CATEGORIES, SCRY_OPTIONS } from '../utils/spells-table'
 import { RECIPES } from '../utils/spells-table'
 import skillsMatrix from '../utils/skills-matrix'
 import REAGENTS, { REAGENT_KEYS } from '../utils/reagents'
@@ -80,6 +82,27 @@ import MapRedux from '../components/MapRedux';
 import '../styles/map-redux.scss';
 import { FLAGS } from '../flags';
 import { getAdjustedBuildTime, applyBuildingStaminaPenalty, hasEngineerUnit } from '../utils/building-utils';
+import {
+    ENGINEER_EXPEDITION_SKILLS,
+    SCRAP_CAP,
+    GRAPPLE_COST,
+    GRAPPLE_RANGE,
+    GRAPPLE_RANGE_MAX,
+    getGrappleRange,
+    EMPLACEMENT_COST,
+    EMPLACEMENT_REFUND,
+    EMPLACEMENT_RADIUS,
+    getScrap,
+    addScrap,
+    trySpendScrap,
+    isSalvageableTile,
+    computeSalvageYield,
+    findAdjacentSalvageTarget,
+    salvageTile,
+    computeGrapplePath,
+    findZiplineFrom,
+    isWithinEmplacementRange
+} from '../utils/engineer-expedition';
 import tutorialDungeonJson from '../assets/tutorial-export.json';
 import archaicTopLeft from '../assets/icons/runes/archaic/top left.png';
 import archaicTopRight from '../assets/icons/runes/archaic/top right.png';
@@ -296,6 +319,107 @@ const TATTOO_DESIGNS = {
         effect: { str: 1, baseHp: 5 },
         iconKey: 'tattoo_placeholder',
         color: '#8B6914',
+    },
+};
+
+// ── Homunculus Assembly constants (Summoner) ─────────────────────────────────
+const HOMUNCULUS_ASSEMBLY_DURATIONS_MS = [
+    30 * 60 * 1000,            // 1st:  30 min
+    3 * 60 * 60 * 1000,        // 2nd:  3 hours
+    2 * 24 * 60 * 60 * 1000,   // 3rd:  2 days
+    5 * 24 * 60 * 60 * 1000,   // 4th:  5 days
+    8 * 24 * 60 * 60 * 1000,   // 5th:  8 days
+    12 * 24 * 60 * 60 * 1000,  // 6th: 12 days
+    15 * 24 * 60 * 60 * 1000,  // 7th: 15 days
+    20 * 24 * 60 * 60 * 1000,  // 8th: 20 days
+];
+
+const HOMUNCULUS_SLOT_LABELS = {
+    skull: 'Skull & Cortex',
+    spine: 'Void Spine',
+    ribcage: 'Ribcage & Chassis',
+    void_core: 'Abyssal Core',
+    left_wing: 'Left Wing',
+    right_wing: 'Right Wing',
+    left_talon: 'Left Talon',
+    right_talon: 'Right Talon',
+};
+
+const HOMUNCULUS_SLOT_POSITIONS = [
+    { key: 'skull', top: '15%', left: '50%' },
+    { key: 'spine', top: '30%', left: '50%' },
+    { key: 'ribcage', top: '44%', left: '50%' },
+    { key: 'void_core', top: '58%', left: '50%' },
+    { key: 'left_wing', top: '24%', left: '22%' },
+    { key: 'right_wing', top: '24%', left: '78%' },
+    { key: 'left_talon', top: '80%', left: '34%' },
+    { key: 'right_talon', top: '80%', left: '66%' },
+];
+
+const HOMUNCULUS_GRAFT_DESIGNS = {
+    grave_steel_chassis: {
+        name: 'Grave-Steel Chassis',
+        desc: '+3 FORT, +10 Base HP — Reinforced metallic bone-cage.',
+        flavor: 'Forged from crypt-iron and sealed with consecrated grave-wax.',
+        effect: { fort: 3, baseHp: 10 },
+        iconKey: 'hounskull',
+        color: '#7f8c8d',
+    },
+    soul_siphon_talons: {
+        name: 'Soul-Siphon Talons',
+        desc: '+2 INT, +1 STR — Razor claws that harvest residual life-essence.',
+        flavor: 'Every scratch harvests a wisp of the victim\'s soul.',
+        effect: { int: 2, str: 1 },
+        iconKey: 'soul_tap_summoner',
+        color: '#8e44ad',
+    },
+    spectral_wings: {
+        name: 'Spectral Pinions',
+        desc: '+2 DEX, +1 INT, +2 Speed — Phosphorescent ethereal wings.',
+        flavor: 'Beats between dimensions, slipping past mortal friction.',
+        effect: { dex: 2, int: 1, speed: 2 },
+        iconKey: 'spirit_sight_summoner',
+        color: '#16a085',
+    },
+    abyssal_heart: {
+        name: 'Abyssal Core',
+        desc: '+3 INT, +15 Max Energy — Pulsing void nexus contained in obsidian.',
+        flavor: 'A direct link into the dark ether that fuels the summoner.',
+        effect: { int: 3, maxEnergy: 15 },
+        iconKey: 'sould_shards',
+        color: '#c0392b',
+    },
+    plague_ichor_reservoir: {
+        name: 'Plague Ichor Reservoir',
+        desc: '+2 FORT, +2 INT — Caustic alchemical bladder oozing necro-toxins.',
+        flavor: 'Bile and brimstone circulate through synthetic veins.',
+        effect: { fort: 2, int: 2 },
+        iconKey: 'demonskull_charm',
+        color: '#27ae60',
+    },
+    occult_neuro_matrix: {
+        name: 'Occult Neuro-Matrix',
+        desc: '+3 INT, +2 WIL — Embalmed cerebrum woven with silver threads.',
+        flavor: 'Calculates dimensional shifts and spirit containment frequencies.',
+        effect: { int: 3, wil: 2 },
+        iconKey: 'whiteskull',
+        color: '#9b59b6',
+    },
+    chitinous_carapace: {
+        name: 'Chitinous Carapace',
+        desc: '+2 DEF, +2 FORT — Interlocking subterranean beast plating.',
+        flavor: 'Hardened exo-skeleton impervious to glancing strikes.',
+        effect: { def: 2, fort: 2 },
+        iconKey: 'demonskull_charm',
+        color: '#d35400',
+    },
+    astral_tendrils: {
+        name: 'Astral Sinews',
+        desc: '+2 STR, +2 DEX — Writhing void-forged muscular sinew.',
+        flavor: 'Fibers harvested from deep-rift wraiths that lash with monstrous torque.',
+        effect: { str: 2, dex: 2 },
+        iconKey: 'spirit_sight_summoner',
+        color: '#2980b9',
     },
 };
 
@@ -2214,10 +2338,63 @@ class DungeonPage extends React.Component {
                 ]
             });
         }
+        if (character.type === 'summoner') {
+            // Count available (ready) spirit vessels per tier
+            const specialActions = character.specialActions || [];
+            const boneFetishCount = specialActions.filter(a => a.type === 'spirit_vessel' && a.vesselTier === 'bone_fetish' && a.available).length;
+            const clayEffigyCount = specialActions.filter(a => a.type === 'spirit_vessel' && a.vesselTier === 'clay_effigy' && a.available).length;
+            const obsidianPhylacteryCount = specialActions.filter(a => a.type === 'spirit_vessel' && a.vesselTier === 'obsidian_phylactery' && a.available).length;
+
+            actions.push({
+                type: 'spirit_vessel',
+                name: 'Spirit Vessels',
+                iconUrl: images['whiteskull'] || images['wide_skull'] || '',
+                noMaxCap: true,
+                subTypes: [
+                    {
+                        type: 'Bone Fetish',
+                        vesselTier: 'bone_fetish',
+                        iconUrl: images['whiteskull'] || '',
+                        available: true,
+                        count: boneFetishCount,
+                    },
+                    {
+                        type: 'Clay Effigy',
+                        vesselTier: 'clay_effigy',
+                        iconUrl: images['demonskull_charm'] || '',
+                        available: true,
+                        count: clayEffigyCount,
+                    },
+                    {
+                        type: 'Obsidian Phylactery',
+                        vesselTier: 'obsidian_phylactery',
+                        iconUrl: images['hounskull'] || '',
+                        available: true,
+                        count: obsidianPhylacteryCount,
+                    },
+                ]
+            });
+
+            // ── Homunculus Assembly ──
+            const grafts = character.homunculusGrafts || [];
+            const isAssembling = !!character.homunculusAssembling &&
+                new Date(character.homunculusAssembling.endDate) > new Date();
+            actions.push({
+                type: 'homunculus_assembly',
+                name: 'Homunculus',
+                iconUrl: images['wide_skull'] || images['whiteskull'] || '',
+                noMaxCap: true,
+                disabled: grafts.length >= 8 || isAssembling,
+                graftCount: grafts.length,
+                isAssembling,
+                homunculusEndDate: (character.homunculusAssembling && character.homunculusAssembling.endDate) || null,
+                subTypes: []
+            });
+        }
         // Add other class logic here as needed
 
         // Compute per-action maximum: only count subtypes belonging to that action type.
-        // Glyph actions have no cap (multiple glyphs of same tier are allowed).
+        // Glyph and Spirit Vessel actions have no cap (multiple vessels/glyphs of same tier are allowed).
         // Rituals cap at 3.
         const getMaxReachedForAction = (action) => {
             if (action.noMaxCap) return false;
@@ -2238,6 +2415,7 @@ class DungeonPage extends React.Component {
                     const typeMatches =
                         a.type === action.type ||
                         (action.type === 'glyph' && (a.type === 'spell' || a.type === 'glyph')) ||
+                        (action.type === 'spirit_vessel' && a.type === 'spirit_vessel') ||
                         (action.type === 'prepare_poison' && a.type === 'acid_bomb') ||
                         (action.type === 'deploy_animal' && a.type === 'rat_agent') ||
                         (action.type === 'pyrotechnics' && (a.type === 'phosphor_lure' || a.type === 'flashbang_powder' || a.type === 'mirror_decoy'));
@@ -2258,6 +2436,20 @@ class DungeonPage extends React.Component {
                             type: 'imprint_tattoo',
                             startDate: character.tattooImprinting.startDate,
                             endDate: character.tattooImprinting.endDate
+                        };
+                    }
+                }
+
+                // Support progress overlay for Summoner's Homunculus Assembly
+                if (action.type === 'homunculus_assembly' && character.homunculusAssembling) {
+                    const start = new Date(character.homunculusAssembling.startDate);
+                    const end = new Date(character.homunculusAssembling.endDate);
+                    const now = new Date();
+                    if (now >= start && now < end) {
+                        activeAction = {
+                            type: 'homunculus_assembly',
+                            startDate: character.homunculusAssembling.startDate,
+                            endDate: character.homunculusAssembling.endDate
                         };
                     }
                 }
@@ -2304,10 +2496,17 @@ class DungeonPage extends React.Component {
                             <div className="action-text">
                                 {action.type === 'imprint_tattoo' && action.isImprinting
                                     ? this.getTattooImprintLabel(this.state.selectedCrewMember) || action.name
-                                    : action.name}
+                                    : action.type === 'homunculus_assembly' && action.isAssembling
+                                        ? this.getHomunculusAssemblyLabel(this.state.selectedCrewMember) || action.name
+                                        : action.name}
                                 {action.type === 'imprint_tattoo' && (
                                     <span style={{ fontSize: '0.7rem', color: '#7a6a5a', marginLeft: 6 }}>
                                         {action.tattooCount}/8
+                                    </span>
+                                )}
+                                {action.type === 'homunculus_assembly' && (
+                                    <span style={{ fontSize: '0.7rem', color: '#8c7b99', marginLeft: 6 }}>
+                                        {action.graftCount}/8
                                     </span>
                                 )}
                             </div>
@@ -2330,14 +2529,17 @@ class DungeonPage extends React.Component {
                                 const subTypeDiscDef = subType.disciplineKey ? INNER_DISCIPLINES[subType.disciplineKey] : null;
                                 const subTypeTacticDef = subType.tacticKey ? BATTLE_TACTICS[subType.tacticKey] : null;
                                 const subTypeScryDef = subType.scryKey ? SCRY_OPTIONS[subType.scryKey] : null;
+                                const subTypeVesselDef = subType.vesselTier ? SPIRIT_VESSELS[subType.vesselTier] : null;
                                 const subTypeTooltip = subTypeDiscDef ? `${subTypeDiscDef.name}\n${subTypeDiscDef.description}\n⏱ ${Math.round(subTypeDiscDef.prepTime / 60000)} min prep${subTypeDiscDef.combatDuration ? ` · ⚔ ${subTypeDiscDef.combatDuration} combats` : ''}${subTypeDiscDef.category === 'chi' ? ` · 🧘 Max ${subTypeDiscDef.maxCharges || 3} charges` : ''}\n"${subTypeDiscDef.flavorText}"`
                                     : (subTypeTacticDef ? `${subTypeTacticDef.name}\n${subTypeTacticDef.description}\n⏱ ${Math.round(subTypeTacticDef.prepTime / 60000)} min prep · ⚔ ${subTypeTacticDef.combatDuration} combats · ✦ +${Math.round((subTypeTacticDef.xpMultiplier - 1) * 100)}% XP\n"${subTypeTacticDef.flavorText}"`
-                                        : (subTypeScryDef ? `${subTypeScryDef.name}\n${subTypeScryDef.description}\n⏱ ${Math.round(subTypeScryDef.prepTime / 60000)} min prep\n"${subTypeScryDef.flavorText}"` : undefined));
+                                        : (subTypeScryDef ? `${subTypeScryDef.name}\n${subTypeScryDef.description}\n⏱ ${Math.round(subTypeScryDef.prepTime / 60000)} min prep\n"${subTypeScryDef.flavorText}"`
+                                            : (subTypeVesselDef ? `${subTypeVesselDef.name}\n${subTypeVesselDef.description}\nCapacity: ${subTypeVesselDef.slots} spirit matrices · Auto-deploys in battle`
+                                                : undefined)));
                                 return (
                                     <React.Fragment key={j}>
                                         <div onClick={() => this.handleActionSubtypeClick(action, subType)}
                                             title={subTypeTooltip}
-                                            className={`action-subtype ${this.getSubtypeClass(subType, maximumReached)} ${action.type === 'glyph' && this.state.glyphBuilderOpen === subType.glyphTier ? 'active-tier' : ''} ${subType.isCategory && this.state.innerDisciplineCategoryOpen === subType.categoryKey ? 'active-tier' : ''} ${!subType.isCategory && subType.disciplineKey && this.state.innerDisciplineSelected === subType.disciplineKey ? 'active-tier' : ''}`}
+                                            className={`action-subtype ${this.getSubtypeClass(subType, maximumReached)} ${action.type === 'glyph' && this.state.glyphBuilderOpen === subType.glyphTier ? 'active-tier' : ''} ${action.type === 'spirit_vessel' && this.state.vesselBuilderOpen === subType.vesselTier ? 'active-tier' : ''} ${subType.isCategory && this.state.innerDisciplineCategoryOpen === subType.categoryKey ? 'active-tier' : ''} ${!subType.isCategory && subType.disciplineKey && this.state.innerDisciplineSelected === subType.disciplineKey ? 'active-tier' : ''}`}
                                             style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '4px 6px', boxSizing: 'border-box', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden', textAlign: 'left' }}
                                         >
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0, flex: 1, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', textAlign: 'left' }}>
@@ -2352,7 +2554,7 @@ class DungeonPage extends React.Component {
                                                     title={`View Codex entry for ${subType.type}`}
                                                     onClick={(e) => {
                                                         e.stopPropagation();
-                                                        const key = subType.tacticKey || subType.disciplineKey || subType.scryKey || subType.glyphTier || subType.ritualKey || subType.agentType || subType.bombType || subType.type;
+                                                        const key = subType.tacticKey || subType.disciplineKey || subType.scryKey || subType.vesselTier || subType.glyphTier || subType.ritualKey || subType.agentType || subType.bombType || subType.type;
                                                         this.openSpecialActionCodex(key, subType.type);
                                                     }}
                                                 >
@@ -2484,6 +2686,101 @@ class DungeonPage extends React.Component {
                                                         disabled={pickedSpells.length === 0}
                                                     >
                                                         {pickedSpells.length === 0 ? 'Pick spells above' : `Prepare · ${prepLabel}`}
+                                                    </button>
+                                                </div>
+                                            );
+                                        })()}
+                                        {/* Spirit Vessel builder renders immediately below the tier that is open */}
+                                        {action.type === 'spirit_vessel' && this.state.vesselBuilderOpen === subType.vesselTier && (() => {
+                                            const tier = this.state.vesselBuilderOpen;
+                                            const vesselDef = SPIRIT_VESSELS[tier];
+                                            if (!vesselDef) return null;
+                                            const totalSlots = vesselDef.slots;
+                                            const pickedSpirits = this.state.vesselBuilderSpirits || [];
+                                            const slotsUsed = pickedSpirits.reduce((s, sp) => s + (VESSEL_SPIRIT_SLOT_COST[sp.tier] || 1), 0);
+
+                                            // Summoner's eligible combat spells/summons from skills-matrix
+                                            const memberSkills = (this.state.selectedCrewMember?.skills ||
+                                                (this.state.selectedCrewMember?.specials || []).concat(this.state.selectedCrewMember?.attacks || []));
+                                            let summonerCombatKeys = memberSkills.filter(key => {
+                                                const def = skillsMatrix[key];
+                                                return def && def.class === 'summoner' && def.type !== 'passive';
+                                            });
+                                            if (summonerCombatKeys.length === 0) {
+                                                summonerCombatKeys = ['summon_skeleton', 'summon_imp', 'summoner_duplicate'].filter(k => skillsMatrix[k]);
+                                            }
+
+                                            // Compute prep time label
+                                            const prepMs = computeVesselPrepTime(pickedSpirits);
+                                            const prepMin = Math.round(prepMs / 60000);
+                                            const prepLabel = prepMin >= 60
+                                                ? `${Math.floor(prepMin / 60)}h ${prepMin % 60 > 0 ? (prepMin % 60) + 'm' : ''}`.trim()
+                                                : `${prepMin} min`;
+
+                                            // Build slot row: slot-0 = spirit icon, slots 1+ = red X
+                                            const slotBlocks = [];
+                                            let slotIdx = 0;
+                                            pickedSpirits.forEach((sp) => {
+                                                const cost = VESSEL_SPIRIT_SLOT_COST[sp.tier] || 1;
+                                                const spDef = skillsMatrix[sp.id];
+                                                const spIconUrl = spDef?.icon
+                                                    ? (typeof spDef.icon === 'object' ? (spDef.icon.default || '') : spDef.icon)
+                                                    : '';
+                                                for (let c = 0; c < cost; c++) {
+                                                    slotBlocks.push(
+                                                        <div key={`vessel-slot-${slotIdx++}`}
+                                                            className={`glyph-slot filled tier-${sp.tier} ${c > 0 ? 'slot-overflow' : ''}`}
+                                                            title={c === 0 ? `${sp.name} (click to remove)` : `Slot used by ${sp.name}`}
+                                                            onClick={() => this.handleVesselSpiritToggle(sp.id)}>
+                                                            {c === 0
+                                                                ? <div className="glyph-slot-icon" style={{ backgroundImage: spIconUrl ? `url(${spIconUrl})` : 'none' }} />
+                                                                : <span className="glyph-slot-x">✕</span>
+                                                            }
+                                                        </div>
+                                                    );
+                                                }
+                                            });
+                                            for (let e = slotsUsed; e < totalSlots; e++) {
+                                                slotBlocks.push(<div key={`vessel-slot-empty-${e}`} className="glyph-slot empty" />);
+                                            }
+
+                                            return (
+                                                <div className="glyph-builder-panel vessel-builder-panel">
+                                                    {/* TOP: slot squares */}
+                                                    <div className="glyph-slot-row">{slotBlocks}</div>
+
+                                                    {/* BOTTOM: visual spirit icon grid */}
+                                                    <div className="glyph-spell-grid">
+                                                        {summonerCombatKeys.map(key => {
+                                                            const def = skillsMatrix[key];
+                                                            if (!def) return null;
+                                                            const cost = VESSEL_SPIRIT_SLOT_COST[def.tier] || 1;
+                                                            const isSelected = pickedSpirits.some(s => s.id === key);
+                                                            const wouldOverflow = !isSelected && slotsUsed + cost > totalSlots;
+                                                            const iconUrl = def.icon
+                                                                ? (typeof def.icon === 'object' ? (def.icon.default || '') : def.icon)
+                                                                : '';
+                                                            return (
+                                                                <div
+                                                                    key={key}
+                                                                    className={`glyph-spell-cell ${isSelected ? 'selected' : ''} ${wouldOverflow ? 'overflow' : ''}`}
+                                                                    onClick={() => this.handleVesselSpiritToggle(key)}
+                                                                    title={`${def.name} — T${def.tier || 1} · ${cost} slot${cost > 1 ? 's' : ''}`}
+                                                                >
+                                                                    <div className={`glyph-spell-cell-icon tier-${def.tier || 1}`}
+                                                                        style={{ backgroundImage: iconUrl ? `url(${iconUrl})` : 'none' }} />
+                                                                    <span className="glyph-spell-cell-name">{def.name}</span>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+
+                                                    <button
+                                                        className={`glyph-prepare-btn ${pickedSpirits.length === 0 ? 'disabled' : ''}`}
+                                                        onClick={this.handleVesselPrepare}
+                                                        disabled={pickedSpirits.length === 0}
+                                                    >
+                                                        {pickedSpirits.length === 0 ? 'Pick spirits above' : `Inscribe · ${prepLabel}`}
                                                     </button>
                                                 </div>
                                             );
@@ -2712,11 +3009,13 @@ class DungeonPage extends React.Component {
                                                     : a.category === 'stance'
                                                         ? `${member.name} has trained ${a.name} stance`
                                                         : `${member.name} has completed ${a.name}`)
-                                                : (a.type === 'acid_bomb'
-                                                    ? `🧪 ${member.name}'s Acid Bomb is ready to use in combat!`
-                                                    : (a.type === 'rat_agent'
-                                                        ? `🐀 ${member.name}'s Scrounging Rat has returned with ${10 * (a.rangerLevel || 1)} food! A patch of the dungeon has been revealed for 30 minutes.`
-                                                        : `${member.name} has finished ${a.name}`)))));
+                                                : (a.type === 'spirit_vessel'
+                                                    ? `💀 ${member.name}'s ${a.name} is sealed and ready for combat!`
+                                                    : (a.type === 'acid_bomb'
+                                                        ? `🧪 ${member.name}'s Acid Bomb is ready to use in combat!`
+                                                        : (a.type === 'rat_agent'
+                                                            ? `🐀 ${member.name}'s Scrounging Rat has returned with ${10 * (a.rangerLevel || 1)} food! A patch of the dungeon has been revealed for 30 minutes.`
+                                                            : `${member.name} has finished ${a.name}`))))));
                             }
                             updates.push({
                                 text: updateText,
@@ -2775,11 +3074,13 @@ class DungeonPage extends React.Component {
                                                     : a.category === 'stance'
                                                         ? `${member.name} has trained ${a.name} stance`
                                                         : `${member.name} has completed ${a.name}`)
-                                                : (a.type === 'acid_bomb'
-                                                    ? `🧪 ${member.name}'s Acid Bomb is ready to use in combat!`
-                                                    : (a.type === 'rat_agent'
-                                                        ? `🐀 ${member.name}'s Scrounging Rat has returned with ${10 * (a.rangerLevel || 1)} food!`
-                                                        : `${member.name} has finished ${a.name}`)))));
+                                                : (a.type === 'spirit_vessel'
+                                                    ? `💀 ${member.name}'s ${a.name} is sealed and ready for combat!`
+                                                    : (a.type === 'acid_bomb'
+                                                        ? `🧪 ${member.name}'s Acid Bomb is ready to use in combat!`
+                                                        : (a.type === 'rat_agent'
+                                                            ? `🐀 ${member.name}'s Scrounging Rat has returned with ${10 * (a.rangerLevel || 1)} food!`
+                                                            : `${member.name} has finished ${a.name}`))))));
                             }
                             updates.push({
                                 text: updateText,
@@ -2903,6 +3204,44 @@ class DungeonPage extends React.Component {
             numeralUpdate = true;
         });
 
+        // Check Homunculus Assembly completion (Summoner)
+        (meta.crew || []).forEach(m => {
+            if (!m || !m.homunculusAssembling) return;
+            const end = new Date(m.homunculusAssembling.endDate);
+            if (new Date() < end) return;
+
+            m.homunculusGrafts = m.homunculusGrafts || [];
+            m.homunculusGrafts.push({
+                design: m.homunculusAssembling.design,
+                slot: m.homunculusAssembling.slot,
+                appliedAt: new Date().toISOString(),
+            });
+
+            // Apply permanent stat boosts directly to member.stats
+            const effect = HOMUNCULUS_GRAFT_DESIGNS[m.homunculusAssembling.design]?.effect || {};
+            if (!m.stats) m.stats = {};
+            Object.entries(effect).forEach(([stat, delta]) => {
+                if (typeof m.stats[stat] === 'number') {
+                    m.stats[stat] += delta;
+                } else {
+                    m.stats[stat] = delta;
+                }
+            });
+            // Recompute derived stats (atk, def, hp, etc.)
+            try { if (this.props.crewManager && typeof this.props.crewManager.computeDerivedStats === 'function') this.props.crewManager.computeDerivedStats(m); } catch (e) { }
+
+            const designName = HOMUNCULUS_GRAFT_DESIGNS[m.homunculusAssembling.design]?.name || m.homunculusAssembling.design;
+            updates.push({
+                text: `💀 ${m.name}'s Homunculus graft (${designName}) is complete! Anatomical bond permanently empowered.`,
+                actionType: 'homunculus_complete',
+                owner: m.name,
+            });
+
+            delete m.homunculusAssembling;
+            modified = true;
+            numeralUpdate = true;
+        });
+
         // Check Fastidious Crow completion
         if (meta.scoutActive && !meta.scoutActive.scoutedArea) {
             const end = new Date(meta.scoutActive.endDate);
@@ -3002,6 +3341,17 @@ class DungeonPage extends React.Component {
         this._lastDrawTimestamp = 0;
         this._fpsLimit = 30; // cap draw loop to 30fps
         this._breadcrumbs = new Map();
+        this._wanderingEyeRevealedTiles = new Map();
+        this._wanderingEyeFlightTimer = null;
+        this._wanderingEyeDecayTimer = null;
+        this._wanderingEyePatrolTimeout = null;
+        this._wanderingEyePatrolTimer = null;
+        this._wanderingEyeAppearTimeout = null;
+        this._wanderingEyeMeltTimeout = null;
+        this._walkerRevealedTiles = new Map();
+        this._dungeonWalkerTimer = null;
+        this._dungeonWalkerAttackResetTimeout = null;
+        this._dungeonWalkerDestroyTimeout = null;
         this._breadcrumbSeq = 0;
         this._monsterSightings = new Map();
         this._wasPoiPanelExpanded = !!((getMeta() || {}).camping);
@@ -3026,6 +3376,10 @@ class DungeonPage extends React.Component {
 
         this.state = {
             activePygmyCompanion: null,
+            activeWanderingEye: null,
+            activeShadowEffigy: null,
+            activeVoidFetch: null,
+            activeDungeonWalker: null,
             generatorUpgradeState: null,
             domainNodeConversionState: null,
             pocketInfluence: 0,
@@ -3073,6 +3427,8 @@ class DungeonPage extends React.Component {
             showInventoryPopup: false,
             isInventoryExpanded: false,
             activeInventoryItem: null,
+            flyingGoldCoins: [],
+            goldTrackerImpact: false,
             keysLocked: false,
             isSneaking: false,
             portalTransitionClass: '',
@@ -3162,6 +3518,7 @@ class DungeonPage extends React.Component {
             , isAvatarDamaged: false
             , healingFloatingIndicators: []
             , activeHealingGround: null
+            , wanderingEye: null
             , peerHealingGrounds: new Map()
             , swingArc: null
             , showPocketDefeatModal: false
@@ -3218,6 +3575,10 @@ class DungeonPage extends React.Component {
             , tattooOverlayMemberId: null
             , tattooSelectedSlot: null
             , tattooSelectedDesign: null
+            , showHomunculusOverlay: false
+            , homunculusOverlayMemberId: null
+            , homunculusSelectedSlot: null
+            , homunculusSelectedDesign: null
             , showShrineOverlay: false
             , shrineData: null
             , inShrineScreen: false
@@ -3239,6 +3600,7 @@ class DungeonPage extends React.Component {
             , illuminatedTileId: null
             , popoutResources: (getMeta()?.popoutResources || false)
             , showIsometric: !!(initMeta.showIsometric)
+            , showOrganicEdges: !!(initMeta.showOrganicEdges)
         }
         // Native browser tooltip will be used for death-tracker; no custom tooltip state required.
         // Track timers/intervals created by this component so we can clear on unmount
@@ -3255,6 +3617,18 @@ class DungeonPage extends React.Component {
     // Reverted to native browser tooltip; no custom tooltip lifecycle is necessary.
 
     componentDidUpdate(prevProps, prevState) {
+        if (prevState && (
+            prevState.showIsometric !== this.state.showIsometric ||
+            prevState.leftPanelExpanded !== this.state.leftPanelExpanded ||
+            prevState.rightPanelExpanded !== this.state.rightPanelExpanded ||
+            prevState.boardSize !== this.state.boardSize ||
+            prevState.inSuperboard !== this.state.inSuperboard ||
+            prevState.isInPocketDimension !== this.state.isInPocketDimension ||
+            prevState.inMonsterBattle !== this.state.inMonsterBattle ||
+            prevState.inTowerSiege !== this.state.inTowerSiege
+        )) {
+            this.scheduleIsoBoardFit();
+        }
         if (this.props.boardManager) {
             this.props.boardManager.getPeerPlayers = () => this.state.peerPlayers;
             this.props.boardManager.handlePeerTileInteraction = (peer, coords) => this.handlePeerTileInteraction(peer, coords);
@@ -3512,8 +3886,9 @@ class DungeonPage extends React.Component {
             itemCleanup(null, tutorialCrew);
             this.loadTutorialSequence();
         } else if (!meta || !meta.dungeonId) {
-            this.props.crewManager.initializeCrew(meta.crew);
-            itemCleanup(null, meta.crew);
+            const initialCrew = (meta && Array.isArray(meta.crew)) ? meta.crew : ((this.props.crewManager && Array.isArray(this.props.crewManager.crew)) ? this.props.crewManager.crew : []);
+            this.props.crewManager.initializeCrew(initialCrew);
+            itemCleanup(null, initialCrew);
             if (this.props.inventoryManager && typeof this.props.inventoryManager.refreshWeaponStats === 'function') {
                 this.props.crewManager.crew.forEach(m => { if (m && Array.isArray(m.inventory)) m.inventory = this.props.inventoryManager.refreshWeaponStats(m.inventory); });
             }
@@ -3530,7 +3905,8 @@ class DungeonPage extends React.Component {
 
             // this.props.inventoryManager.addItem(this.props.inventoryManager.allItems['minor_key'])
 
-            this.props.crewManager.initializeCrew(meta.crew);
+            const initialCrew = (meta && Array.isArray(meta.crew)) ? meta.crew : ((this.props.crewManager && Array.isArray(this.props.crewManager.crew)) ? this.props.crewManager.crew : []);
+            this.props.crewManager.initializeCrew(initialCrew);
             if (this.props.inventoryManager && typeof this.props.inventoryManager.refreshWeaponStats === 'function') {
                 this.props.crewManager.crew.forEach(m => { if (m && Array.isArray(m.inventory)) m.inventory = this.props.inventoryManager.refreshWeaponStats(m.inventory); });
             }
@@ -3589,7 +3965,7 @@ class DungeonPage extends React.Component {
                 rightPanelExpanded: (!meta || !meta.dungeonId || !meta.hasEnteredFirstDungeon) ? false : !!meta?.rightExpanded,
                 // persist/rehydrate crew actions tray expanded state
                 crewActionsTrayExpanded: meta?.crewActionsTrayExpanded || false,
-                crewSize: meta.crew.length,
+                crewSize: (meta && Array.isArray(meta.crew)) ? meta.crew.length : ((this.props.crewManager && Array.isArray(this.props.crewManager.crew)) ? this.props.crewManager.crew.length : 0),
                 minimap,
                 updates,
                 selectedCrewMember: initialSelectedCrewMember,
@@ -3598,6 +3974,9 @@ class DungeonPage extends React.Component {
                 // Glyph builder state — which tier is open, and which spells the user has slotted so far
                 glyphBuilderOpen: null,
                 glyphBuilderSpells: [],
+                // Spirit Vessel builder state (Summoner)
+                vesselBuilderOpen: null,
+                vesselBuilderSpirits: [],
                 // Compound Potions builder state — whether the panel is open, and which reagents are in the 3 slots
                 compoundBuilderOpen: initialExpanded.includes('compound'),
                 compoundBuilderSlots: [], // array of reagent IDs (max 3)
@@ -4847,6 +5226,8 @@ class DungeonPage extends React.Component {
     };
 
     componentDidMount() {
+        window.addEventListener('resize', this.scheduleIsoBoardFit);
+        this.scheduleIsoBoardFit();
         this.initDungeonSockets();
         this.positionSyncInterval = this._setInterval(() => {
             try {
@@ -5002,7 +5383,8 @@ class DungeonPage extends React.Component {
                     const meta = getMeta() || {};
                     const crew = (this.props.crewManager && Array.isArray(this.props.crewManager.crew)) ? this.props.crewManager.crew : (meta.crew || []);
                     const hasActiveTattoo = crew.some(m => m && m.tattooImprinting);
-                    if (this.state.showCampPopup || this.state.showMapOverlay || hasActiveTattoo) {
+                    const hasActiveHomunculus = crew.some(m => m && m.homunculusAssembling);
+                    if (this.state.showCampPopup || this.state.showMapOverlay || hasActiveTattoo || hasActiveHomunculus) {
                         this.forceUpdate();
                     }
                     this.checkFoodExpiry();
@@ -5020,7 +5402,7 @@ class DungeonPage extends React.Component {
                 // Also update selectedCrewMember reference so numerals/counts update immediately
                 let selectedCrewMember = this.state.selectedCrewMember;
                 if (selectedCrewMember && selectedCrewMember.id) {
-                    const updated = meta.crew.find(c => c.id === selectedCrewMember.id);
+                    const updated = (meta && Array.isArray(meta.crew)) ? meta.crew.find(c => c && c.id === selectedCrewMember.id) : null;
                     if (updated) selectedCrewMember = { ...updated };
                 }
                 // Use RitualComplete modal if the finished action was a ritual; otherwise PrepComplete
@@ -5037,7 +5419,7 @@ class DungeonPage extends React.Component {
                 this.setState(prevState => {
                     let selectedCrewMember = prevState.selectedCrewMember;
                     if (selectedCrewMember && selectedCrewMember.id) {
-                        const updated = meta.crew.find(c => c.id === selectedCrewMember.id);
+                        const updated = (meta && Array.isArray(meta.crew)) ? meta.crew.find(c => c && c.id === selectedCrewMember.id) : null;
                         if (updated) selectedCrewMember = { ...updated };
                     }
                     return { selectedCrewMember, numeralUpdate: (prevState.numeralUpdate || false) ? false : true };
@@ -5056,6 +5438,12 @@ class DungeonPage extends React.Component {
                     if (member.tattooImprinting && member.tattooImprinting.startDate && member.tattooImprinting.endDate) {
                         const start = new Date(member.tattooImprinting.startDate);
                         const end = new Date(member.tattooImprinting.endDate);
+                        const now = new Date();
+                        if (now >= start && now < end) return true;
+                    }
+                    if (member.homunculusAssembling && member.homunculusAssembling.startDate && member.homunculusAssembling.endDate) {
+                        const start = new Date(member.homunculusAssembling.startDate);
+                        const end = new Date(member.homunculusAssembling.endDate);
                         const now = new Date();
                         if (now >= start && now < end) return true;
                     }
@@ -5367,6 +5755,12 @@ class DungeonPage extends React.Component {
         if (typeof this.props.boardManager.establishGetBreadcrumbsCallback === 'function') {
             this.props.boardManager.establishGetBreadcrumbsCallback(() => this._breadcrumbs);
         }
+        if (typeof this.props.boardManager.establishGetWanderingEyeRevealsCallback === 'function') {
+            this.props.boardManager.establishGetWanderingEyeRevealsCallback(() => this._wanderingEyeRevealedTiles);
+        }
+        if (typeof this.props.boardManager.establishGetWalkerRevealsCallback === 'function') {
+            this.props.boardManager.establishGetWalkerRevealsCallback(() => this._walkerRevealedTiles);
+        }
         this.props.boardManager.establishSaveCrewCallback(() => {
             const meta = getMeta();
             meta.crew = this.props.crewManager.crew;
@@ -5492,6 +5886,10 @@ class DungeonPage extends React.Component {
 
             // Tower Siege debug command — type 'siege' in the browser console
             window.siege = () => this.triggerTowerSiege();
+            window.wanderingEye = () => this.activateWanderingEye();
+            window.wandering_eye = () => this.activateWanderingEye();
+            window.walker = (t) => this.deployDungeonWalker(t);
+            window.buildWalker = (t) => this.deployDungeonWalker(t);
             Object.defineProperty(window, 'tower_siege', {
                 get: () => { this.triggerTowerSiege(); return 'Initiating Tower Siege...'; },
                 configurable: true
@@ -5727,6 +6125,63 @@ class DungeonPage extends React.Component {
         const diff = end - new Date();
         if (diff <= 0) return 'Finishing...';
         return 'Imprinting...';
+    }
+
+    handleAssembleHomunculusGraft = () => {
+        const { homunculusOverlayMemberId, homunculusSelectedSlot, homunculusSelectedDesign } = this.state;
+        if (!homunculusOverlayMemberId || !homunculusSelectedSlot || !homunculusSelectedDesign) return;
+
+        const member = (this.props.crewManager && Array.isArray(this.props.crewManager.crew))
+            ? this.props.crewManager.crew.find(m => m && m.id === homunculusOverlayMemberId)
+            : null;
+        if (!member) return;
+
+        const grafts = member.homunculusGrafts || [];
+        const graftIndex = grafts.length; // 0-based → duration table
+        if (graftIndex >= 8) return;
+
+        // Check slot not already occupied
+        if (grafts.some(g => g.slot === homunculusSelectedSlot)) {
+            this.displayMessage('That anatomical slot already has a graft!');
+            return;
+        }
+
+        const durationMs = HOMUNCULUS_ASSEMBLY_DURATIONS_MS[graftIndex] || HOMUNCULUS_ASSEMBLY_DURATIONS_MS[0];
+        const now = new Date();
+
+        member.homunculusAssembling = {
+            design: homunculusSelectedDesign,
+            slot: homunculusSelectedSlot,
+            index: graftIndex,
+            startDate: now.toISOString(),
+            endDate: new Date(now.getTime() + durationMs).toISOString(),
+        };
+
+        const meta = getMeta() || {};
+        meta.crew = this.props.crewManager.crew;
+        storeMeta(meta);
+        if (typeof this.props.saveUserData === 'function') this.props.saveUserData();
+
+        const designName = HOMUNCULUS_GRAFT_DESIGNS[homunculusSelectedDesign]?.name || homunculusSelectedDesign;
+        const slotName = HOMUNCULUS_SLOT_LABELS[homunculusSelectedSlot] || homunculusSelectedSlot;
+        this.displayMessage(`💀 ${member.name} begins assembling ${designName} on the homunculus's ${slotName}...`);
+
+        this.setState({
+            showHomunculusOverlay: false,
+            homunculusOverlayMemberId: null,
+            homunculusSelectedSlot: null,
+            homunculusSelectedDesign: null,
+            selectedCrewMember: { ...member },
+            numeralUpdate: !this.state.numeralUpdate,
+        });
+    }
+
+    getHomunculusAssemblyLabel = (member) => {
+        if (!member || !member.homunculusAssembling) return null;
+        const end = new Date(member.homunculusAssembling.endDate);
+        const diff = end - new Date();
+        if (diff <= 0) return 'Finishing...';
+        return 'Assembling...';
     }
 
     pickRandomBoardForScout = () => {
@@ -7081,6 +7536,18 @@ class DungeonPage extends React.Component {
         });
     };
 
+    toggleOrganicEdges = (forceState = null) => {
+        const next = forceState !== null ? !!forceState : !this.state.showOrganicEdges;
+        const meta = getMeta() || {};
+        meta.showOrganicEdges = next;
+        storeMeta(meta);
+        this.setState({ showOrganicEdges: next }, () => {
+            if (typeof this.displayMessage === 'function') {
+                this.displayMessage(next ? "🌿 Organic Edges: Enabled" : "🌿 Organic Edges: Disabled");
+            }
+        });
+    };
+
     getPocketZoomTransform = () => {
         if (this.state.portalTransitionClass) {
             return undefined;
@@ -7351,7 +7818,14 @@ class DungeonPage extends React.Component {
                     domainTiles.push({ vx, vy });
                 }
 
-                const isRevealed = inUnitVision || inObsPlatformVision || inAnimVision || inFriendlyDomain;
+                let inEyeVision = false;
+                if (this._wanderingEyeRevealedTiles && this._wanderingEyeRevealedTiles.size > 0) {
+                    const eyeNow = Date.now();
+                    const exp = this._wanderingEyeRevealedTiles.get(tileIdx) || this._wanderingEyeRevealedTiles.get(vTileIdx);
+                    if (exp && eyeNow < exp) inEyeVision = true;
+                }
+
+                const isRevealed = inUnitVision || inObsPlatformVision || inAnimVision || inFriendlyDomain || inEyeVision;
                 fogVisibility[vTileIdx] = !!isRevealed;
 
                 const storedColor = mbTile?.color && mbTile.color !== 'null' && mbTile.color !== 'undefined' ? mbTile.color : null;
@@ -10348,6 +10822,11 @@ class DungeonPage extends React.Component {
                 } catch (e) {}
             }
 
+            // Sync Far Sight moves remaining
+            if (playerMoved && bm && typeof bm.farSightMoves === 'number') {
+                this.setState({ farSightMoves: bm.farSightMoves });
+            }
+
             if (!playerMoved) {
                 if (fromQueue) {
                     this.resolveQueuedMovement(false);
@@ -10372,7 +10851,8 @@ class DungeonPage extends React.Component {
                 const sides = sideMap[direction];
 
                 const isConnectingPathBetween = (bm.isConnectingPathTile && (bm.isConnectingPathTile(playerTileObj) || bm.isConnectingPathTile(destTileObj)));
-                const hasPassageWallBetween = !isConnectingPathBetween && (
+                const isPortalBetween = (this.isPortalTile(playerTileObj) || this.isPortalTile(destTileObj) || (bm.isPortalTile && (bm.isPortalTile(playerTileObj) || bm.isPortalTile(destTileObj))));
+                const hasPassageWallBetween = !isConnectingPathBetween && !isPortalBetween && (
                     (destIndex !== null && bm.isPassageWallBlockingBetween(playerIdx, destIndex, { ignoreBuilding: true })) ||
                     (sides?.self && bm.hasSolidBorder(playerTileObj, sides.self)) ||
                     (sides?.opp && bm.hasSolidBorder(destTileObj, sides.opp))
@@ -10639,12 +11119,29 @@ class DungeonPage extends React.Component {
                         } catch (e) { return {}; }
                     })() : {}),
                     ...(playerMoved && this.state.activePygmyCompanion ? {
-                        activePygmyCompanion: this.state.activePygmyCompanion.boardIndex === (bm.boardIndex || 0) ? {
+                        activePygmyCompanion: this.state.activePygmyCompanion.boardIndex === ((bm.playerTile?.boardIndex != null) ? bm.playerTile.boardIndex : ((bm.boardIndex != null) ? bm.boardIndex : ((bm.currentBoard?.id != null) ? bm.currentBoard.id : 0))) ? {
                             ...this.state.activePygmyCompanion,
                             location: originCoords
                         } : null
+                    } : {}),
+                    ...(playerMoved && this.state.activeWanderingEye ? {
+                        activeWanderingEye: (this.state.activeWanderingEye.boardIndex === ((bm.playerTile?.boardIndex != null) ? bm.playerTile.boardIndex : ((bm.boardIndex != null) ? bm.boardIndex : ((bm.currentBoard?.id != null) ? bm.currentBoard.id : 0))) && !this.state.activeWanderingEye.roaming && !this.state.activeWanderingEye.patrolling) ? {
+                            ...this.state.activeWanderingEye,
+                            location: originCoords
+                        } : this.state.activeWanderingEye,
+                        wanderingEye: (this.state.activeWanderingEye.boardIndex === ((bm.playerTile?.boardIndex != null) ? bm.playerTile.boardIndex : ((bm.boardIndex != null) ? bm.boardIndex : ((bm.currentBoard?.id != null) ? bm.currentBoard.id : 0))) && !this.state.activeWanderingEye.roaming && !this.state.activeWanderingEye.patrolling) ? {
+                            ...this.state.wanderingEye,
+                            row: originCoords[0],
+                            col: originCoords[1],
+                            x: (originCoords[1] + 0.5) * (this.state.tileSize || 48),
+                            y: (originCoords[0] + 0.5) * (this.state.tileSize || 48),
+                            active: true
+                        } : this.state.wanderingEye
                     } : {})
                 }, () => {
+                    if (playerMoved && this.state.activeWanderingEye && !this.state.activeWanderingEye.roaming && !this.state.activeWanderingEye.patrolling && typeof this.revealWanderingEyeTiles === 'function') {
+                        this.revealWanderingEyeTiles(originCoords[0], originCoords[1]);
+                    }
                     this.checkMobileViewportCentering(bm.playerTile.location);
                     this.sendLocationSocketUpdate(bm.playerTile.location);
                     this.recordBreadcrumb();
@@ -10663,7 +11160,7 @@ class DungeonPage extends React.Component {
                     }
                     const csubtype = currentTile && currentTile.contains && (currentTile.contains.subtype || currentTile.contains.key);
                     const isLocusTile = ctype === 'locus' || (typeof csubtype === 'string' && csubtype.includes('locus')) || (typeof currentTile?.image === 'string' && currentTile.image.includes('locus'));
-                    if (ctype === 'dungeon_portal' || ctype === 'dungeon portal') {
+                    if (this.isPortalTile(currentTile)) {
                         this.executePortalTeleport(currentTile);
                     } else if (isLocusTile && !isShiftHeld) {
                         this.interactWithLocus(currentTile);
@@ -10701,12 +11198,29 @@ class DungeonPage extends React.Component {
                     } catch (e) { return {}; }
                 })() : {}),
                 ...(playerMoved && this.state.activePygmyCompanion ? {
-                    activePygmyCompanion: this.state.activePygmyCompanion.boardIndex === (bm.boardIndex || 0) ? {
+                    activePygmyCompanion: this.state.activePygmyCompanion.boardIndex === ((bm.playerTile?.boardIndex != null) ? bm.playerTile.boardIndex : ((bm.boardIndex != null) ? bm.boardIndex : ((bm.currentBoard?.id != null) ? bm.currentBoard.id : 0))) ? {
                         ...this.state.activePygmyCompanion,
                         location: originCoords
                     } : null
+                } : {}),
+                ...(playerMoved && this.state.activeWanderingEye ? {
+                    activeWanderingEye: (this.state.activeWanderingEye.boardIndex === ((bm.playerTile?.boardIndex != null) ? bm.playerTile.boardIndex : ((bm.boardIndex != null) ? bm.boardIndex : ((bm.currentBoard?.id != null) ? bm.currentBoard.id : 0))) && !this.state.activeWanderingEye.roaming && !this.state.activeWanderingEye.patrolling) ? {
+                        ...this.state.activeWanderingEye,
+                        location: originCoords
+                    } : this.state.activeWanderingEye,
+                    wanderingEye: (this.state.activeWanderingEye.boardIndex === ((bm.playerTile?.boardIndex != null) ? bm.playerTile.boardIndex : ((bm.boardIndex != null) ? bm.boardIndex : ((bm.currentBoard?.id != null) ? bm.currentBoard.id : 0))) && !this.state.activeWanderingEye.roaming && !this.state.activeWanderingEye.patrolling) ? {
+                        ...this.state.wanderingEye,
+                        row: originCoords[0],
+                        col: originCoords[1],
+                        x: (originCoords[1] + 0.5) * (this.state.tileSize || 48),
+                        y: (originCoords[0] + 0.5) * (this.state.tileSize || 48),
+                        active: true
+                    } : this.state.wanderingEye
                 } : {})
             }, () => {
+                if (playerMoved && this.state.activeWanderingEye && !this.state.activeWanderingEye.roaming && !this.state.activeWanderingEye.patrolling && typeof this.revealWanderingEyeTiles === 'function') {
+                    this.revealWanderingEyeTiles(originCoords[0], originCoords[1]);
+                }
                 if (ambushTriggered) {
                     this.ambushTimeout = setTimeout(() => {
                         this.startAmbushCombat();
@@ -10760,7 +11274,7 @@ class DungeonPage extends React.Component {
                             }, () => {
                                 const csubtype = currentTile && currentTile.contains && (currentTile.contains.subtype || currentTile.contains.key);
                                 const isLocusTile = ctype === 'locus' || (typeof csubtype === 'string' && csubtype.includes('locus')) || (typeof currentTile?.image === 'string' && currentTile.image.includes('locus'));
-                                if (ctype === 'dungeon_portal' || ctype === 'dungeon portal') {
+                                if (this.isPortalTile(currentTile)) {
                                     this.executePortalTeleport(currentTile);
                                 } else if (isLocusTile && !isShiftHeld) {
                                     this.interactWithLocus(currentTile);
@@ -10805,7 +11319,7 @@ class DungeonPage extends React.Component {
                     const ctype = currentTile && currentTile.contains && (currentTile.contains.type || currentTile.contains);
                     const csubtype = currentTile && currentTile.contains && (currentTile.contains.subtype || currentTile.contains.key);
                     const isLocusTile = ctype === 'locus' || (typeof csubtype === 'string' && csubtype.includes('locus')) || (typeof currentTile?.image === 'string' && currentTile.image.includes('locus'));
-                    if (ctype === 'dungeon_portal' || ctype === 'dungeon portal') {
+                    if (this.isPortalTile(currentTile)) {
                         this.executePortalTeleport(currentTile);
                     } else if (isLocusTile && !isShiftHeld) {
                         this.interactWithLocus(currentTile);
@@ -11062,32 +11576,95 @@ class DungeonPage extends React.Component {
     }
 
     executePortalTeleport = (tile) => {
-        if (!tile || !tile.contains) {
-            this.resolveQueuedMovement(true);
-            return;
-        }
-        const portal = tile.contains;
-        if (!portal || (!portal.targetCoordinates && !portal.targetPortalId)) {
+        if (!tile) {
             this.resolveQueuedMovement(true);
             return;
         }
 
-        this.clearIlluminatedTile();
-        this.setState({ keysLocked: true, illuminatedTileId: null, portalTransitionClass: 'portal-transition-out' });
-        this.messaging('🌀 Teleporting through portal...');
+        const now = Date.now();
+        if (this._lastTeleportTimestamp && (now - this._lastTeleportTimestamp < 1200)) {
+            this.resolveQueuedMovement(true);
+            return;
+        }
 
-        this._setTimeout(() => {
-            const bm = this.props.boardManager;
-            let targetLevelIdVal = portal.targetLevelId;
-            let targetOrientation = portal.targetOrientation;
-            let targetMiniboardIndex = portal.targetMiniboardIndex;
-            let targetCoordinates = portal.targetCoordinates;
+        const cObj = (typeof tile.contains === 'object' && tile.contains !== null)
+            ? tile.contains
+            : (typeof tile.data === 'object' && tile.data !== null ? tile.data : {});
+        const portal = cObj;
+        const portalId = portal.portalId || tile.portalId;
+        let targetPortalId = portal.targetPortalId || tile.targetPortalId;
+        let targetLevelIdVal = portal.targetLevelId ?? tile.targetLevelId;
+        let targetOrientation = portal.targetOrientation ?? tile.targetOrientation;
+        let targetMiniboardIndex = portal.targetMiniboardIndex ?? portal.targetBoardIndex ?? tile.targetMiniboardIndex;
+        let targetCoordinates = portal.targetCoordinates || portal.targetCoords || tile.targetCoordinates;
+        const targetTileId = portal.targetTileId ?? tile.targetTileId;
 
-            // Bulletproof dynamic resolution if any target property is missing or incomplete
-            if (portal.targetPortalId && (targetLevelIdVal === null || targetLevelIdVal === undefined || targetOrientation === null || targetOrientation === undefined || targetMiniboardIndex === null || targetMiniboardIndex === undefined || !targetCoordinates)) {
-                try {
-                    const allLevels = bm.dungeon?.levels || [];
-                    let foundTarget = null;
+        const bm = this.props.boardManager;
+        if (!bm) {
+            this.resolveQueuedMovement(true);
+            return;
+        }
+
+        // Parse string coordinates if necessary
+        if (typeof targetCoordinates === 'string') {
+            try {
+                const parsed = JSON.parse(targetCoordinates);
+                if (Array.isArray(parsed)) targetCoordinates = parsed;
+            } catch (e) {
+                const match = targetCoordinates.match(/(\d+)[,\s]+(\d+)/);
+                if (match) {
+                    targetCoordinates = [parseInt(match[1]), parseInt(match[2])];
+                }
+            }
+        }
+
+        // Support object format { x, y } or { col, row }
+        if (targetCoordinates && typeof targetCoordinates === 'object' && !Array.isArray(targetCoordinates)) {
+            if (targetCoordinates.x !== undefined && targetCoordinates.y !== undefined) {
+                targetCoordinates = [Number(targetCoordinates.x), Number(targetCoordinates.y)];
+            } else if (targetCoordinates.col !== undefined && targetCoordinates.row !== undefined) {
+                targetCoordinates = [Number(targetCoordinates.col), Number(targetCoordinates.row)];
+            }
+        }
+
+        // Direct tileId support
+        if (!targetCoordinates && targetTileId !== undefined && targetTileId !== null && !isNaN(Number(targetTileId))) {
+            const tId = Number(targetTileId);
+            targetCoordinates = [tId % 15, Math.floor(tId / 15)];
+        }
+
+        const currentTileIdx = (tile.id !== undefined && tile.id !== null)
+            ? tile.id
+            : (tile.index !== undefined ? tile.index : bm.getIndexFromCoordinates(bm.playerTile.location));
+
+        const isTilePortal = (t) => {
+            if (!t) return false;
+            if (typeof bm.isPortalTile === 'function' && bm.isPortalTile(t)) return true;
+            const tc = typeof t.contains === 'object' && t.contains ? t.contains : {};
+            if (tc.portalId || t.portalId || tc.isPortal || t.isPortal || tc.targetPortalId || t.targetPortalId || t['data-portal-id']) return true;
+            const ctype = String((typeof bm.getContainsType === 'function' ? bm.getContainsType(t.contains) : null) || tc.type || t.contains || t.type || '').toLowerCase();
+            const csubtype = String((typeof bm.getContainsSubtype === 'function' ? bm.getContainsSubtype(t.contains) : null) || tc.subtype || tc.key || t.subtype || '').toLowerCase();
+            const img = String(t.image || tc.image || '').toLowerCase();
+            const bldg = String(t.building || tc.building || '').toLowerCase();
+            const portalKeys = ['dungeon_portal', 'dungeon portal', 'portal', 'teleporter'];
+            return portalKeys.some(k => ctype.includes(k) || csubtype.includes(k) || img.includes(k) || bldg.includes(k));
+        };
+
+        // Bulletproof dynamic resolution if any target property is missing or incomplete
+        const needsResolution = (targetLevelIdVal === null || targetLevelIdVal === undefined || targetOrientation === null || targetOrientation === undefined || targetMiniboardIndex === null || targetMiniboardIndex === undefined || !targetCoordinates);
+
+        if (needsResolution) {
+            try {
+                const allLevels = (bm.dungeon?.levels && bm.dungeon.levels.length > 0)
+                    ? bm.dungeon.levels
+                    : (this.state.dungeon?.levels && this.state.dungeon.levels.length > 0)
+                        ? this.state.dungeon.levels
+                        : (bm.currentLevel ? [bm.currentLevel] : []);
+
+                let foundTarget = null;
+
+                // 1. If explicit targetPortalId or portalId is set, search levels
+                if (targetPortalId || portalId) {
                     for (const level of allLevels) {
                         for (const orientation of ['front', 'back']) {
                             const plane = level[orientation];
@@ -11095,13 +11672,21 @@ class DungeonPage extends React.Component {
                                 for (let mbIndex = 0; mbIndex < plane.miniboards.length; mbIndex++) {
                                     const mb = plane.miniboards[mbIndex];
                                     if (mb && Array.isArray(mb.tiles)) {
-                                        const tile = mb.tiles.find(t => t.contains && (t.contains.portalId === portal.targetPortalId || (portal.portalId && t.contains.targetPortalId === portal.portalId)));
-                                        if (tile) {
+                                        const matchTile = mb.tiles.find(t => {
+                                            if (!t) return false;
+                                            const tc = typeof t.contains === 'object' && t.contains ? t.contains : {};
+                                            const tId = tc.portalId || t.portalId;
+                                            const tTargetId = tc.targetPortalId || t.targetPortalId;
+                                            if (targetPortalId && (tId === targetPortalId || String(tId) === String(targetPortalId))) return true;
+                                            if (portalId && (tTargetId === portalId || String(tTargetId) === String(portalId))) return true;
+                                            return false;
+                                        });
+                                        if (matchTile) {
                                             foundTarget = {
                                                 levelId: level.id,
                                                 orientation: orientation,
                                                 miniboardIndex: mbIndex,
-                                                coordinates: tile.coordinates
+                                                coordinates: matchTile.coordinates || [matchTile.id % 15, Math.floor(matchTile.id / 15)]
                                             };
                                             break;
                                         }
@@ -11112,23 +11697,96 @@ class DungeonPage extends React.Component {
                         }
                         if (foundTarget) break;
                     }
-                    if (foundTarget) {
-                        targetLevelIdVal = foundTarget.levelId;
-                        targetOrientation = foundTarget.orientation;
-                        targetMiniboardIndex = foundTarget.miniboardIndex;
-                        targetCoordinates = foundTarget.coordinates;
-                    }
-                } catch (e) {
-                    console.warn("Failed to dynamically resolve target portal properties", e);
                 }
+
+                // 2. Check current board tiles for linked target or counterpart portal
+                if (!foundTarget && bm.tiles && Array.isArray(bm.tiles)) {
+                    const matchTile = bm.tiles.find((t, idx) => {
+                        if (!t || idx === currentTileIdx) return false;
+                        const tc = typeof t.contains === 'object' && t.contains ? t.contains : {};
+                        const tId = tc.portalId || t.portalId;
+                        const tTargetId = tc.targetPortalId || t.targetPortalId;
+                        if (targetPortalId && (tId === targetPortalId || String(tId) === String(targetPortalId))) return true;
+                        if (portalId && (tTargetId === portalId || String(tTargetId) === String(portalId))) return true;
+                        if (!targetPortalId && isTilePortal(t)) return true;
+                        return false;
+                    });
+                    if (matchTile) {
+                        foundTarget = {
+                            levelId: bm.currentLevel?.id ?? 0,
+                            orientation: (bm.currentOrientation === 'F' || bm.currentOrientation === 'front') ? 'front' : 'back',
+                            miniboardIndex: Number(bm.playerTile?.boardIndex ?? 0),
+                            coordinates: matchTile.coordinates || [matchTile.id % 15, Math.floor(matchTile.id / 15)]
+                        };
+                    }
+                }
+
+                // 3. Fallback: search all miniboards of all levels for any other portal
+                if (!foundTarget && !targetPortalId) {
+                    for (const level of allLevels) {
+                        for (const orientation of ['front', 'back']) {
+                            const plane = level[orientation];
+                            if (plane && Array.isArray(plane.miniboards)) {
+                                for (let mbIndex = 0; mbIndex < plane.miniboards.length; mbIndex++) {
+                                    const mb = plane.miniboards[mbIndex];
+                                    if (mb && Array.isArray(mb.tiles)) {
+                                        const matchTile = mb.tiles.find(t => {
+                                            if (!t) return false;
+                                            const tc = typeof t.contains === 'object' && t.contains ? t.contains : {};
+                                            const tId = tc.portalId || t.portalId;
+                                            if (portalId && tId === portalId) return false;
+                                            const isSameBoard = (level.id === bm.currentLevel?.id && orientation === ((bm.currentOrientation === 'F' || bm.currentOrientation === 'front') ? 'front' : 'back') && mbIndex === Number(bm.playerTile?.boardIndex ?? 0));
+                                            if (isSameBoard && t.id === currentTileIdx) return false;
+                                            return isTilePortal(t);
+                                        });
+                                        if (matchTile) {
+                                            foundTarget = {
+                                                levelId: level.id,
+                                                orientation: orientation,
+                                                miniboardIndex: mbIndex,
+                                                coordinates: matchTile.coordinates || [matchTile.id % 15, Math.floor(matchTile.id / 15)]
+                                            };
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                            if (foundTarget) break;
+                        }
+                        if (foundTarget) break;
+                    }
+                }
+
+                if (foundTarget) {
+                    targetLevelIdVal = foundTarget.levelId;
+                    targetOrientation = foundTarget.orientation;
+                    targetMiniboardIndex = foundTarget.miniboardIndex;
+                    targetCoordinates = foundTarget.coordinates;
+                }
+            } catch (e) {
+                console.warn("Failed to dynamically resolve target portal properties", e);
             }
+        }
 
-            const canTransition = targetLevelIdVal !== null && targetLevelIdVal !== undefined && targetMiniboardIndex !== null && targetMiniboardIndex !== undefined && targetCoordinates;
+        const canTransition = targetLevelIdVal !== null && targetLevelIdVal !== undefined && targetMiniboardIndex !== null && targetMiniboardIndex !== undefined && targetCoordinates;
 
+        if (!canTransition && (!Array.isArray(targetCoordinates) || targetCoordinates.length < 2)) {
+            this.messaging('🌀 The portal hums softly, but it is dormant and leads nowhere.');
+            this.setState({ toastMessage: '🌀 The portal is dormant and leads nowhere.' });
+            this.resolveQueuedMovement(true);
+            return;
+        }
+
+        this._lastTeleportTimestamp = now;
+        this.clearIlluminatedTile();
+        this.setState({ keysLocked: true, illuminatedTileId: null, portalTransitionClass: 'portal-transition-out' });
+        this.messaging('🌀 Teleporting through portal...');
+
+        this._setTimeout(() => {
             if (canTransition) {
                 const targetLevelId = Number(targetLevelIdVal);
                 if (targetLevelId !== Number(bm.currentLevel?.id)) {
-                    const incomingLevel = bm.dungeon.levels.find(l => String(l.id) === String(targetLevelId));
+                    const incomingLevel = bm.dungeon?.levels?.find(l => String(l.id) === String(targetLevelId));
                     if (incomingLevel) {
                         bm.currentLevel = incomingLevel;
                     }
@@ -11146,11 +11804,9 @@ class DungeonPage extends React.Component {
                 if (Array.isArray(targetCoordinates) && targetCoordinates.length >= 2) {
                     const c0 = Number(targetCoordinates[0]);
                     const c1 = Number(targetCoordinates[1]);
-                    if (c0 >= 15 || c1 >= 15) {
-                        targetIdx = bm.getIndexFromCoordinates([c0, c1]);
-                    } else {
-                        targetIdx = bm.getIndexFromCoordinates([c1, c0]);
-                    }
+                    const targetRow = (c0 >= 15 || c1 >= 15) ? ((c0 % 15) + 15) % 15 : ((c1 % 15) + 15) % 15;
+                    const targetCol = (c0 >= 15 || c1 >= 15) ? ((c1 % 15) + 15) % 15 : ((c0 % 15) + 15) % 15;
+                    targetIdx = targetRow * 15 + targetCol;
                 } else if (typeof targetCoordinates === 'number') {
                     targetIdx = targetCoordinates;
                 } else {
@@ -11168,13 +11824,14 @@ class DungeonPage extends React.Component {
                     finalTargetIdx = bm.getIndexFromCoordinates(bm.playerTile.location);
                 }
 
-                const levelTracker = this.state.levelTracker;
-                levelTracker.forEach(e => e.active = false);
-                const lvl = levelTracker.find(e => String(e.id) === String(targetLevelId));
+                const levelTracker = this.state.levelTracker || [];
+                levelTracker.forEach(e => { if (e) e.active = false; });
+                const lvl = levelTracker.find(e => e && String(e.id) === String(targetLevelId));
                 if (lvl) lvl.active = true;
 
                 const meta = getMeta() || {};
-                let indicatorsGroup = meta.minimapIndicators.find(e => String(e.level) === String(targetLevelId) && e.orientation === mappedOrientation);
+                if (!meta.minimapIndicators || !Array.isArray(meta.minimapIndicators)) meta.minimapIndicators = [];
+                let indicatorsGroup = meta.minimapIndicators.find(e => e && String(e.level) === String(targetLevelId) && e.orientation === mappedOrientation);
                 if (!indicatorsGroup) {
                     let newIndicators = [];
                     for (let i = 0; i < 9; i++) {
@@ -11191,8 +11848,8 @@ class DungeonPage extends React.Component {
                 }
                 storeMeta(meta);
 
-                const minimap = this.state.minimap;
-                minimap.forEach(e => e.active = false);
+                const minimap = this.state.minimap || [];
+                minimap.forEach(e => { if (e) e.active = false; });
                 if (minimap[targetMiniboardIndex]) {
                     minimap[targetMiniboardIndex].active = true;
                 }
@@ -11217,14 +11874,20 @@ class DungeonPage extends React.Component {
                         });
                     }, 800);
                 });
-            } else {
-                const targetIdx = bm.getIndexFromCoordinates([targetCoordinates[1], targetCoordinates[0]]);
-                const correctedCoordinates = [15 + targetCoordinates[1], 15 + targetCoordinates[0]];
+            } else if (Array.isArray(targetCoordinates) && targetCoordinates.length >= 2) {
+                const c0 = Number(targetCoordinates[0]);
+                const c1 = Number(targetCoordinates[1]);
+                const targetRow = (c0 >= 15 || c1 >= 15) ? (c0 % 15) : (c1 % 15);
+                const targetCol = (c0 >= 15 || c1 >= 15) ? (c1 % 15) : (c0 % 15);
+                const targetIdx = targetRow * 15 + targetCol;
+                const correctedCoordinates = [15 + targetRow, 15 + targetCol];
                 bm.placePlayer(correctedCoordinates);
                 bm.playerTile.location = [...correctedCoordinates];
-                bm.tiles.forEach(t => t.playerTile = false);
-                bm.tiles[targetIdx].playerTile = true;
-                bm.handleFogOfWar(bm.tiles[targetIdx]);
+                bm.tiles.forEach(t => { if (t) t.playerTile = false; });
+                if (bm.tiles[targetIdx]) {
+                    bm.tiles[targetIdx].playerTile = true;
+                    bm.handleFogOfWar(bm.tiles[targetIdx]);
+                }
                 try { bm.checkAdjacency(); } catch (e) { }
 
                 this.setState({
@@ -11241,6 +11904,11 @@ class DungeonPage extends React.Component {
                             this.resolveQueuedMovement(true);
                         });
                     }, 800);
+                });
+            } else {
+                this.messaging('🌀 The portal hums softly, but it is unlinked and leads nowhere.');
+                this.setState({ toastMessage: '🌀 The portal is dormant and leads nowhere.', portalTransitionClass: '', keysLocked: false }, () => {
+                    this.resolveQueuedMovement(true);
                 });
             }
         }, 800);
@@ -12466,6 +13134,9 @@ class DungeonPage extends React.Component {
         }
     }
     componentWillUnmount() {
+        window.removeEventListener('resize', this.scheduleIsoBoardFit);
+        if (this._isoFitTimers) this._isoFitTimers.forEach(t => clearTimeout(t));
+        if (this._isoFitRaf) cancelAnimationFrame(this._isoFitRaf);
         this.cleanupDungeonSockets();
         try { document.body.classList.remove('combat-active'); } catch (e) { }
         this._isMounted = false;
@@ -12478,6 +13149,11 @@ class DungeonPage extends React.Component {
         try { if (this._foodGoneBadTimer) { clearTimeout(this._foodGoneBadTimer); this._foodGoneBadTimer = null; } } catch (e) { }
         try { if (this._skillFlashTimeout) { clearTimeout(this._skillFlashTimeout); this._skillFlashTimeout = null; } } catch (e) { }
         try { if (this._healingGroundTimer) { clearInterval(this._healingGroundTimer); this._healingGroundTimer = null; } } catch (e) { }
+        try { if (this._wanderingEyeFlightTimer) { clearInterval(this._wanderingEyeFlightTimer); } this._wanderingEyeFlightTimer = null; } catch (e) { }
+        try { if (this._wanderingEyeDecayTimer) { clearInterval(this._wanderingEyeDecayTimer); } this._wanderingEyeDecayTimer = null; } catch (e) { }
+        try { if (typeof this.stopAutonomousWanderingEye === 'function') { this.stopAutonomousWanderingEye(); } } catch (e) { }
+        try { if (this._shadowEffigyInterval) { clearInterval(this._shadowEffigyInterval); this._shadowEffigyInterval = null; } } catch (e) { }
+        try { if (typeof this.dismissDungeonWalker === 'function') { this.dismissDungeonWalker(); } } catch (e) { }
         // Backwards compat: clear any direct references as well
         try { if (this.realTimeSpecialActionCheckInterval) { clearInterval(this.realTimeSpecialActionCheckInterval); } } catch (e) { }
         try { if (this.pygmiesInterval) { clearInterval(this.pygmiesInterval); this.pygmiesInterval = null; } } catch (e) { }
@@ -12570,6 +13246,9 @@ class DungeonPage extends React.Component {
             const getTileClan = (tId) => {
                 const tile = bm.tiles[tId] || (bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[tId]);
                 if (!tile) return null;
+                if (typeof bm.isVoidTile === 'function' && bm.isVoidTile(tile)) return null;
+                if (tile.color === 'black' || tile.color === '#000000' || tile.color === '#000') return null;
+
                 let raw = tile.territory || (typeof tile.contains === 'object' ? tile.contains?.territory : null);
                 if (!raw && bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[tId]) {
                     raw = bm.currentBoard.tiles[tId].territory || (typeof bm.currentBoard.tiles[tId].contains === 'object' ? bm.currentBoard.tiles[tId].contains?.territory : null);
@@ -12577,21 +13256,24 @@ class DungeonPage extends React.Component {
                 // If the tile itself does not have a territory tag, check adjacent tiles for territory clan
                 if (!raw) {
                     const row = Math.floor(tId / 15), col = tId % 15;
-                    const neighbors = [];
-                    if (row > 0 && !bm.isPassageWallBlockingBetween(tId, (row - 1) * 15 + col, { ignoreBuilding: true })) neighbors.push((row - 1) * 15 + col);
-                    if (row < 14 && !bm.isPassageWallBlockingBetween(tId, (row + 1) * 15 + col, { ignoreBuilding: true })) neighbors.push((row + 1) * 15 + col);
-                    if (col > 0 && !bm.isPassageWallBlockingBetween(tId, row * 15 + (col - 1), { ignoreBuilding: true })) neighbors.push(row * 15 + (col - 1));
-                    if (col < 14 && !bm.isPassageWallBlockingBetween(tId, row * 15 + (col + 1), { ignoreBuilding: true })) neighbors.push(row * 15 + (col + 1));
-                    for (const nId of neighbors) {
-                        const nTile = bm.tiles[nId] || (bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[nId]);
-                        if (nTile) {
-                            const nRaw = nTile.territory || (typeof nTile.contains === 'object' ? nTile.contains?.territory : null);
-                            if (nRaw) { raw = nRaw; break; }
+                    for (let dr = -1; dr <= 1; dr++) {
+                        for (let dc = -1; dc <= 1; dc++) {
+                            if (dr === 0 && dc === 0) continue;
+                            const nr = row + dr, nc = col + dc;
+                            if (nr >= 0 && nr < 15 && nc >= 0 && nc < 15) {
+                                const nId = nr * 15 + nc;
+                                const nTile = bm.tiles[nId] || (bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[nId]);
+                                if (nTile && !(typeof bm.isVoidTile === 'function' && bm.isVoidTile(nTile)) && nTile.color !== 'black') {
+                                    const nRaw = nTile.territory || (typeof nTile.contains === 'object' ? nTile.contains?.territory : null);
+                                    if (nRaw) { raw = nRaw; break; }
+                                }
+                            }
                         }
+                        if (raw) break;
                     }
                 }
                 if (!raw) return null;
-                const str = typeof raw === 'object' ? raw.clan || raw.type : String(raw);
+                const str = typeof raw === 'object' ? raw.clan || raw.type || raw.affiliation : String(raw);
                 if (!str) return null;
                 const lower = str.toLowerCase();
                 if (lower.includes('mox')) return 'mox';
@@ -12602,6 +13284,7 @@ class DungeonPage extends React.Component {
                 if (lower.includes('mud')) return 'mud';
                 if (lower.includes('shadow')) return 'shadow';
                 if (lower.includes('paradox')) return 'paradox';
+                if (lower.includes('friendly') || lower.includes('player') || lower.includes('crew')) return 'player';
                 return lower.replace(/_clan$/i, '');
             };
 
@@ -12619,15 +13302,23 @@ class DungeonPage extends React.Component {
                     const row = Math.floor(curr / 15);
                     const col = curr % 15;
                     const neighbors = [];
-                    if (row > 0 && !bm.isPassageWallBlockingBetween(curr, (row - 1) * 15 + col, { ignoreBuilding: true })) neighbors.push((row - 1) * 15 + col);
-                    if (row < 14 && !bm.isPassageWallBlockingBetween(curr, (row + 1) * 15 + col, { ignoreBuilding: true })) neighbors.push((row + 1) * 15 + col);
-                    if (col > 0 && !bm.isPassageWallBlockingBetween(curr, row * 15 + (col - 1), { ignoreBuilding: true })) neighbors.push(row * 15 + (col - 1));
-                    if (col < 14 && !bm.isPassageWallBlockingBetween(curr, row * 15 + (col + 1), { ignoreBuilding: true })) neighbors.push(row * 15 + (col + 1));
+                    for (let dr = -1; dr <= 1; dr++) {
+                        for (let dc = -1; dc <= 1; dc++) {
+                            if (dr === 0 && dc === 0) continue;
+                            const nr = row + dr;
+                            const nc = col + dc;
+                            if (nr >= 0 && nr < 15 && nc >= 0 && nc < 15) {
+                                neighbors.push(nr * 15 + nc);
+                            }
+                        }
+                    }
 
                     for (const n of neighbors) {
-                        if (!visited.has(n) && getTileClan(n) === targetClan) {
+                        if (!visited.has(n)) {
                             visited.add(n);
-                            queue.push(n);
+                            if (getTileClan(n) === targetClan) {
+                                queue.push(n);
+                            }
                         }
                     }
                 }
@@ -12790,49 +13481,7 @@ class DungeonPage extends React.Component {
                     const minGy = anchorGy;
                     const maxGy = anchorGy + (isNode ? 0 : 1);
 
-                    superboard.miniboards.forEach((tMb, tMbIdx) => {
-                        if (!tMb || !tMb.tiles) return;
-                        const tMbX = (tMbIdx % 3) * 15;
-                        const tMbY = Math.floor(tMbIdx / 3) * 15;
-                        tMb.tiles.forEach((t) => {
-                            if (!t) return;
-                            const gx = tMbX + (t.coordinates ? t.coordinates[0] : (t.id % 15));
-                            const gy = tMbY + (t.coordinates ? t.coordinates[1] : Math.floor(t.id / 15));
-                            if (gx >= minGx && gx <= maxGx && gy >= minGy && gy <= maxGy) {
-                                const ec = (typeof t.contains === 'object' && t.contains) ? t.contains : {};
-                                t.contains = {
-                                    ...ec,
-                                    affiliation: affiliation,
-                                    isHostile: affiliation === 'hostile',
-                                    faction: affiliation,
-                                    growthCycles: currentCycles,
-                                    maxGrowthCycles: 5,
-                                    lastGrowthTime: t.lastGrowthTime || ec.lastGrowthTime || now,
-                                    level: t.level || ec.level || 1,
-                                    id: monolithId,
-                                    activated: true
-                                };
-                                t.affiliation = affiliation;
-                                t.growthCycles = currentCycles;
-                                t.lastGrowthTime = t.lastGrowthTime || ec.lastGrowthTime || now;
-                                t.isHostile = affiliation === 'hostile';
-                                t.activated = true;
-                            }
-
-                            let dx = 0;
-                            if (gx < minGx) dx = minGx - gx;
-                            else if (gx > maxGx) dx = gx - maxGx;
-                            let dy = 0;
-                            if (gy < minGy) dy = minGy - gy;
-                            else if (gy > maxGy) dy = gy - maxGy;
-                            const dist = Math.max(dx, dy);
-                            if (dist <= currentCycles) {
-                                t.territory = affiliation;
-                                t.territoryAffiliation = affiliation;
-                                t.territoryMonolithId = monolithId;
-                            }
-                        });
-                    });
+                    this.convertSuperboardContiguousTerritory(superboard, monolithId, affiliation, anchorGx, anchorGy, isNode);
                 } else if (!isExplicitlyActive) {
                     const ec = (typeof tile.contains === 'object' && tile.contains) ? tile.contains : {};
                     tile.contains = {
@@ -14343,125 +14992,7 @@ class DungeonPage extends React.Component {
                 this.clearMonolithTerritory(superboard, monolithId, affiliation, anchorGx, anchorGy);
                 return;
             }
-
-            const isGeneratorActive = !!(tile.generatorData?.activated || cObj?.generatorData?.activated);
-            const isExplicitlyActive = !!(cObj?.activated || tile.activated || isGeneratorActive || (cObj?.growthCycles > 0) || (tile.growthCycles > 0) || sKey.includes('dark_domain_monolith') || sKey.includes('dark_domain_node') || tile.isHostile || cObj?.isHostile || (cObj?.affiliation && cObj.affiliation !== 'none') || (tile.affiliation && tile.affiliation !== 'none'));
-            if (!isExplicitlyActive) return;
-
-                let affiliation = cObj?.affiliation || tile.affiliation || (isGeneratorActive ? 'player' : null);
-                if (affiliation !== 'neutral' && affiliation !== 'friendly' && affiliation !== 'player' && (tile.isHostile || cObj?.isHostile || cObj?.faction === 'hostile' || sKey.includes('dark_domain_monolith') || sKey.includes('dark_domain_node'))) {
-                    affiliation = 'hostile';
-                }
-                if (!affiliation || affiliation === 'none' || affiliation === 'neutral') return;
-
-                const level = cObj?.level || tile.level || 1;
-                const maxGrowthCycles = level >= 2 ? 10 : 5;
-                let growthCycles = cObj?.growthCycles ?? tile.growthCycles ?? 0;
-                let lastGrowthTime = cObj?.lastGrowthTime || tile.lastGrowthTime || 0;
-
-                if (!lastGrowthTime) {
-                    lastGrowthTime = now;
-                    if (cObj) cObj.lastGrowthTime = now;
-                    tile.lastGrowthTime = now;
-                }
-
-                const shouldGrow = (growthCycles === 0) || (growthCycles < maxGrowthCycles && (now - lastGrowthTime >= 30000));
-
-                if (shouldGrow) {
-                    const nextCycle = growthCycles + 1;
-                    const isNode = sKey.includes('domain_node') || sKey.includes('dark_domain_node');
-                    const anchorGx = (mbIdx % 3) * 15 + (tIdx % 15);
-                    const anchorGy = Math.floor(mbIdx / 3) * 15 + Math.floor(tIdx / 15);
-                    const minGx = anchorGx;
-                    const maxGx = anchorGx + (isNode ? 0 : 1);
-                    const minGy = anchorGy;
-                    const maxGy = anchorGy + (isNode ? 0 : 1);
-
-                    const monolithId = cObj?.id || tile.id || `monolith_${anchorGx}_${anchorGy}`;
-
-                    superboard.miniboards.forEach((targetMb, targetMbIdx) => {
-                        if (!targetMb || !targetMb.tiles) return;
-                        const mbX = (targetMbIdx % 3) * 15;
-                        const mbY = Math.floor(targetMbIdx / 3) * 15;
-
-                        targetMb.tiles.forEach((targetTile) => {
-                            if (!targetTile) return;
-                            const gx = mbX + (targetTile.coordinates ? targetTile.coordinates[0] : (targetTile.id % 15));
-                            const gy = mbY + (targetTile.coordinates ? targetTile.coordinates[1] : Math.floor(targetTile.id / 15));
-
-                            let dx = 0;
-                            if (gx < minGx) dx = minGx - gx;
-                            else if (gx > maxGx) dx = gx - maxGx;
-
-                            let dy = 0;
-                            if (gy < minGy) dy = minGy - gy;
-                            else if (gy > maxGy) dy = gy - maxGy;
-
-                            const dist = Math.max(dx, dy);
-                            if (dist <= nextCycle) {
-                                const wasClaimed = targetTile.territory === affiliation;
-                                targetTile.territory = affiliation;
-                                targetTile.territoryAffiliation = affiliation;
-                                targetTile.territoryMonolithId = monolithId;
-                                if (!wasClaimed) {
-                                    targetTile.newlyClaimed = true;
-                                    targetTile.claimDelayMs = Math.max(0, dist - 1) * 150;
-                                }
-                            }
-                        });
-                    });
-
-                    // Sync updated growth state across all 4 cells of this specific monolith
-                    superboard.miniboards.forEach((targetMb, targetMbIdx) => {
-                        if (!targetMb || !targetMb.tiles) return;
-                        const mbX = (targetMbIdx % 3) * 15;
-                        const mbY = Math.floor(targetMbIdx / 3) * 15;
-                        targetMb.tiles.forEach((t) => {
-                            if (!t) return;
-                            const tgx = mbX + (t.coordinates ? t.coordinates[0] : (t.id % 15));
-                            const tgy = mbY + (t.coordinates ? t.coordinates[1] : Math.floor(t.id / 15));
-                            if (tgx >= minGx && tgx <= maxGx && tgy >= minGy && tgy <= maxGy) {
-                                const existingC = (typeof t.contains === 'object' && t.contains) ? t.contains : {};
-                                t.contains = {
-                                    ...existingC,
-                                    affiliation: affiliation,
-                                    isHostile: affiliation === 'hostile',
-                                    faction: affiliation,
-                                    growthCycles: nextCycle,
-                                    maxGrowthCycles: maxGrowthCycles,
-                                    lastGrowthTime: now,
-                                    level: level,
-                                    id: monolithId,
-                                    activated: true
-                                };
-                                t.affiliation = affiliation;
-                                t.isHostile = affiliation === 'hostile';
-                                t.growthCycles = nextCycle;
-                                t.lastGrowthTime = now;
-                            }
-                        });
-                    });
-
-                    this.updateSuperboardViewport();
-                    setTimeout(() => {
-                        if (superboard && superboard.miniboards) {
-                            superboard.miniboards.forEach(mb => {
-                                if (mb && mb.tiles) {
-                                    mb.tiles.forEach(t => {
-                                        if (t) t.newlyClaimed = false;
-                                    });
-                                }
-                            });
-                        }
-                        this.updateSuperboardViewport();
-                    }, 2000);
-
-                    const affTitle = affiliation.toUpperCase();
-                    this.invalidateSuperboardStructureCache();
-                    this.displayMessage(`✦ Domain Monolith expanded ${affTitle} territory (Ring ${nextCycle}/${maxGrowthCycles})!`);
-                    this.checkPocketDimensionVictory();
-                }
-            });
+        });
 
         this.tickPocketResourceGenerators(superboard);
         this.tickClaimableBuildings(superboard);
@@ -14654,132 +15185,66 @@ class DungeonPage extends React.Component {
         return clearedCount;
     };
 
-    activateSuperboardDomainMonolith = (superboard, monolith, affiliation = 'hostile') => {
-        if (!superboard || !monolith) return;
-        const now = Date.now();
-        const { anchorGx, anchorGy } = monolith;
-        const sKey = String(monolith.key || monolith.subtype || monolith.type || monolith.containsSubtype || monolith.tile?.contains?.subtype || monolith.cObj?.subtype || monolith.cObj?.key || monolith.tile?.contains?.key || monolith.tile?.building || '').toLowerCase();
-        const isNode = sKey.includes('domain_node') || sKey.includes('dark_domain_node') || sKey.includes('node');
+    convertSuperboardContiguousTerritory = (superboard, monolithId, affiliation, anchorGx, anchorGy, isNode = false) => {
+        if (!superboard || !Array.isArray(superboard.miniboards) || anchorGx === null || anchorGy === null) return;
         const minGx = anchorGx;
         const maxGx = anchorGx + (isNode ? 0 : 1);
         const minGy = anchorGy;
         const maxGy = anchorGy + (isNode ? 0 : 1);
-        const monolithId = monolith.id || `monolith_${anchorGx}_${anchorGy}`;
 
-        // 0. Fully clear out any territory that this monolith had generated previously across the superboard
-        const possibleIds = new Set([
-            monolithId,
-            monolith.id,
-            `monolith_${anchorGx}_${anchorGy}`,
-            monolith.cObj?.id,
-            monolith.tile?.id ? `monolith_${monolith.tile.id}` : null
-        ].filter(Boolean));
+        const queue = [];
+        const visited = new Set();
 
+        // 1. Mark monolith footprint tiles (only the building footprint itself: 1x1 for node, 2x2 for monolith)
         superboard.miniboards.forEach((mb, mbIdx) => {
             if (!mb || !mb.tiles) return;
             const mbX = (mbIdx % 3) * 15;
             const mbY = Math.floor(mbIdx / 3) * 15;
             mb.tiles.forEach((t, tIdx) => {
                 if (!t) return;
-                const gx = mbX + (tIdx % 15);
-                const gy = mbY + Math.floor(tIdx / 15);
+                const gx = mbX + (t.coordinates ? t.coordinates[0] : (tIdx % 15));
+                const gy = mbY + (t.coordinates ? t.coordinates[1] : Math.floor(tIdx / 15));
 
-                let dx = 0;
-                if (gx < minGx) dx = minGx - gx;
-                else if (gx > maxGx) dx = gx - maxGx;
-
-                let dy = 0;
-                if (gy < minGy) dy = minGy - gy;
-                else if (gy > maxGy) dy = gy - maxGy;
-
-                const dist = Math.max(dx, dy);
-
-                const isTaggedWithMonolith = possibleIds.has(t.territoryMonolithId) ||
-                    (t.contains && typeof t.contains === 'object' && possibleIds.has(t.contains.territoryMonolithId));
-                const isOldTerritory = t.territory && t.territory !== affiliation;
-                const isOldTerritoryInRadius = dist <= 12 && isOldTerritory;
-
-                if (isTaggedWithMonolith || isOldTerritoryInRadius) {
-                    delete t.territory;
-                    delete t.territoryAffiliation;
-                    delete t.territoryMonolithId;
-                    delete t.growthCycles;
-                    delete t.lastGrowthTime;
-                    delete t.newlyClaimed;
-                    delete t.isHostile;
-                    const isMonolithFootprint = (gx >= minGx && gx <= maxGx && gy >= minGy && gy <= maxGy);
-                    if (!isMonolithFootprint) {
-                        delete t.affiliation;
-                        delete t.generatorData;
-                    }
-
-                    if (t.contains && typeof t.contains === 'object') {
-                        delete t.contains.territory;
-                        delete t.contains.territoryAffiliation;
-                        delete t.contains.territoryMonolithId;
-                        delete t.contains.growthCycles;
-                        delete t.contains.lastGrowthTime;
-                        delete t.contains.isHostile;
-                        if (!isMonolithFootprint && (!t.contains.placedBy || t.contains.placedBy !== 'player')) {
-                            delete t.contains.affiliation;
-                            delete t.contains.generatorData;
-                            delete t.contains.faction;
-                        }
-                    }
-                }
-            });
-        });
-
-        // 1. Update all cells of the 2x2 monolith
-        superboard.miniboards.forEach((mb, mbIdx) => {
-            if (!mb || !mb.tiles) return;
-            const mbX = (mbIdx % 3) * 15;
-            const mbY = Math.floor(mbIdx / 3) * 15;
-            mb.tiles.forEach((t, tIdx) => {
-                if (!t) return;
-                const gx = mbX + (tIdx % 15);
-                const gy = mbY + Math.floor(tIdx / 15);
-                if (gx >= minGx && gx <= maxGx && gy >= minGy && gy <= maxGy) {
+                const isFootprint = (gx >= minGx && gx <= maxGx && gy >= minGy && gy <= maxGy);
+                if (isFootprint) {
                     const existingC = (typeof t.contains === 'object' && t.contains) ? t.contains : {};
                     t.contains = {
                         ...existingC,
                         affiliation: affiliation,
                         isHostile: (affiliation === 'hostile'),
                         faction: affiliation,
-                        growthCycles: 1,
-                        maxGrowthCycles: 5,
-                        lastGrowthTime: now,
-                        level: 1,
                         id: monolithId,
-                        activated: true,
-                        territory: affiliation,
-                        territoryAffiliation: affiliation,
-                        territoryMonolithId: monolithId,
-                        newlyClaimed: true,
-                        claimDelayMs: 0
+                        activated: true
                     };
                     t.affiliation = affiliation;
-                    t.growthCycles = 1;
-                    t.lastGrowthTime = now;
+                    t.activated = true;
                     t.isHostile = (affiliation === 'hostile');
+
                     t.territory = affiliation;
                     t.territoryAffiliation = affiliation;
                     t.territoryMonolithId = monolithId;
-                    t.newlyClaimed = true;
-                    t.claimDelayMs = 0;
+                    if (t.contains && typeof t.contains === 'object') {
+                        t.contains.territory = affiliation;
+                        t.contains.territoryAffiliation = affiliation;
+                        t.contains.territoryMonolithId = monolithId;
+                    }
+
+                    const key = `${gx}_${gy}`;
+                    visited.add(key);
+                    queue.push({ gx, gy });
                 }
             });
         });
 
-        // 2. Claim footprint + Ring 1 as territory immediately
+        // 2. Also check if immediate adjacent tiles (dist <= 1) have existing territory to seed flood fill
         superboard.miniboards.forEach((mb, mbIdx) => {
             if (!mb || !mb.tiles) return;
             const mbX = (mbIdx % 3) * 15;
             const mbY = Math.floor(mbIdx / 3) * 15;
             mb.tiles.forEach((t, tIdx) => {
                 if (!t) return;
-                const gx = mbX + (tIdx % 15);
-                const gy = mbY + Math.floor(tIdx / 15);
+                const gx = mbX + (t.coordinates ? t.coordinates[0] : (tIdx % 15));
+                const gy = mbY + (t.coordinates ? t.coordinates[1] : Math.floor(tIdx / 15));
 
                 let dx = 0;
                 if (gx < minGx) dx = minGx - gx;
@@ -14791,38 +15256,82 @@ class DungeonPage extends React.Component {
 
                 const dist = Math.max(dx, dy);
                 if (dist <= 1) {
-                    t.territory = affiliation;
-                    t.territoryAffiliation = affiliation;
-                    t.territoryMonolithId = monolithId;
-                    t.newlyClaimed = true;
-                    t.claimDelayMs = dist * 150;
-                    t.lastGrowthTime = now;
-                    if (t.contains && typeof t.contains === 'object') {
-                        t.contains.territory = affiliation;
-                        t.contains.territoryAffiliation = affiliation;
-                        t.contains.territoryMonolithId = monolithId;
-                        t.contains.newlyClaimed = true;
-                        t.contains.claimDelayMs = dist * 150;
-                        t.contains.lastGrowthTime = now;
+                    const key = `${gx}_${gy}`;
+                    const hasTerritory = !!(t.territory || t.territoryAffiliation || t.contains?.territory || t.contains?.territoryAffiliation);
+                    if (hasTerritory) {
+                        t.territory = affiliation;
+                        t.territoryAffiliation = affiliation;
+                        t.territoryMonolithId = monolithId;
+                        if (t.contains && typeof t.contains === 'object') {
+                            t.contains.territory = affiliation;
+                            t.contains.territoryAffiliation = affiliation;
+                            t.contains.territoryMonolithId = monolithId;
+                        }
+                        if (!visited.has(key)) {
+                            visited.add(key);
+                            queue.push({ gx, gy });
+                        }
                     }
                 }
             });
         });
 
+        // 2. Flood fill contiguous existing domain/territory tiles on the superboard
+
+        const getTileAt = (gx, gy) => {
+            if (gx < 0 || gx >= 45 || gy < 0 || gy >= 45) return null;
+            const mbIdx = Math.floor(gy / 15) * 3 + Math.floor(gx / 15);
+            const tIdx = (gy % 15) * 15 + (gx % 15);
+            return superboard.miniboards[mbIdx]?.tiles?.[tIdx] || null;
+        };
+
+        while (queue.length > 0) {
+            const { gx, gy } = queue.shift();
+
+            for (let dy = -1; dy <= 1; dy++) {
+                for (let dx = -1; dx <= 1; dx++) {
+                    if (dx === 0 && dy === 0) continue;
+                    const ngx = gx + dx;
+                    const ngy = gy + dy;
+                    const nKey = `${ngx}_${ngy}`;
+                    if (visited.has(nKey)) continue;
+
+                    const tile = getTileAt(ngx, ngy);
+                    if (!tile) continue;
+
+                    const isVoid = tile.isVoid === true || tile.contains === 'void' || (tile.contains && typeof tile.contains === 'object' && (tile.contains.type === 'void' || tile.contains.isVoid));
+                    if (isVoid || tile.color === 'black' || tile.color === '#000000' || tile.color === '#000') continue;
+
+                    const hasTerritory = !!(tile.territory || tile.territoryAffiliation || tile.contains?.territory || tile.contains?.territoryAffiliation);
+                    if (hasTerritory) {
+                        visited.add(nKey);
+                        queue.push({ gx: ngx, gy: ngy });
+
+                        tile.territory = affiliation;
+                        tile.territoryAffiliation = affiliation;
+                        tile.territoryMonolithId = monolithId;
+                        if (tile.contains && typeof tile.contains === 'object') {
+                            tile.contains.territory = affiliation;
+                            tile.contains.territoryAffiliation = affiliation;
+                            tile.contains.territoryMonolithId = monolithId;
+                        }
+                    }
+                }
+            }
+        }
+    };
+
+    activateSuperboardDomainMonolith = (superboard, monolith, affiliation = 'hostile') => {
+        if (!superboard || !monolith) return;
+        const { anchorGx, anchorGy } = monolith;
+        const sKey = String(monolith.key || monolith.subtype || monolith.type || monolith.containsSubtype || monolith.tile?.contains?.subtype || monolith.cObj?.subtype || monolith.cObj?.key || monolith.tile?.contains?.key || monolith.tile?.building || '').toLowerCase();
+        const isNode = sKey.includes('domain_node') || sKey.includes('dark_domain_node') || sKey.includes('node');
+        const monolithId = monolith.id || `monolith_${anchorGx}_${anchorGy}`;
+
+        this.convertSuperboardContiguousTerritory(superboard, monolithId, affiliation, anchorGx, anchorGy, isNode);
+
         this.updateSuperboardViewport();
         this.checkPocketDimensionVictory();
-        setTimeout(() => {
-            if (superboard && superboard.miniboards) {
-                superboard.miniboards.forEach(mb => {
-                    if (mb && mb.tiles) {
-                        mb.tiles.forEach(t => {
-                            if (t) t.newlyClaimed = false;
-                        });
-                    }
-                });
-            }
-            this.updateSuperboardViewport();
-        }, 2000);
     };
 
     isSuperboardCoordVisibleToUser = (gx, gy, targetTile) => {
@@ -18923,20 +19432,23 @@ class DungeonPage extends React.Component {
                 if (!rawClan && bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[outpost.id]) {
                     rawClan = bm.currentBoard.tiles[outpost.id].territory || bm.currentBoard.tiles[outpost.id].contains?.territory;
                 }
-                // If not directly on outpost tile, check 4 orthogonal neighbor tiles for territory clan
+                // If not directly on outpost tile, check neighbor tiles for territory clan
                 if (!rawClan) {
                     const rowO = Math.floor(outpost.id / 15), colO = outpost.id % 15;
-                    const neighbors = [];
-                    if (rowO > 0 && !bm.isPassageWallBlockingBetween(outpost.id, (rowO - 1) * 15 + colO, { ignoreBuilding: true })) neighbors.push((rowO - 1) * 15 + colO);
-                    if (rowO < 14 && !bm.isPassageWallBlockingBetween(outpost.id, (rowO + 1) * 15 + colO, { ignoreBuilding: true })) neighbors.push((rowO + 1) * 15 + colO);
-                    if (colO > 0 && !bm.isPassageWallBlockingBetween(outpost.id, rowO * 15 + (colO - 1), { ignoreBuilding: true })) neighbors.push(rowO * 15 + (colO - 1));
-                    if (colO < 14 && !bm.isPassageWallBlockingBetween(outpost.id, rowO * 15 + (colO + 1), { ignoreBuilding: true })) neighbors.push(rowO * 15 + (colO + 1));
-                    for (const nId of neighbors) {
-                        const nTile = bm.tiles[nId] || (bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[nId]);
-                        if (nTile) {
-                            const nRaw = nTile.territory || (typeof nTile.contains === 'object' ? nTile.contains?.territory : null);
-                            if (nRaw) { rawClan = nRaw; break; }
+                    for (let dr = -1; dr <= 1; dr++) {
+                        for (let dc = -1; dc <= 1; dc++) {
+                            if (dr === 0 && dc === 0) continue;
+                            const nr = rowO + dr, nc = colO + dc;
+                            if (nr >= 0 && nr < 15 && nc >= 0 && nc < 15) {
+                                const nId = nr * 15 + nc;
+                                const nTile = bm.tiles[nId] || (bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[nId]);
+                                if (nTile) {
+                                    const nRaw = nTile.territory || (typeof nTile.contains === 'object' ? nTile.contains?.territory : null);
+                                    if (nRaw) { rawClan = nRaw; break; }
+                                }
+                            }
                         }
+                        if (rawClan) break;
                     }
                 }
                 const rawClanStr = typeof rawClan === 'object' ? rawClan.clan || rawClan.type : (rawClan ? String(rawClan) : null);
@@ -18977,7 +19489,7 @@ class DungeonPage extends React.Component {
                                     bm.removePygmyTile(targetTile.id, () => this.setState({ tiles: [...bm.tiles] }));
                                     this.displayMessage('🏹 Your Outpost eliminated an enemy unit in your territory!');
                                 }
-                            });
+                            }, 'fireball', { isOutpost: true });
                         }
                     }
                     return;
@@ -18993,7 +19505,7 @@ class DungeonPage extends React.Component {
                         if (this.projectileCanvasRef && this.projectileCanvasRef.current) {
                             this.projectileCanvasRef.current.fireProjectile(outpost.id, playerTileIdx, () => {
                                 this.handleProjectileHitPlayer(firedTargetTileIdx);
-                            }, 'fireball', { aimedAtPlayer: true });
+                            }, 'fireball', { aimedAtPlayer: true, isOutpost: true });
                         }
                         return;
                     }
@@ -19018,7 +19530,7 @@ class DungeonPage extends React.Component {
                                 if (typeof bm.removePygmyTile === 'function' && bm.getContainsType(targetTile.contains) === 'pygmies') {
                                     bm.removePygmyTile(targetTile.id, () => this.setState({ tiles: [...bm.tiles] }));
                                 }
-                            });
+                            }, 'fireball', { isOutpost: true });
                         }
                         return;
                     }
@@ -19034,7 +19546,7 @@ class DungeonPage extends React.Component {
                     if (this.projectileCanvasRef && this.projectileCanvasRef.current) {
                         this.projectileCanvasRef.current.fireProjectile(outpost.id, playerTileIdx, () => {
                             this.handleProjectileHitPlayer(firedTargetTileIdx);
-                        }, 'fireball', { aimedAtPlayer: true });
+                        }, 'fireball', { aimedAtPlayer: true, isOutpost: true });
                     }
                 }
             });
@@ -19832,7 +20344,9 @@ class DungeonPage extends React.Component {
                                     actions.forEach(action => {
                                         const key = action.type === 'glyph' && action.glyphTier
                                             ? `glyph:${action.glyphTier}`
-                                            : action.type;
+                                            : action.type === 'spirit_vessel' && action.vesselTier
+                                                ? `spirit_vessel:${action.vesselTier}`
+                                                : action.type;
                                         if (!grouped[key]) grouped[key] = [];
                                         grouped[key].push(action);
                                     });
@@ -19852,6 +20366,10 @@ class DungeonPage extends React.Component {
                                         let iconUrl = action.iconUrlInverted || action.iconUrl;
                                         if (!iconUrl && action.glyphTier && typeof images !== 'undefined') {
                                             iconUrl = images[`${action.glyphTier}_glyph`] || '';
+                                        }
+                                        if (!iconUrl && action.vesselTier && typeof images !== 'undefined') {
+                                            const vDef = SPIRIT_VESSELS[action.vesselTier];
+                                            iconUrl = (vDef && images[vDef.icon]) || images[action.vesselTier] || images['whiteskull'] || '';
                                         }
                                         if (!iconUrl && action.subtype === 'magic missile' && typeof images !== 'undefined') {
                                             iconUrl = images['magic_missile_icon'] || images['magic_missile_inverted'] || images['magic_missile'];
@@ -21274,13 +21792,15 @@ class DungeonPage extends React.Component {
         const stableChem = (this.props.inventoryManager?.stable_chemicals || 0);
         const chemicals = unstableChem + stableChem + inv.filter(item => item && (item._im_key === 'chemicals' || item.id === 'chemicals' || item.name === 'Chemicals')).length;
 
+        const scrap = getScrap(meta);
+
         return {
-            totalAtk, totalDef, food, foodLimit, isOverLimit, resolve, deaths, tooltip, incomeRates, gold, dust, wood, mushrooms, stone, slate, chemicals, unstableChem, stableChem
+            totalAtk, totalDef, food, foodLimit, isOverLimit, resolve, deaths, tooltip, incomeRates, gold, dust, wood, mushrooms, stone, slate, chemicals, unstableChem, stableChem, scrap, crew
         };
     };
 
     renderPoppedOutResourcesTopBar = () => {
-        const { totalAtk, totalDef, food, foodLimit, isOverLimit, resolve, incomeRates, gold, dust, wood, mushrooms, stone, slate, chemicals, unstableChem, stableChem } = this.getResourcesData();
+        const { totalAtk, totalDef, food, foodLimit, isOverLimit, resolve, incomeRates, gold, dust, wood, mushrooms, stone, slate, chemicals, unstableChem, stableChem, scrap, crew } = this.getResourcesData();
         const isInPocket = !!this.state.inSuperboard;
 
         return (
@@ -21325,7 +21845,7 @@ class DungeonPage extends React.Component {
                                 {food}/{foodLimit}
                             </span>
                         </div>
-                        <div className="topbar-resource-item" title="Gold">
+                        <div className={`topbar-resource-item ${this.state.goldTrackerImpact ? 'gold-tracker-impact' : ''}`} data-resource-tracker="gold" title="Gold">
                             <span className="res-icon">🪙</span>
                             <span className="res-val" style={{ color: '#ffd700' }}>
                                 {incomeRates.gold > 0 && <span className="res-income">+{incomeRates.gold}</span>}
@@ -21419,6 +21939,12 @@ class DungeonPage extends React.Component {
                                 {chemicals}
                             </span>
                         </div>
+                        {(hasEngineerUnit(crew) || scrap > 0) && (
+                            <div className="topbar-resource-item" title={`Scrap: ${scrap}/${SCRAP_CAP}`}>
+                                <span className="res-icon">⚙️</span>
+                                <span className="res-val" style={{ color: '#e67e22' }}>{scrap}</span>
+                            </div>
+                        )}
                     </React.Fragment>
                 )}
                 <button
@@ -21437,7 +21963,7 @@ class DungeonPage extends React.Component {
         const resourcesCollapsed = this.isSectionCollapsed('resources_submenu');
         const poppedOut = !!this.state.popoutResources;
         const isInPocket = !!this.state.inSuperboard;
-        const { totalAtk, totalDef, food, foodLimit, isOverLimit, resolve, deaths, tooltip, incomeRates, gold, dust, wood, mushrooms, stone, slate, chemicals, unstableChem, stableChem } = this.getResourcesData();
+        const { totalAtk, totalDef, food, foodLimit, isOverLimit, resolve, deaths, tooltip, incomeRates, gold, dust, wood, mushrooms, stone, slate, chemicals, unstableChem, stableChem, scrap, crew } = this.getResourcesData();
 
         return (
             <div className="dungeon-panel-section section-status_summary">
@@ -21554,7 +22080,7 @@ class DungeonPage extends React.Component {
                                         </div>
                                         {!resourcesCollapsed && (
                                             <div className="ql-submenu-content">
-                                                <div className="ql-row">
+                                                <div className={`ql-row ${this.state.goldTrackerImpact ? 'gold-tracker-impact' : ''}`} data-resource-tracker="gold" id="resource-tracker-gold">
                                                     <span className="ql-label"><span className="gold-emoji" role="img" aria-label="gold coin">🪙</span> Gold</span>
                                                     <span className="ql-value" style={{ color: '#ffd700' }}>
                                                         {incomeRates.gold > 0 && <span style={{ color: '#2ecc71', marginRight: '6px', fontWeight: 'bold' }}>+{incomeRates.gold}</span>}
@@ -21653,6 +22179,14 @@ class DungeonPage extends React.Component {
                                                         {chemicals}
                                                     </span>
                                                 </div>
+                                                {(hasEngineerUnit(crew) || scrap > 0) && (
+                                                    <div className="ql-row" title={`Scrap: ${scrap}/${SCRAP_CAP}`}>
+                                                        <span className="ql-label"><span role="img" aria-label="gear">⚙️</span> Scrap</span>
+                                                        <span className="ql-value" style={{ color: '#e67e22' }}>
+                                                            {scrap} / {SCRAP_CAP}
+                                                        </span>
+                                                    </div>
+                                                )}
                                             </div>
                                         )}
                                     </React.Fragment>
@@ -22098,6 +22632,37 @@ class DungeonPage extends React.Component {
                                         ? selectedMember.selectedExpeditionSkillSlot
                                         : 0;
                                     const slotSize = (this.state.tileSize && this.state.tileSize > 20) ? this.state.tileSize : 48;
+                                    const defaultExpSkills = {
+                                        wizard: ['astral_conduit', 'ley_tap', 'scry', 'far_sight'],
+                                        sage: ['healing_ground', 'sing'],
+                                        ranger: ['sneak_attack', 'spike_trap'],
+                                        soldier: ['soldier_shield', 'breacher'],
+                                        summoner: ['wandering_eye', 'shadow_effigy', 'void_fetch'],
+                                        glitterburn: ['blinding_beacon', 'prismatic_flare'],
+                                        horologist: ['rewind_step', 'stopwatch'],
+                                        engineer: ENGINEER_EXPEDITION_SKILLS
+                                    };
+                                    const rawMemberClass = ((selectedMember && (selectedMember.type || selectedMember.class || selectedMember.image)) || '').toLowerCase();
+                                    const isSummonerMember = rawMemberClass.includes('summoner') || rawMemberClass === 'vaelis' || rawMemberClass === 'morwenna' || String(selectedMember?.image || '').toLowerCase().includes('summoner');
+                                    const memberClass = isSummonerMember ? 'summoner' : rawMemberClass;
+                                    let expSkills = (selectedMember && Array.isArray(selectedMember.expeditionSkills) && selectedMember.expeditionSkills.length > 0)
+                                        ? selectedMember.expeditionSkills
+                                        : (defaultExpSkills[memberClass] || (isSummonerMember ? ['wandering_eye', 'shadow_effigy', 'void_fetch'] : []));
+                                    if (memberClass === 'wizard' && !expSkills.includes('far_sight')) {
+                                        expSkills = [...expSkills, 'far_sight'];
+                                    }
+                                    if (isSummonerMember) {
+                                        const summonerDefaults = ['wandering_eye', 'shadow_effigy', 'void_fetch'];
+                                        summonerDefaults.forEach(sk => {
+                                            if (!expSkills.includes(sk)) expSkills = [...expSkills, sk];
+                                        });
+                                    }
+                                    if (memberClass === 'engineer') {
+                                        ENGINEER_EXPEDITION_SKILLS.forEach(sk => {
+                                            if (!expSkills.includes(sk)) expSkills = [...expSkills, sk];
+                                        });
+                                    }
+                                    const slotCount = Math.max(3, expSkills.length);
                                     return (
                                         <div
                                             className={`expedition-skills-container ${isSelected ? 'has-selected-member' : ''}`}
@@ -22108,38 +22673,26 @@ class DungeonPage extends React.Component {
                                                 <span>Expedition Skills</span>
                                             </div>
                                             <div className="expedition-skills-slots">
-                                                {[0, 1, 2].map(slotIdx => {
-                                                    const isSlotSelected = isSelected && (slotIdx === activeSlotIdx);
-                                                    const isFlashing = this.state.flashingSkillSlot === slotIdx;
-                                                    const currentMember = selectedMember || this.state.selectedCrewMember;
-                                                    const defaultExpSkills = {
-                                                        wizard: ['astral_conduit', 'ley_tap', 'scry'],
-                                                        sage: ['healing_ground', 'sing'],
-                                                        ranger: ['sneak_attack', 'spike_trap'],
-                                                        soldier: ['soldier_shield', 'breacher'],
-                                                        summoner: ['wandering_eye'],
-                                                        glitterburn: ['blinding_beacon', 'prismatic_flare'],
-                                                        horologist: ['rewind_step', 'stopwatch']
-                                                    };
-                                                    const memberClass = ((currentMember && (currentMember.type || currentMember.image)) || '').toLowerCase();
-                                                    const expSkills = (currentMember && Array.isArray(currentMember.expeditionSkills) && currentMember.expeditionSkills.length > 0)
-                                                        ? currentMember.expeditionSkills
-                                                        : (defaultExpSkills[memberClass] || []);
+                                                {Array.from({ length: slotCount }, (_, slotIdx) => {
+                                                        const isSlotSelected = isSelected && (slotIdx === activeSlotIdx);
+                                                        const isFlashing = this.state.flashingSkillSlot === slotIdx;
+                                                        const skillKey = expSkills[slotIdx];
+                                                        const skillDef = skillKey ? skillsMatrix[skillKey] : null;
+                                                        const rawSkillIcon = skillDef ? skillDef.icon : (skillKey ? (images[skillKey] || images[`${skillKey}_${memberClass}`]) : null);
+                                                        const resolvedSkillIcon = (rawSkillIcon && typeof rawSkillIcon === 'object' && rawSkillIcon.default)
+                                                            ? rawSkillIcon.default
+                                                            : (rawSkillIcon || (skillKey === 'wandering_eye' ? ((images.wandering_eye_summoner && images.wandering_eye_summoner.default) || images.wandering_eye_summoner || (images.wandering_eye && images.wandering_eye.default) || images.wandering_eye || images.the_watchful_eye || images.eye_open || images.eye) : null));
+                                                        const skillName = skillDef ? skillDef.name : (skillKey ? skillKey.replace(/_/g, ' ') : null);
+                                                        let slotTitle = skillName ? `${skillName} (Expedition Skill Slot ${slotIdx + 1}` : `Expedition Skill Slot ${slotIdx + 1}`;
+                                                        if (isSelected && isSlotSelected) {
+                                                            slotTitle += skillName ? ` - Selected - Click or Press Shift+Space to trigger)` : ` - Selected - Click or Press Shift+Space to trigger`;
+                                                        } else if (skillName) {
+                                                            slotTitle += ` - Click or Press Shift+Space to trigger)`;
+                                                        }
 
-                                                    const skillKey = expSkills[slotIdx];
-                                                    const skillDef = skillKey ? skillsMatrix[skillKey] : null;
-                                                    const skillIcon = skillDef ? skillDef.icon : (skillKey ? (images[skillKey] || images[`${skillKey}_${memberClass}`]) : null);
-                                                    const skillName = skillDef ? skillDef.name : (skillKey ? skillKey.replace(/_/g, ' ') : null);
-                                                    let slotTitle = skillName ? `${skillName} (Expedition Skill Slot ${slotIdx + 1}` : `Expedition Skill Slot ${slotIdx + 1}`;
-                                                    if (isSelected && isSlotSelected) {
-                                                        slotTitle += skillName ? ` - Selected - Click or Press Shift+Space to trigger)` : ` - Selected - Click or Press Shift+Space to trigger`;
-                                                    } else if (skillName) {
-                                                        slotTitle += ` - Click or Press Shift+Space to trigger)`;
-                                                    }
-
-                                                    return (
-                                                        <div
-                                                            key={slotIdx}
+                                                        return (
+                                                            <div
+                                                                key={slotIdx}
                                                             className={`expedition-skill-slot slot-pos-${slotIdx} ${isSelected ? 'slot-active' : ''} ${isSlotSelected ? 'selected-slot' : ''} ${isFlashing ? 'skill-slot-flashing' : ''}`}
                                                             style={{ width: slotSize, height: slotSize, cursor: isSelected ? 'pointer' : 'default', padding: 2, position: 'relative' }}
                                                             onClick={() => {
@@ -22149,9 +22702,9 @@ class DungeonPage extends React.Component {
                                                                 }
                                                             }}
                                                         >
-                                                            {skillIcon ? (
+                                                            {resolvedSkillIcon ? (
                                                                 <img
-                                                                    src={skillIcon}
+                                                                    src={resolvedSkillIcon}
                                                                     alt={skillName}
                                                                     style={{
                                                                         width: '100%',
@@ -24912,7 +25465,9 @@ class DungeonPage extends React.Component {
             return;
         }
 
-        this.props.inventoryManager.addCurrency(data)
+        if (this.props.inventoryManager && typeof this.props.inventoryManager.addCurrency === 'function') {
+            this.props.inventoryManager.addCurrency(data);
+        }
 
         if (type === 'food') {
             const meta = getMeta() || {};
@@ -24948,10 +25503,17 @@ class DungeonPage extends React.Component {
             this.activatePocketChemicalLantern();
         }
 
-        this.forceUpdate();
+        try {
+            if (this.updater && typeof this.updater.isMounted === 'function') {
+                if (this.updater.isMounted(this)) this.forceUpdate();
+            } else {
+                this.forceUpdate();
+            }
+        } catch (e) { }
 
 
-        if (this.props.boardManager && (this.props.boardManager.chestPickupInProgress || this.props.boardManager.treasurePickupInProgress)) {
+        const isChestOrTreasure = !!(this.props.boardManager && (this.props.boardManager.chestPickupInProgress || this.props.boardManager.treasurePickupInProgress));
+        if (isChestOrTreasure) {
             let iconKey = 'gold';
             if (data.type === 'shimmering_dust' || data.type === 'shimmering dust') {
                 iconKey = 'magic_moon_1';
@@ -24961,11 +25523,139 @@ class DungeonPage extends React.Component {
             this.triggerLootRadialArc({
                 type: 'currency',
                 id: data.type + '_' + Math.random(),
-                icon: iconKey === 'gold' ? images.getRandomGoldIcon() : (images[iconKey] || images['gold'] || null),
+                icon: iconKey === 'gold' ? (typeof images.getRandomGoldIcon === 'function' ? images.getRandomGoldIcon() : (images?.gold || null)) : (images[iconKey] || images['gold'] || null),
                 name: `${data.amount} ${type}`
             }, tile);
+        } else if (data.type === 'gold' && data.amount > 0 && tile) {
+            const goldIcon = (images && typeof images.getRandomGoldIcon === 'function')
+                ? images.getRandomGoldIcon()
+                : (images?.gold || null);
+            this.triggerLootRadialArc({
+                type: 'currency',
+                id: 'gold_' + Math.random(),
+                icon: goldIcon,
+                emoji: '🪙',
+                name: `+${data.amount} Gold`
+            }, tile);
+        }
+
+        // When gold is collected, after the pickup icon is rendered, trigger the flying gold coins animation to the resources panel
+        if (data.type === 'gold' && data.amount > 0) {
+            this._setTimeout(() => {
+                this.triggerFlyingGoldAnimation(tile, data.amount);
+            }, 450);
         }
     }
+
+    triggerFlyingGoldAnimation = (tile = null, amount = 0) => {
+        try {
+            // 1. Starting position (coordinates in viewport)
+            let startX = window.innerWidth / 2;
+            let startY = window.innerHeight / 2;
+
+            // Use the rendered loot icon if present
+            const lootItemEl = document.querySelector('.chest-loot-item') || document.querySelector('.chest-loot-overlay');
+            if (lootItemEl) {
+                const rect = lootItemEl.getBoundingClientRect();
+                startX = rect.left + rect.width / 2;
+                startY = rect.top + rect.height / 2;
+            } else if (tile && tile.id !== undefined && tile.id !== null) {
+                const tileEl = document.querySelector(`.tile[data-tile-id="${tile.id}"]`);
+                if (tileEl) {
+                    const rect = tileEl.getBoundingClientRect();
+                    startX = rect.left + rect.width / 2;
+                    startY = rect.top + rect.height / 2;
+                } else if (this.playerFloatRef?.current) {
+                    const rect = this.playerFloatRef.current.getBoundingClientRect();
+                    startX = rect.left + rect.width / 2;
+                    startY = rect.top + rect.height / 2;
+                }
+            } else if (this.playerFloatRef?.current) {
+                const rect = this.playerFloatRef.current.getBoundingClientRect();
+                startX = rect.left + rect.width / 2;
+                startY = rect.top + rect.height / 2;
+            }
+
+            // 2. Target position (Gold tracker in resources panel or topbar)
+            const targetCandidates = [
+                document.querySelector('.topbar-resource-item[data-resource-tracker="gold"]'),
+                document.querySelector('.ql-row[data-resource-tracker="gold"]'),
+                document.querySelector('#resource-tracker-gold'),
+                document.querySelector('[data-resource-tracker="gold"]'),
+                document.querySelector('.gold-emoji'),
+                document.querySelector('.section-status_summary'),
+                document.querySelector('.inventory-gold')
+            ].filter(Boolean);
+
+            let targetEl = targetCandidates.find(el => {
+                const r = el.getBoundingClientRect();
+                return (r.width > 0 && r.height > 0) || (el.offsetWidth > 0 && el.offsetHeight > 0);
+            }) || targetCandidates[0];
+
+            let targetX = window.innerWidth - 75;
+            let targetY = 90;
+            if (targetEl) {
+                const tRect = targetEl.getBoundingClientRect();
+                targetX = tRect.left + tRect.width / 2;
+                targetY = tRect.top + tRect.height / 2;
+            }
+
+            // 3. Spawn particles
+            const count = Math.min(8, Math.max(4, Math.floor(Math.log2((amount || 10) + 1)) + 2));
+            const particles = [];
+            const baseId = Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+
+            const goldIcon = (images && typeof images.getRandomGoldIcon === 'function')
+                ? images.getRandomGoldIcon()
+                : (images?.gold || null);
+            let resolvedIconUrl = typeof goldIcon === 'string' ? goldIcon : (goldIcon?.default || '');
+            if (resolvedIconUrl && typeof resolvedIconUrl === 'object') {
+                resolvedIconUrl = resolvedIconUrl.default || '';
+            }
+
+            for (let i = 0; i < count; i++) {
+                const angle = (Math.PI * 2 * i) / count;
+                const spread = 20 + Math.random() * 25;
+                const curveOffsetX = Math.cos(angle) * spread;
+                const curveOffsetY = Math.sin(angle) * spread - (25 + Math.random() * 20);
+
+                particles.push({
+                    id: `${baseId}_${i}`,
+                    startX: Math.round(startX),
+                    startY: Math.round(startY),
+                    targetX: Math.round(targetX),
+                    targetY: Math.round(targetY),
+                    curveOffsetX: Math.round(curveOffsetX),
+                    curveOffsetY: Math.round(curveOffsetY),
+                    delay: i * 65,
+                    duration: 650 + Math.round(Math.random() * 120),
+                    iconUrl: resolvedIconUrl
+                });
+            }
+
+            this.setState(prev => ({
+                flyingGoldCoins: [...(prev.flyingGoldCoins || []), ...particles]
+            }));
+
+            // Impact effect at the resource tracker when the coins arrive
+            const totalFlightTime = (count - 1) * 65 + 720;
+            this._setTimeout(() => {
+                this.setState({ goldTrackerImpact: true });
+                this._setTimeout(() => {
+                    this.setState({ goldTrackerImpact: false });
+                }, 450);
+            }, totalFlightTime - 120);
+
+            // Clean up particles
+            this._setTimeout(() => {
+                this.setState(prev => ({
+                    flyingGoldCoins: (prev.flyingGoldCoins || []).filter(p => !p.id.startsWith(baseId))
+                }));
+            }, totalFlightTime + 300);
+        } catch (e) {
+            console.error('Error triggering flying gold animation:', e);
+        }
+    };
     getResourceIncomeRates = () => {
         const rates = {
             food: 0,
@@ -25634,8 +26324,19 @@ class DungeonPage extends React.Component {
             return;
         }
         if (bool) {
+            this.armForwardEmplacementForBattle();
             this.reduxCombatManager = new CombatManagerRedux();
-            this.setState({ activePygmyCompanion: null });
+            if (this._wanderingEyeFlightTimer) {
+                clearInterval(this._wanderingEyeFlightTimer);
+                this._wanderingEyeFlightTimer = null;
+            }
+            if (typeof this.stopAutonomousWanderingEye === 'function') {
+                this.stopAutonomousWanderingEye();
+            }
+            if (typeof this.dismissDungeonWalker === 'function') {
+                this.dismissDungeonWalker();
+            }
+            this.setState({ activePygmyCompanion: null, activeWanderingEye: null, wanderingEye: null, activeDungeonWalker: null });
         } else {
             this.reduxCombatManager = null;
         }
@@ -25678,8 +26379,12 @@ class DungeonPage extends React.Component {
                         if (typeof containsVal === 'string') {
                             monsterType = containsVal;
                         } else if (typeof containsVal === 'object' && containsVal) {
-                            monsterType = containsVal.type || containsVal.subtype || containsVal.key || containsVal.name;
-                            if (monsterType === 'monster' && containsVal.subtype) monsterType = containsVal.subtype;
+                            let sub = containsVal.subtype;
+                            if (typeof sub === 'object' && sub !== null) {
+                                sub = sub.key || sub.type || sub.id;
+                            }
+                            monsterType = sub || containsVal.type || containsVal.key || containsVal.name;
+                            if (monsterType === 'monster' && sub) monsterType = sub;
                         }
 
                         const mm = this.props.monsterManager || defaultMonsterManager;
@@ -25718,11 +26423,43 @@ class DungeonPage extends React.Component {
                             }
                         }
 
-                        if (!monsterObj || !monsterObj.portrait) {
-                            if (this.state.monster && this.state.monster.portrait) {
-                                monsterObj = { ...this.state.monster };
-                            } else if (!monsterObj) {
-                                monsterObj = typeof containsVal === 'object' ? { ...containsVal } : { type: monsterType || 'monster', id: monsterType || 'monster', name: monsterType || 'Monster' };
+                        if (!monsterObj || !monsterObj.portrait || !monsterObj.stats || !monsterObj.level) {
+                            if (this.state.monster && this.state.monster.portrait && this.state.monster.stats && this.state.monster.level) {
+                                monsterObj = { ...this.state.monster, ...(monsterObj || {}) };
+                            } else {
+                                let fallback = null;
+                                if (mm && typeof mm.getRandomMonsterByTier === 'function') {
+                                    const tier = (typeof containsVal === 'object' && containsVal && (containsVal.tier || containsVal.level)) ? (containsVal.tier || Math.ceil(containsVal.level / 2)) : 1;
+                                    fallback = mm.getRandomMonsterByTier(typeof tier === 'number' ? Math.max(1, Math.min(5, tier)) : 1);
+                                }
+                                if (!fallback && mm && typeof mm.getRandomMonster === 'function') {
+                                    fallback = mm.getRandomMonster();
+                                }
+                                if (fallback) {
+                                    monsterObj = { ...fallback, ...(typeof containsVal === 'object' ? containsVal : {}), ...(monsterObj || {}) };
+                                } else if (!monsterObj) {
+                                    monsterObj = typeof containsVal === 'object' ? { ...containsVal } : { type: monsterType || 'monster', id: monsterType || 'monster', name: monsterType || 'Monster' };
+                                }
+                            }
+                        }
+
+                        if (monsterObj) {
+                            if (typeof monsterObj.level !== 'number' || !Number.isFinite(monsterObj.level) || monsterObj.level <= 0) {
+                                monsterObj.level = (typeof monsterObj.tier === 'number' && monsterObj.tier > 0) ? monsterObj.tier * 2 : 1;
+                            }
+                            if (!monsterObj.stats || typeof monsterObj.stats !== 'object') {
+                                monsterObj.stats = { hp: 50, atk: 5, def: 5, speed: 5 };
+                            }
+                            if (typeof monsterObj.stats.hp !== 'number' || !Number.isFinite(monsterObj.stats.hp) || monsterObj.stats.hp <= 0) {
+                                monsterObj.stats.hp = 50;
+                            }
+                            if (!monsterObj.name || monsterObj.name === 'Monster') {
+                                monsterObj.name = (Array.isArray(monsterObj.monster_names) && monsterObj.monster_names.length)
+                                    ? this.pickRandom(monsterObj.monster_names)
+                                    : (monsterObj.lordName || (monsterObj.type ? monsterObj.type.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : 'Cave Beast'));
+                            }
+                            if (!monsterObj.portrait) {
+                                monsterObj.portrait = images[monsterObj.key] || images[monsterObj.type] || images['avatar'];
                             }
                         }
 
@@ -27315,6 +28052,13 @@ class DungeonPage extends React.Component {
         }
     }
     boardTransition = (direction) => {
+        this._movementQueue = [];
+        this._isMoving = false;
+        this._processingQueuedMove = false;
+        if (this._pathfindStepTimeout) {
+            clearTimeout(this._pathfindStepTimeout);
+            this._pathfindStepTimeout = null;
+        }
         const bm = this.props.boardManager;
         if (bm && bm.tiles) {
             try {
@@ -27367,7 +28111,11 @@ class DungeonPage extends React.Component {
             minimap,
             minimapZoomedTile: zoomed,
             illuminatedTileId: null
-        })
+        }, () => {
+            if (this.props.boardManager && this.props.boardManager.playerTile && this.props.boardManager.playerTile.location) {
+                this.checkMobileViewportCentering(this.props.boardManager.playerTile.location, true);
+            }
+        });
     }
     toggleMobileTileZoom = (isMinus) => {
         this.setState({ mobileTileZoomMinus: isMinus }, () => {
@@ -28023,8 +28771,8 @@ class DungeonPage extends React.Component {
                     return;
                 }
             }
-            // '1', '2', '3' — Select Expedition Skill slot 1, 2, or 3 for active crew member
-            if ((maybeKey === '1' || maybeKey === '2' || maybeKey === '3') && !this.state.inMonsterBattle && !isInPocketDimension && !event.metaKey && !event.ctrlKey) {
+            // '1', '2', '3', '4' — Select Expedition Skill slot 1, 2, 3, or 4 for active crew member
+            if ((maybeKey === '1' || maybeKey === '2' || maybeKey === '3' || maybeKey === '4') && !this.state.inMonsterBattle && !isInPocketDimension && !event.metaKey && !event.ctrlKey) {
                 const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
                 if (activeTag !== 'input' && activeTag !== 'textarea') {
                     event.preventDefault();
@@ -28759,9 +29507,10 @@ class DungeonPage extends React.Component {
         }
 
         const isFogged = actualTile?.fog === true || actualTile?.color === 'black';
-        const isVoid = (bm.isVoidTile(actualTile) || bm.getContainsType(actualTile?.contains) === 'void') && !bm.isConnectingPathTile(actualTile);
+        const isPortalClick = this.isPortalTile(actualTile) || this.isPortalTile(tile) || (bm.isPortalTile && (bm.isPortalTile(actualTile) || bm.isPortalTile(tile)));
+        const isVoid = !isPortalClick && (bm.isVoidTile(actualTile) || bm.getContainsType(actualTile?.contains) === 'void') && !bm.isConnectingPathTile(actualTile);
 
-        if ((isFogged || isVoid) && !isAdjacent) {
+        if ((isFogged || isVoid) && !isAdjacent && !isPortalClick) {
             return;
         }
 
@@ -28895,11 +29644,12 @@ class DungeonPage extends React.Component {
             const sides = sideMap[`${dx},${dy}`];
 
             const isConnectingPathBetween = (bm.isConnectingPathTile && (bm.isConnectingPathTile(playerTileObj) || bm.isConnectingPathTile(actualTile)));
-            const isWallBlocked = (tileIndex !== null && bm.isPassageWallBlockingBetween(playerIdx, tileIndex, { ignoreBuilding: true })) ||
+            const isPortalBetween = (this.isPortalTile(playerTileObj) || this.isPortalTile(actualTile) || (bm.isPortalTile && (bm.isPortalTile(playerTileObj) || bm.isPortalTile(actualTile))));
+            const isWallBlocked = !isPortalBetween && ((tileIndex !== null && bm.isPassageWallBlockingBetween(playerIdx, tileIndex, { ignoreBuilding: true })) ||
                 (!isConnectingPathBetween && (
                     (sides?.self && bm.hasSolidBorder(playerTileObj, sides.self)) ||
                     (sides?.opp && bm.hasSolidBorder(actualTile, sides.opp))
-                ));
+                )));
 
             if (isVoid || isWallBlocked) {
                 const selfInscription = sides?.self && playerTileObj?.inscriptions?.[sides.self];
@@ -28954,8 +29704,17 @@ class DungeonPage extends React.Component {
             }
         }
 
-        // If clicked on the tile the player is already on, toggle avatar radial menu
+        // If clicked on the tile the player is already on, check if standing on an edge connecting path tile leading to next board, else toggle avatar radial menu
         if (startCoords[0] === endCoords[0] && startCoords[1] === endCoords[1]) {
+            const playerIdx = bm.getIndexFromCoordinates(startCoords);
+            const playerTileObj = bm.tiles[playerIdx] || actualTile;
+            if (bm.isConnectingPathTile && bm.isConnectingPathTile(playerTileObj) && typeof bm.getConnectingPathTransitionDirection === 'function') {
+                const transitionDir = bm.getConnectingPathTransitionDirection(startCoords);
+                if (transitionDir) {
+                    this.handleDirectionalMove(transitionDir);
+                    return;
+                }
+            }
             this.setState((prev) => ({ showAvatarRadialMenu: !prev.showAvatarRadialMenu }));
             return;
         }
@@ -28984,10 +29743,14 @@ class DungeonPage extends React.Component {
 
                 if (t.blockedByLargeMonster) return true;
 
-                const type = bm.getContainsType(t.contains);
-                const subtype = bm.getContainsSubtype(t.contains);
-                if (bm.isImpassableBuildingTile && bm.isImpassableBuildingTile(t)) return true;
-                if ((bm.isVoidTile(t) || type === 'void') && !bm.isConnectingPathTile(t)) return true;
+                const type = (bm && typeof bm.getContainsType === 'function' ? bm.getContainsType(t.contains) : null) || t.contains?.type || t.type;
+                const subtype = (bm && typeof bm.getContainsSubtype === 'function' ? bm.getContainsSubtype(t.contains) : null) || t.contains?.subtype || t.subtype;
+
+                const isPortal = this.isPortalTile(t) || (bm.isPortalTile && bm.isPortalTile(t));
+                if (!isPortal) {
+                    if (bm.isImpassableBuildingTile && bm.isImpassableBuildingTile(t)) return true;
+                    if ((bm.isVoidTile(t) || type === 'void') && !bm.isConnectingPathTile(t)) return true;
+                }
 
                 const gateType = bm.getGateTypeFromTile(t);
                 if (gateType && bm.isLockedGateTile(t)) {
@@ -28999,7 +29762,7 @@ class DungeonPage extends React.Component {
                 const subStr = typeof subtype === 'string' ? subtype : (typeof t.building === 'string' ? t.building : (t.contains && typeof t.contains === 'object' ? (t.contains.subtype || t.contains.building || t.contains.name || t.contains.type) : ''));
                 const { isVendor } = this.getVendorInfo(t);
 
-                if (isVendor) {
+                if (isVendor && !isPortal) {
                     return true;
                 }
 
@@ -31468,6 +32231,82 @@ class DungeonPage extends React.Component {
             }, 1000);
         }
     }
+    /**
+     * Isometric board auto-fit.
+     * The iso board-plane is rotateX'd under perspective, so its near (bottom) edge
+     * projects wider than its layout box and its corners spill under the side panels.
+     * We measure the real projected rect (getBoundingClientRect includes 3D transforms)
+     * and shrink --iso-scale until the footprint clears both panels. The CSS media-query
+     * value of --iso-scale is treated as the maximum, so we never scale *up* past design.
+     */
+    scheduleIsoBoardFit = () => {
+        if (this._isoFitTimers) this._isoFitTimers.forEach(t => clearTimeout(t));
+        if (this._isoFitRaf) cancelAnimationFrame(this._isoFitRaf);
+        this._isoFitRaf = requestAnimationFrame(() => this.fitIsoBoardToViewport());
+        // Re-fit after side-panel expand/collapse transitions settle
+        this._isoFitTimers = [
+            setTimeout(() => this.fitIsoBoardToViewport(), 200),
+            setTimeout(() => this.fitIsoBoardToViewport(), 500)
+        ];
+    }
+
+    fitIsoBoardToViewport = () => {
+        const boardEl = this.isoBoardRef && this.isoBoardRef.current;
+        if (!boardEl) return;
+        if (!boardEl.classList.contains('iso-view')) {
+            boardEl.style.removeProperty('--iso-scale');
+            return;
+        }
+        const plane = boardEl.querySelector('.board-plane');
+        if (!plane) return;
+
+        // Reset to stylesheet default to learn the design max scale for this viewport
+        boardEl.style.removeProperty('--iso-scale');
+        const maxScale = parseFloat(getComputedStyle(boardEl).getPropertyValue('--iso-scale')) || 1.34;
+
+        // Available horizontal band between the visible side panels
+        const PAD = 12;
+        let leftBound = 0;
+        let rightBound = window.innerWidth;
+        const leftPanel = document.querySelector('.left-side-panel');
+        const rightPanel = document.querySelector('.right-side-panel');
+        if (leftPanel) {
+            const r = leftPanel.getBoundingClientRect();
+            if (r.width > 0 && r.right > 0) leftBound = Math.max(leftBound, r.right);
+        }
+        if (rightPanel) {
+            const r = rightPanel.getBoundingClientRect();
+            if (r.width > 0 && r.left < window.innerWidth) rightBound = Math.min(rightBound, r.left);
+        }
+        leftBound += PAD;
+        rightBound -= PAD;
+
+        // Measure without the 0.4s transform transition so we read final geometry
+        const prevTransition = plane.style.transition;
+        plane.style.transition = 'none';
+        let scale = maxScale;
+        // Perspective makes width slightly non-linear in scale; two passes converge
+        for (let i = 0; i < 3; i++) {
+            boardEl.style.setProperty('--iso-scale', String(scale));
+            const rect = plane.getBoundingClientRect();
+            if (!rect.width) break;
+            const cx = boardEl.getBoundingClientRect().left + boardEl.offsetWidth / 2;
+            const leftOver = cx - rect.left;
+            const rightOver = rect.right - cx;
+            const kLeft = leftOver > 0 ? (cx - leftBound) / leftOver : 1;
+            const kRight = rightOver > 0 ? (rightBound - cx) / rightOver : 1;
+            const k = Math.min(kLeft, kRight);
+            if (k >= 0.999 && i > 0) break;
+            const next = Math.max(0.6, Math.min(maxScale, scale * k));
+            if (Math.abs(next - scale) < 0.002) break;
+            scale = next;
+        }
+        if (scale >= maxScale - 0.001) boardEl.style.removeProperty('--iso-scale');
+        else boardEl.style.setProperty('--iso-scale', scale.toFixed(3));
+        void plane.offsetWidth; // commit before restoring transition
+        plane.style.transition = prevTransition;
+    }
+
     toggleLeftSidePanel = async (val = null) => {
         if (this.state.isTutorialMode) return;
         // toggle left side panel
@@ -31559,20 +32398,43 @@ class DungeonPage extends React.Component {
         });
 
         const memberName = selectedMember ? (selectedMember.name || selectedMember.type || 'Crew member') : 'Crew member';
-        const memberClass = ((selectedMember && (selectedMember.type || selectedMember.image)) || '').toLowerCase();
+        const rawMemberClass = ((selectedMember && (selectedMember.type || selectedMember.class || selectedMember.image)) || '').toLowerCase();
+        const isSummonerMember = rawMemberClass.includes('summoner') || rawMemberClass === 'vaelis' || rawMemberClass === 'morwenna' || String(selectedMember?.image || '').toLowerCase().includes('summoner');
+        const memberClass = isSummonerMember ? 'summoner' : rawMemberClass;
         const defaultExpSkills = {
-            wizard: ['astral_conduit', 'ley_tap', 'scry'],
+            wizard: ['astral_conduit', 'ley_tap', 'scry', 'far_sight'],
             sage: ['healing_ground', 'sing'],
             ranger: ['sneak_attack', 'spike_trap'],
             soldier: ['soldier_shield', 'breacher'],
-            summoner: ['wandering_eye'],
+            summoner: ['wandering_eye', 'shadow_effigy', 'void_fetch'],
             horologist: ['rewind_step', 'stopwatch'],
-            glitterburn: ['blinding_beacon', 'prismatic_flare']
+            glitterburn: ['blinding_beacon', 'prismatic_flare'],
+            engineer: ENGINEER_EXPEDITION_SKILLS
         };
-        const expSkills = (selectedMember && Array.isArray(selectedMember.expeditionSkills) && selectedMember.expeditionSkills.length > 0)
+        let expSkills = (selectedMember && Array.isArray(selectedMember.expeditionSkills) && selectedMember.expeditionSkills.length > 0)
             ? selectedMember.expeditionSkills
-            : (defaultExpSkills[memberClass] || []);
-        const skillKey = expSkills[slotIdx];
+            : (defaultExpSkills[memberClass] || (isSummonerMember ? ['wandering_eye', 'shadow_effigy', 'void_fetch'] : []));
+        if (memberClass === 'wizard' && !expSkills.includes('far_sight')) {
+            expSkills = [...expSkills, 'far_sight'];
+        }
+        if (isSummonerMember) {
+            const summonerDefaults = ['wandering_eye', 'shadow_effigy', 'void_fetch'];
+            summonerDefaults.forEach(sk => {
+                if (!expSkills.includes(sk)) expSkills = [...expSkills, sk];
+            });
+        }
+        if (memberClass === 'engineer') {
+            ENGINEER_EXPEDITION_SKILLS.forEach(sk => {
+                if (!expSkills.includes(sk)) expSkills = [...expSkills, sk];
+            });
+        }
+        let skillKey = expSkills[slotIdx];
+        if (isSummonerMember && !skillKey) {
+            skillKey = ['wandering_eye', 'shadow_effigy', 'void_fetch'][slotIdx] || 'wandering_eye';
+        }
+        if (memberClass === 'engineer' && !skillKey) {
+            skillKey = ENGINEER_EXPEDITION_SKILLS[slotIdx] || 'engineer_salvage';
+        }
 
         if (skillKey === 'breacher' || skillKey === 'gate_buster' || skillKey === 'gate_breaker') {
             const bm = this.props.boardManager;
@@ -31786,8 +32648,1653 @@ class DungeonPage extends React.Component {
             return;
         }
 
+        if (skillKey === 'wandering_eye') {
+            this.activateWanderingEye();
+            return;
+        }
+
+        if (skillKey === 'shadow_effigy') {
+            this.activateShadowEffigy();
+            return;
+        }
+
+        if (skillKey === 'void_fetch') {
+            this.activateVoidFetch();
+            return;
+        }
+
+        if (skillKey === 'engineer_salvage') {
+            this.activateEngineerSalvage(selectedMember);
+            return;
+        }
+
+        if (skillKey === 'engineer_grapple_winch') {
+            this.activateEngineerGrapple(selectedMember);
+            return;
+        }
+
+        if (skillKey === 'engineer_forward_emplacement') {
+            this.activateForwardEmplacement();
+            return;
+        }
+
+        if (skillKey === 'far_sight') {
+            const meta = (typeof getMeta === 'function' ? getMeta() : null) || {};
+            const curResolve = typeof meta.resolve === 'number' ? meta.resolve : 100;
+            if (curResolve < 2) {
+                this.displayMessage("❌ Far Sight requires 2 Resolve!");
+                return;
+            }
+            meta.resolve = Math.max(0, curResolve - 2);
+            meta.farSightMoves = 5;
+            if (typeof storeMeta === 'function') storeMeta(meta);
+            try {
+                if (typeof updateUserRequest === 'function' && typeof getUserId === 'function') {
+                    updateUserRequest(getUserId(), meta).catch(() => {});
+                }
+            } catch (e) {}
+
+            const bm = this.props.boardManager;
+            if (bm) {
+                bm.farSightMoves = 5;
+                try {
+                    const playerLocation = bm.playerTile?.location || [0, 0];
+                    const playerIdx = bm.getIndexFromCoordinates(playerLocation);
+                    const pTile = (bm.tiles && bm.tiles[playerIdx]) || (bm.currentBoard?.tiles && bm.currentBoard.tiles[playerIdx]);
+                    if (pTile) {
+                        bm.handleFogOfWar(pTile);
+                        if (typeof bm.refreshTiles === 'function') bm.refreshTiles();
+                    }
+                } catch (e) {}
+            }
+            this.setState({ farSightMoves: 5 });
+            this.displayMessage("👁️ Far Sight activated! Vision radius expanded by +2 for 5 movements. (-2 Resolve)");
+            return;
+        }
+
         this.displayMessage(`⚡ ${memberName} triggered Expedition Skill Slot ${slotIdx + 1}!`);
     }
+
+    // ── Engineer expedition skills ────────────────────────────────────────
+    getEngineerBoardKey = () => {
+        const bm = this.props.boardManager;
+        const lvl = bm?.currentLevel?.id ?? 0;
+        const orient = bm?.currentOrientation ?? 'F';
+        const bIdx = bm?.playerTile?.boardIndex ?? bm?.currentBoard?.id ?? 0;
+        return `${lvl}:${orient}:${bIdx}`;
+    }
+
+    moveEngineerPlayerTo = (coords) => {
+        const bm = this.props.boardManager;
+        if (!bm || !bm.playerTile) return;
+        bm.playerTile.location = coords;
+        if (typeof bm.refreshTiles === 'function') bm.refreshTiles();
+        if (typeof bm.handleFogOfWar === 'function') {
+            try { bm.handleFogOfWar(bm.playerTile); } catch (e) { }
+        }
+        this.updateFloatingPlayerPosition(coords);
+        this.setState({ tiles: bm.tiles ? [...bm.tiles] : this.state.tiles });
+    }
+
+    activateEngineerSalvage = (member) => {
+        const bm = this.props.boardManager;
+        if (!bm || !bm.playerTile || !Array.isArray(bm.tiles)) return;
+        const facing = this.state.playerFacing;
+        const target = findAdjacentSalvageTarget(bm.tiles, bm.playerTile.location, facing);
+        if (!target) {
+            this.displayMessage('🔧 Salvage: nothing to dismantle next to you.');
+            return;
+        }
+        salvageTile(target.tile);
+        const boardTile = bm.currentBoard?.tiles?.[target.idx];
+        if (boardTile && boardTile !== target.tile) salvageTile(boardTile);
+        const meta = getMeta() || {};
+        const gained = computeSalvageYield(member?.stats?.dex);
+        const total = addScrap(meta, gained);
+        storeMeta(meta);
+        if (typeof bm.refreshTiles === 'function') bm.refreshTiles();
+        this.setState({ tiles: [...bm.tiles] });
+        this.displayMessage(`🔧 Salvage: +${gained} ⚙️ Scrap (${total}/${SCRAP_CAP}).`);
+    }
+
+    activateEngineerGrapple = (member) => {
+        const bm = this.props.boardManager;
+        if (!bm || !bm.playerTile || !Array.isArray(bm.tiles)) return;
+        const here = bm.playerTile.location;
+        const boardKey = this.getEngineerBoardKey();
+        const meta = getMeta() || {};
+        const ziplines = (meta.ziplines && meta.ziplines[boardKey]) || [];
+
+        // Standing on an existing anchor: ride it for free.
+        const existing = findZiplineFrom(ziplines, here);
+        if (existing) {
+            this.moveEngineerPlayerTo(existing.dest);
+            this.displayMessage('🪝 You glide across the zipline.');
+            return;
+        }
+
+        const voidCheck = (t) => {
+            if (!t) return true;
+            const idx = bm.tiles.indexOf(t);
+            const bt = idx >= 0 ? bm.currentBoard?.tiles?.[idx] : null;
+            return typeof bm.isVoidTile === 'function' && (bm.isVoidTile(t) || (bt && bm.isVoidTile(bt)));
+        };
+        const helpers = {
+            isVoid: voidCheck,
+            isBlocking: (t) => !!t && typeof bm.isImpassableBuildingTile === 'function' && !voidCheck(t) && bm.isImpassableBuildingTile(t),
+            isWalkable: (t) => !voidCheck(t)
+        };
+        const range = getGrappleRange(member?.level);
+        const facing = this.state.playerFacing;
+        const order = [facing, 'up', 'down', 'left', 'right'].filter((d, i, a) => d && a.indexOf(d) === i);
+        let path = null;
+        for (const dir of order) {
+            const res = computeGrapplePath(bm.tiles, here, dir, helpers, range);
+            if (res.ok) { path = res; break; }
+        }
+        if (!path) {
+            this.displayMessage(`🪝 Grapple Winch: no gap to cross within ${range} tiles.`);
+            return;
+        }
+        if (!trySpendScrap(meta, GRAPPLE_COST)) {
+            this.displayMessage(`🪝 Grapple Winch needs ${GRAPPLE_COST} ⚙️ Scrap (you have ${getScrap(meta)}).`);
+            return;
+        }
+        meta.ziplines = meta.ziplines || {};
+        meta.ziplines[boardKey] = [...ziplines, { from: [...here], to: path.endCoords }];
+        storeMeta(meta);
+        this.moveEngineerPlayerTo(path.endCoords);
+        this.displayMessage(`🪝 Zipline anchored! You glide ${path.span} tiles. (-${GRAPPLE_COST} ⚙️)`);
+    }
+
+    activateForwardEmplacement = () => {
+        const bm = this.props.boardManager;
+        if (!bm || !bm.playerTile) return;
+        const here = bm.playerTile.location;
+        const boardKey = this.getEngineerBoardKey();
+        const meta = getMeta() || {};
+        const current = meta.forwardEmplacement;
+
+        // Using it while standing on your emplacement packs it up for a refund.
+        if (current && current.boardKey === boardKey && current.coords[0] === here[0] && current.coords[1] === here[1]) {
+            delete meta.forwardEmplacement;
+            const total = addScrap(meta, EMPLACEMENT_REFUND);
+            storeMeta(meta);
+            this.displayMessage(`🏗️ Emplacement packed up. +${EMPLACEMENT_REFUND} ⚙️ (${total}/${SCRAP_CAP}).`);
+            return;
+        }
+        if (current && current.boardKey === boardKey) {
+            this.displayMessage('🏗️ You already have an emplacement on this board. Stand on it and use the skill again to pack it up.');
+            return;
+        }
+        if (!trySpendScrap(meta, EMPLACEMENT_COST)) {
+            this.displayMessage(`🏗️ Forward Emplacement needs ${EMPLACEMENT_COST} ⚙️ Scrap (you have ${getScrap(meta)}).`);
+            return;
+        }
+        meta.forwardEmplacement = { coords: [...here], boardKey };
+        storeMeta(meta);
+        this.displayMessage(`🏗️ Turret staged. Fights within ${EMPLACEMENT_RADIUS} tiles start with it built. (-${EMPLACEMENT_COST} ⚙️)`);
+    }
+
+    // Called at battle start: arm the combat manager if the fight is in range.
+    armForwardEmplacementForBattle = () => {
+        try {
+            const bm = this.props.boardManager;
+            const meta = getMeta() || {};
+            const emp = meta.forwardEmplacement;
+            if (!emp || !bm?.playerTile) return;
+            const boardKey = this.getEngineerBoardKey();
+            if (emp.boardKey !== boardKey) {
+                // Left the board: emplacement is lost.
+                delete meta.forwardEmplacement;
+                storeMeta(meta);
+                return;
+            }
+            if (isWithinEmplacementRange(emp, bm.playerTile.location, boardKey)) {
+                delete meta.forwardEmplacement;
+                meta.forwardEmplacementArmed = true;
+                storeMeta(meta);
+            }
+        } catch (e) {
+            console.warn('armForwardEmplacementForBattle failed', e);
+        }
+    }
+
+    startWanderingEyeDecayTimer = () => {
+        if (this._wanderingEyeDecayTimer) return;
+        const bm = this.props.boardManager;
+        this._wanderingEyeDecayTimer = setInterval(() => {
+            const decayNow = Date.now();
+            let prunedAny = false;
+
+            if (this._wanderingEyeRevealedTiles && this._wanderingEyeRevealedTiles.size > 0) {
+                for (const [key, exp] of this._wanderingEyeRevealedTiles.entries()) {
+                    if (decayNow >= exp) {
+                        this._wanderingEyeRevealedTiles.delete(key);
+                        if (bm && bm.wanderingEyeRevealedTiles) {
+                            bm.wanderingEyeRevealedTiles.delete(key);
+                        }
+                        prunedAny = true;
+                    }
+                }
+            }
+
+            if (prunedAny) {
+                if (typeof bm?.handleFogOfWar === 'function') {
+                    bm.handleFogOfWar(bm.playerTile, { skipRefresh: false });
+                }
+                if (typeof this.refreshTiles === 'function') {
+                    this.refreshTiles();
+                }
+            }
+
+            if ((!this._wanderingEyeRevealedTiles || this._wanderingEyeRevealedTiles.size === 0) && !this.state.wanderingEye && !this.state.activeWanderingEye) {
+                if (this._wanderingEyeDecayTimer) {
+                    clearInterval(this._wanderingEyeDecayTimer);
+                    this._wanderingEyeDecayTimer = null;
+                }
+            }
+        }, 500);
+    };
+
+    revealWanderingEyeTiles = (curRow, curCol, currentTimestamp = Date.now(), lingerMs = 20000) => {
+        const bm = this.props.boardManager;
+        if (!bm) return;
+        const centerR = ((Math.round(Number(curRow)) % 15) + 15) % 15;
+        const centerC = ((Math.round(Number(curCol)) % 15) + 15) % 15;
+        const bIdx = (bm.playerTile?.boardIndex != null) ? bm.playerTile.boardIndex : ((bm.currentBoard?.id != null) ? bm.currentBoard.id : 0);
+        const lvlId = bm.currentLevel?.id ?? 0;
+        const orient = bm.currentOrientation ?? 'front';
+        let newlyRevealed = false;
+
+        if (!this._wanderingEyeRevealedTiles) {
+            this._wanderingEyeRevealedTiles = new Map();
+        }
+        if (bm && !bm.wanderingEyeRevealedTiles) {
+            bm.wanderingEyeRevealedTiles = new Map();
+        }
+
+        // Vision radius 2 (5x5 square around eyeball)
+        for (let dr = -2; dr <= 2; dr++) {
+            for (let dc = -2; dc <= 2; dc++) {
+                const r = centerR + dr;
+                const c = centerC + dc;
+                if (r >= 0 && r < 15 && c >= 0 && c < 15) {
+                    const tileId = r * 15 + c;
+                    const tile = bm.tiles ? bm.tiles[tileId] : null;
+                    const boardTile = (bm.currentBoard && bm.currentBoard.tiles) ? bm.currentBoard.tiles[tileId] : null;
+                    if (!tile || (typeof bm.isVoidTile === 'function' && (bm.isVoidTile(tile) || (boardTile && bm.isVoidTile(boardTile))))) {
+                        continue;
+                    }
+
+                    const tileExpiresAt = currentTimestamp + lingerMs;
+                    const key = `${lvlId}:${orient}:${bIdx}:${tileId}`;
+
+                    const prevExp = this._wanderingEyeRevealedTiles.get(tileId) || 0;
+                    if (!prevExp || tileExpiresAt > prevExp) {
+                        this._wanderingEyeRevealedTiles.set(tileId, tileExpiresAt);
+                        this._wanderingEyeRevealedTiles.set(key, tileExpiresAt);
+                        if (bm.wanderingEyeRevealedTiles) {
+                            bm.wanderingEyeRevealedTiles.set(tileId, tileExpiresAt);
+                            bm.wanderingEyeRevealedTiles.set(key, tileExpiresAt);
+                        }
+                        newlyRevealed = true;
+                    }
+                }
+            }
+        }
+
+        if (newlyRevealed) {
+            if (typeof bm.handleFogOfWar === 'function') {
+                bm.handleFogOfWar(bm.playerTile, { skipRefresh: false });
+            }
+            if (typeof this.refreshTiles === 'function') {
+                this.refreshTiles();
+            }
+        }
+
+        this.startWanderingEyeDecayTimer();
+    };
+
+    stopAutonomousWanderingEye = (clearMelt = true) => {
+        if (this._wanderingEyePatrolTimeout) {
+            clearTimeout(this._wanderingEyePatrolTimeout);
+            this._wanderingEyePatrolTimeout = null;
+        }
+        if (this._wanderingEyePatrolTimer) {
+            clearInterval(this._wanderingEyePatrolTimer);
+            this._wanderingEyePatrolTimer = null;
+        }
+        if (this._wanderingEyeAppearTimeout) {
+            clearTimeout(this._wanderingEyeAppearTimeout);
+            this._wanderingEyeAppearTimeout = null;
+        }
+        if (clearMelt && this._wanderingEyeMeltTimeout) {
+            clearTimeout(this._wanderingEyeMeltTimeout);
+            this._wanderingEyeMeltTimeout = null;
+        }
+    };
+
+    meltAndDismissWanderingEye = () => {
+        this.stopAutonomousWanderingEye(false);
+        if (typeof this.displayMessage === 'function') {
+            this.displayMessage("👁️ Wandering Eye has completed its scouting patrol and melts into the ether.");
+        }
+
+        this.setState(prev => ({
+            activeWanderingEye: prev.activeWanderingEye ? {
+                ...prev.activeWanderingEye,
+                melting: true,
+                appearing: false,
+                roaming: false,
+                active: false
+            } : null,
+            wanderingEye: prev.wanderingEye ? {
+                ...prev.wanderingEye,
+                melting: true,
+                appearing: false,
+                roaming: false,
+                active: false
+            } : null
+        }));
+
+        if (this._wanderingEyeMeltTimeout) {
+            clearTimeout(this._wanderingEyeMeltTimeout);
+        }
+        this._wanderingEyeMeltTimeout = setTimeout(() => {
+            this._wanderingEyeMeltTimeout = null;
+            this.setState({ activeWanderingEye: null, wanderingEye: null });
+        }, 650);
+    };
+
+    startAutonomousWanderingEye = (startR, startC, steps = 30) => {
+        this.stopAutonomousWanderingEye();
+
+        const normStartR = ((Number(startR) % 15) + 15) % 15;
+        const normStartC = ((Number(startC) % 15) + 15) % 15;
+
+        this._wanderingEyeStepsRemaining = steps;
+        if (!this._wanderingEyeHistory) {
+            this._wanderingEyeHistory = [[normStartR, normStartC]];
+        } else {
+            this._wanderingEyeHistory.push([normStartR, normStartC]);
+        }
+        if (!this._wanderingEyeVisited) {
+            this._wanderingEyeVisited = new Map();
+        }
+        this._wanderingEyeVisited.set(normStartR * 15 + normStartC, (this._wanderingEyeVisited.get(normStartR * 15 + normStartC) || 0) + 1);
+
+        // Initial delay (300ms, twice as fast) before the eyeball begins its patrol
+        this._wanderingEyePatrolTimeout = setTimeout(() => {
+            this._wanderingEyePatrolTimeout = null;
+            if (!this.state.activeWanderingEye || !this.state.activeWanderingEye.active) return;
+
+            // Patrol step interval: 375ms (twice as fast as previous 750ms)
+            this._wanderingEyePatrolTimer = setInterval(() => {
+                const bm = this.props.boardManager;
+                if (!bm || !this.state.activeWanderingEye || !this.state.activeWanderingEye.active) {
+                    this.stopAutonomousWanderingEye();
+                    return;
+                }
+
+                // If currently surging forward via roamWanderingEyeAhead, wait for surge to finish
+                if (this.state.activeWanderingEye.roaming) {
+                    return;
+                }
+
+                if (this._wanderingEyeStepsRemaining <= 0) {
+                    this.meltAndDismissWanderingEye();
+                    return;
+                }
+
+                const currentLoc = (this.state.activeWanderingEye.location)
+                    ? this.state.activeWanderingEye.location
+                    : [normStartR, normStartC];
+                const curR = ((Number(currentLoc[0]) % 15) + 15) % 15;
+                const curC = ((Number(currentLoc[1]) % 15) + 15) % 15;
+                const curIdx = curR * 15 + curC;
+
+                const isTilePassable = (fromR, fromC, toR, toC) => {
+                    if (toR < 0 || toR >= 15 || toC < 0 || toC >= 15) return false;
+                    const fromI = fromR * 15 + fromC;
+                    const toI = toR * 15 + toC;
+                    const tile = bm.tiles ? bm.tiles[toI] : null;
+                    const boardTile = (bm.currentBoard && bm.currentBoard.tiles) ? bm.currentBoard.tiles[toI] : null;
+                    if (!tile && !boardTile) return false;
+
+                    // Explicit void check: Note that Mapmaker exports board tiles with type: 'void',
+                    // so we NEVER check type === 'void'. Instead check isVoid === true or bm.isVoidTile.
+                    if (tile?.isVoid === true || boardTile?.isVoid === true) return false;
+                    if (tile?.contains === 'void' || boardTile?.contains === 'void') return false;
+                    if (typeof bm.isVoidTile === 'function' && (bm.isVoidTile(tile) || (boardTile && bm.isVoidTile(boardTile)))) return false;
+
+                    // Walls & solid building structures
+                    if (tile?.isWall || tile?.building === 'wall' || boardTile?.isWall || boardTile?.building === 'wall') return false;
+                    const c = tile?.contains || boardTile?.contains;
+                    if (c && typeof c === 'object') {
+                        if (c.type === 'wall' || c.subtype === 'wall' || c.subtype === 'wall_under_construction') return false;
+                    }
+                    if (typeof bm.isImpassableBuildingTile === 'function' && (bm.isImpassableBuildingTile(tile) || (boardTile && bm.isImpassableBuildingTile(boardTile)))) return false;
+
+                    // Passage wall & solid border check between tiles
+                    if (typeof bm.isPassageWallBlockingBetween === 'function' && bm.isPassageWallBlockingBetween(fromI, toI)) return false;
+
+                    return true;
+                };
+
+                const deltas = [
+                    [-1, 0],
+                    [1, 0],
+                    [0, -1],
+                    [0, 1]
+                ];
+
+                let walkableCandidates = deltas
+                    .map(([dr, dc]) => [curR + dr, curC + dc])
+                    .filter(([r, c]) => isTilePassable(curR, curC, r, c));
+
+                // Fallback: If strict passage walls or structures block all 4 directions,
+                // allow stepping to any adjacent in-bounds non-void tile so the eye never gets permanently frozen
+                if (walkableCandidates.length === 0) {
+                    walkableCandidates = deltas
+                        .map(([dr, dc]) => [curR + dr, curC + dc])
+                        .filter(([r, c]) => {
+                            if (r < 0 || r >= 15 || c < 0 || c >= 15) return false;
+                            const idx = r * 15 + c;
+                            const t = bm.tiles ? bm.tiles[idx] : null;
+                            const bt = (bm.currentBoard && bm.currentBoard.tiles) ? bm.currentBoard.tiles[idx] : null;
+                            if (t?.isVoid === true || bt?.isVoid === true) return false;
+                            if (typeof bm.isVoidTile === 'function' && (bm.isVoidTile(t) || (bt && bm.isVoidTile(bt)))) return false;
+                            if (t?.isWall || t?.building === 'wall' || bt?.isWall || bt?.building === 'wall') return false;
+                            return true;
+                        });
+                }
+
+                if (walkableCandidates.length === 0) {
+                    this._wanderingEyeStepsRemaining--;
+                    return;
+                }
+
+                let chosen;
+                if (walkableCandidates.length === 1) {
+                    chosen = walkableCandidates[0];
+                } else {
+                    // Multi-source BFS across reachable walkable graph to find distance to nearest unexplored frontier
+                    const bfsQueue = [];
+                    const bfsVisited = new Set();
+                    bfsVisited.add(curIdx);
+
+                    const candidateStats = new Map();
+                    walkableCandidates.forEach(([r, c]) => {
+                        const idx = r * 15 + c;
+                        bfsVisited.add(idx);
+                        candidateStats.set(idx, { frontierDist: Infinity, frontierCount: 0 });
+                        bfsQueue.push({ r, c, idx, dist: 1, originIdx: idx });
+                    });
+
+                    while (bfsQueue.length > 0) {
+                        const { r, c, idx, dist, originIdx } = bfsQueue.shift();
+                        const tile = bm.tiles ? bm.tiles[idx] : null;
+                        const isDark = !this._wanderingEyeRevealedTiles?.has(idx) || (tile && tile.color === 'black');
+
+                        let darkBorderCount = 0;
+                        for (const [dr, dc] of deltas) {
+                            const nr = r + dr, nc = c + dc;
+                            if (nr >= 0 && nr < 15 && nc >= 0 && nc < 15) {
+                                const nIdx = nr * 15 + nc;
+                                if (!this._wanderingEyeRevealedTiles?.has(nIdx) || (bm.tiles && bm.tiles[nIdx]?.color === 'black')) {
+                                    darkBorderCount++;
+                                }
+                            }
+                        }
+
+                        if (isDark || darkBorderCount > 0) {
+                            const stats = candidateStats.get(originIdx);
+                            if (stats) {
+                                if (dist < stats.frontierDist) {
+                                    stats.frontierDist = dist;
+                                }
+                                stats.frontierCount += (isDark ? 3 : 1) + darkBorderCount;
+                            }
+                        }
+
+                        if (dist < 12) {
+                            for (const [dr, dc] of deltas) {
+                                const nr = r + dr, nc = c + dc;
+                                const nextI = nr * 15 + nc;
+                                if (!bfsVisited.has(nextI) && isTilePassable(r, c, nr, nc)) {
+                                    bfsVisited.add(nextI);
+                                    bfsQueue.push({ r: nr, c: nc, idx: nextI, dist: dist + 1, originIdx });
+                                }
+                            }
+                        }
+                    }
+
+                    const lastMove = this._wanderingEyeHistory && this._wanderingEyeHistory.length >= 2
+                        ? [curR - this._wanderingEyeHistory[this._wanderingEyeHistory.length - 2][0],
+                           curC - this._wanderingEyeHistory[this._wanderingEyeHistory.length - 2][1]]
+                        : null;
+                    const prevLoc = this._wanderingEyeHistory && this._wanderingEyeHistory.length >= 2
+                        ? this._wanderingEyeHistory[this._wanderingEyeHistory.length - 2]
+                        : null;
+
+                    let bestScore = -Infinity;
+                    let bestCandidates = [];
+
+                    walkableCandidates.forEach(([r, c]) => {
+                        const nIdx = r * 15 + c;
+                        const tile = bm.tiles ? bm.tiles[nIdx] : null;
+                        const isDark = !this._wanderingEyeRevealedTiles?.has(nIdx) || (tile && tile.color === 'black');
+                        const visits = (this._wanderingEyeVisited && this._wanderingEyeVisited.get(nIdx)) || 0;
+                        const stats = candidateStats.get(nIdx) || { frontierDist: Infinity, frontierCount: 0 };
+
+                        let score = 0;
+
+                        // 1. Immediate darkness bonus
+                        if (isDark) {
+                            score += 300;
+                        }
+
+                        // 2. Goal-directed proximity to nearest unexplored frontier
+                        if (stats.frontierDist < Infinity) {
+                            score += Math.max(0, 200 - stats.frontierDist * 20);
+                            score += Math.min(60, stats.frontierCount * 5);
+                        }
+
+                        // 3. Visit frequency penalty
+                        score -= visits * 35;
+
+                        // 4. Recency history penalty (prevents bouncing/looping)
+                        if (this._wanderingEyeHistory) {
+                            const hLen = this._wanderingEyeHistory.length;
+                            for (let hi = Math.max(0, hLen - 8); hi < hLen; hi++) {
+                                const [hr, hc] = this._wanderingEyeHistory[hi];
+                                if (hr === r && hc === c) {
+                                    const recency = hi - (hLen - 8) + 1;
+                                    score -= recency * 15;
+                                }
+                            }
+                        }
+
+                        // 5. Backtrack penalty: avoid reversing direction unless dead end
+                        const isDirectBacktrack = prevLoc && prevLoc[0] === r && prevLoc[1] === c;
+                        if (isDirectBacktrack && walkableCandidates.length > 1) {
+                            score -= 75;
+                        }
+
+                        // 6. Momentum bonus: maintain corridor flow
+                        if (lastMove && (r - curR === lastMove[0]) && (c - curC === lastMove[1])) {
+                            score += 25;
+                        }
+
+                        // 7. Passage / Doorway incentive: encourages room transition
+                        const cType = tile?.contains?.type || tile?.contains;
+                        if (tile?.isPassage || tile?.isConnectingPath || cType === 'passage' || cType === 'door' || cType === 'connecting_path') {
+                            score += 30;
+                        }
+
+                        // 8. Slight tie-breaker randomness
+                        score += Math.random() * 4;
+
+                        if (score > bestScore) {
+                            bestScore = score;
+                            bestCandidates = [[r, c]];
+                        } else if (Math.abs(score - bestScore) < 0.001) {
+                            bestCandidates.push([r, c]);
+                        }
+                    });
+
+                    chosen = bestCandidates[Math.floor(Math.random() * bestCandidates.length)] || walkableCandidates[0];
+                }
+
+                const [nextR, nextC] = chosen;
+                const nextIdx = nextR * 15 + nextC;
+
+                if (!this._wanderingEyeHistory) this._wanderingEyeHistory = [];
+                this._wanderingEyeHistory.push([nextR, nextC]);
+                if (this._wanderingEyeHistory.length > 16) this._wanderingEyeHistory.shift();
+
+                if (!this._wanderingEyeVisited) this._wanderingEyeVisited = new Map();
+                this._wanderingEyeVisited.set(nextIdx, (this._wanderingEyeVisited.get(nextIdx) || 0) + 1);
+
+                this._wanderingEyeStepsRemaining--;
+
+                const tileSize = this.state.tileSize || 48;
+                const nextX = (nextC + 0.5) * tileSize;
+                const nextY = (nextR + 0.5) * tileSize;
+                const stepNow = Date.now();
+
+                this.setState(prev => ({
+                    activeWanderingEye: prev.activeWanderingEye ? {
+                        ...prev.activeWanderingEye,
+                        location: [nextR, nextC]
+                    } : null,
+                    wanderingEye: prev.wanderingEye ? {
+                        ...prev.wanderingEye,
+                        row: nextR,
+                        col: nextC,
+                        x: nextX,
+                        y: nextY,
+                        active: true
+                    } : null
+                }), () => {
+                    this.revealWanderingEyeTiles(nextR, nextC, stepNow);
+                });
+            }, 375);
+        }, 300);
+    };
+
+    activateWanderingEye = () => {
+        const bm = this.props.boardManager;
+        if (!bm) {
+            this.displayMessage("👁️ Wandering Eye: Board manager not available.");
+            return;
+        }
+
+        // If a melting dismiss is in progress, cancel it and conjure fresh
+        if (this._wanderingEyeMeltTimeout) {
+            clearTimeout(this._wanderingEyeMeltTimeout);
+            this._wanderingEyeMeltTimeout = null;
+        }
+
+        // If companion is already active and NOT melting, trigger forward scouting surge!
+        if (this.state.activeWanderingEye && this.state.activeWanderingEye.active && !this.state.activeWanderingEye.melting) {
+            if (this.state.activeWanderingEye.roaming) {
+                this.displayMessage("👁️ Wandering Eye is already scouting ahead!");
+                return;
+            }
+            this.roamWanderingEyeAhead();
+            return;
+        }
+
+        // Conjure floating familiar companion
+        const playerLoc = (bm.playerTile && bm.playerTile.location) ? [...bm.playerTile.location] : [7, 7];
+        const startRow = ((Number(playerLoc[0]) % 15) + 15) % 15;
+        const startCol = ((Number(playerLoc[1]) % 15) + 15) % 15;
+        const now = Date.now();
+        const tileSize = this.state.tileSize || 48;
+        const currentBoardIndex = (bm.playerTile?.boardIndex != null) ? bm.playerTile.boardIndex : ((bm.currentBoard?.id != null) ? bm.currentBoard.id : 0);
+        const eyeId = 'wandering_eye_' + now + '_' + Math.random().toString(36).substr(2, 5);
+
+        this.displayMessage("👁️ Summoner conjured a Wandering Eye! The ethereal familiar hovers beside you and scouts ahead.");
+
+        this.setState({
+            activeWanderingEye: {
+                id: eyeId,
+                name: 'Wandering Eye',
+                location: [startRow, startCol],
+                boardIndex: currentBoardIndex,
+                active: true,
+                appearing: true,
+                melting: false,
+                roaming: false,
+                patrolling: true
+            },
+            wanderingEye: {
+                id: eyeId,
+                x: (startCol + 0.5) * tileSize,
+                y: (startRow + 0.5) * tileSize,
+                row: startRow,
+                col: startCol,
+                active: true,
+                appearing: true,
+                melting: false,
+                roaming: false,
+                patrolling: true
+            }
+        }, () => {
+            this.revealWanderingEyeTiles(startRow, startCol, now);
+            this.startAutonomousWanderingEye(startRow, startCol, 30);
+
+            if (this._wanderingEyeAppearTimeout) {
+                clearTimeout(this._wanderingEyeAppearTimeout);
+            }
+            this._wanderingEyeAppearTimeout = setTimeout(() => {
+                this._wanderingEyeAppearTimeout = null;
+                this.setState(prev => ({
+                    activeWanderingEye: prev.activeWanderingEye ? { ...prev.activeWanderingEye, appearing: false } : null,
+                    wanderingEye: prev.wanderingEye ? { ...prev.wanderingEye, appearing: false } : null
+                }));
+            }, 550);
+        });
+    };
+
+    roamWanderingEyeAhead = () => {
+        const bm = this.props.boardManager;
+        if (!bm) return;
+
+        const currentLoc = (this.state.activeWanderingEye && this.state.activeWanderingEye.location)
+            ? [...this.state.activeWanderingEye.location]
+            : ((bm.playerTile && bm.playerTile.location) ? [...bm.playerTile.location] : [7, 7]);
+
+        const startRow = ((Number(currentLoc[0]) % 15) + 15) % 15;
+        const startCol = ((Number(currentLoc[1]) % 15) + 15) % 15;
+        const facing = this.state.playerFacing || 'right';
+        const dirDeltas = {
+            up: [-1, 0],
+            down: [1, 0],
+            left: [0, -1],
+            right: [0, 1]
+        };
+        const [dr, dc] = dirDeltas[facing] || [0, 1];
+
+        // Surge 3 tiles forward in facing direction (clamped within board boundaries 0-14)
+        const targetRow = Math.max(0, Math.min(14, startRow + dr * 3));
+        const targetCol = Math.max(0, Math.min(14, startCol + dc * 3));
+
+        this.displayMessage("👁️ Wandering Eye surges forward to scout ahead!");
+
+        if (this._wanderingEyeFlightTimer) {
+            clearInterval(this._wanderingEyeFlightTimer);
+            this._wanderingEyeFlightTimer = null;
+        }
+        if (typeof this.stopAutonomousWanderingEye === 'function') {
+            this.stopAutonomousWanderingEye();
+        }
+
+        const now = Date.now();
+        const tileSize = this.state.tileSize || 48;
+        const forwardDuration = 300;
+        const pauseDuration = 200;
+        const returnDuration = 300;
+        const totalDuration = forwardDuration + pauseDuration + returnDuration;
+
+        this.setState(prev => ({
+            activeWanderingEye: prev.activeWanderingEye ? {
+                ...prev.activeWanderingEye,
+                roaming: true
+            } : null,
+            wanderingEye: prev.wanderingEye ? {
+                ...prev.wanderingEye,
+                roaming: true
+            } : null
+        }));
+
+        let elapsed = 0;
+        const frameInterval = 20;
+
+        this._wanderingEyeFlightTimer = setInterval(() => {
+            elapsed += frameInterval;
+            const tNow = Date.now();
+
+            // Destination when returning should track where Summoner currently is
+            const rawHomeLoc = (this.state.activeWanderingEye && this.state.activeWanderingEye.location)
+                ? this.state.activeWanderingEye.location
+                : ((bm.playerTile && bm.playerTile.location) ? bm.playerTile.location : [startRow, startCol]);
+            const homeLoc = [((Number(rawHomeLoc[0]) % 15) + 15) % 15, ((Number(rawHomeLoc[1]) % 15) + 15) % 15];
+
+            let curR = startRow;
+            let curC = startCol;
+
+            if (elapsed < forwardDuration) {
+                // Phase 1: Forward surge towards target
+                const p = elapsed / forwardDuration;
+                const easeP = p * p * (3 - 2 * p); // smooth easeInOut
+                curR = startRow + (targetRow - startRow) * easeP;
+                curC = startCol + (targetCol - startCol) * easeP;
+            } else if (elapsed < forwardDuration + pauseDuration) {
+                // Phase 2: Hover & scout at target location
+                curR = targetRow;
+                curC = targetCol;
+            } else if (elapsed < totalDuration) {
+                // Phase 3: Return flight to companion home position
+                const p = (elapsed - (forwardDuration + pauseDuration)) / returnDuration;
+                const easeP = p * p * (3 - 2 * p);
+                curR = targetRow + (homeLoc[0] - targetRow) * easeP;
+                curC = targetCol + (homeLoc[1] - targetCol) * easeP;
+            } else {
+                // Finished surge: return to steady hover beside player
+                if (this._wanderingEyeFlightTimer) {
+                    clearInterval(this._wanderingEyeFlightTimer);
+                    this._wanderingEyeFlightTimer = null;
+                }
+
+                curR = homeLoc[0];
+                curC = homeLoc[1];
+
+                this.setState(prev => ({
+                    activeWanderingEye: prev.activeWanderingEye ? {
+                        ...prev.activeWanderingEye,
+                        location: [curR, curC],
+                        roaming: false
+                    } : null,
+                    wanderingEye: prev.wanderingEye ? {
+                        ...prev.wanderingEye,
+                        row: curR,
+                        col: curC,
+                        x: (curC + 0.5) * tileSize,
+                        y: (curR + 0.5) * tileSize,
+                        roaming: false,
+                        active: true
+                    } : null
+                }), () => {
+                    this.revealWanderingEyeTiles(curR, curC, tNow);
+                    if (this._wanderingEyeStepsRemaining && this._wanderingEyeStepsRemaining > 0) {
+                        this.startAutonomousWanderingEye(curR, curC, this._wanderingEyeStepsRemaining);
+                    }
+                });
+                return;
+            }
+
+            const curX = (curC + 0.5) * tileSize;
+            const curY = (curR + 0.5) * tileSize;
+
+            this.setState(prev => ({
+                wanderingEye: prev.wanderingEye ? {
+                    ...prev.wanderingEye,
+                    x: curX,
+                    y: curY,
+                    row: curR,
+                    col: curC,
+                    roaming: true,
+                    active: true
+                } : null
+            }));
+
+            this.revealWanderingEyeTiles(curR, curC, tNow);
+        }, frameInterval);
+    };
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Mobile Combat Walker in Dungeon Board (Engineer Build)
+    // ═══════════════════════════════════════════════════════════════════
+
+    isWalkerPassableTile = (row, col, options = {}) => {
+        if (row < 0 || row >= 15 || col < 0 || col >= 15) return false;
+        const bm = this.props.boardManager;
+        if (!bm) return false;
+        const tileIdx = row * 15 + col;
+        const tile = bm.tiles ? bm.tiles[tileIdx] : null;
+        if (!tile) return false;
+        if (tile.type === 'void' || tile.isVoid || (typeof bm.isVoidTile === 'function' && bm.isVoidTile(tile))) return false;
+
+        // Passage wall check between previous tile and this tile
+        if (options.fromCoords) {
+            const fromIdx = options.fromCoords[0] * 15 + options.fromCoords[1];
+            if (typeof bm.isPassageWallBlockingBetween === 'function' && bm.isPassageWallBlockingBetween(fromIdx, tileIdx)) {
+                return false;
+            }
+        }
+
+        // Enemies cannot be walked over (Walker must pathfind around them and attack from adjacent)
+        if ((typeof bm.isMonster === 'function' && bm.isMonster(tile)) || (tile.contains && (tile.contains.type === 'monster' || tile.contains.type === 'pygmies'))) {
+            return false;
+        }
+
+        // Objects cannot be walked over: chests, keys, items, shrines, altars, doors, buildings, etc.
+        if (tile.building) return false;
+        if (tile.contains) {
+            const ctype = (typeof bm.getContainsType === 'function')
+                ? bm.getContainsType(tile.contains)
+                : (tile.contains.type || tile.contains);
+            const sub = (typeof tile.contains === 'object' && tile.contains.subtype) ? tile.contains.subtype : null;
+            const passableTypes = ['empty_space', 'obscured_space', 'floor', 'passage', 'none', null, undefined];
+            if (ctype && !passableTypes.includes(ctype)) {
+                return false;
+            }
+            if (sub && !passableTypes.includes(sub)) {
+                return false;
+            }
+        }
+
+        // Do not step directly onto the player avatar's current tile during movement
+        if (!options.allowPlayerTile && bm.playerTile?.location) {
+            const pR = ((Number(bm.playerTile.location[0]) % 15) + 15) % 15;
+            const pC = ((Number(bm.playerTile.location[1]) % 15) + 15) % 15;
+            if (pR === row && pC === col) {
+                return false;
+            }
+        }
+
+        return true;
+    };
+
+    getAdjacentMonsterForWalker = (row, col) => {
+        const bm = this.props.boardManager;
+        if (!bm) return null;
+        const curIdx = row * 15 + col;
+        const deltas = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+        for (const [dr, dc] of deltas) {
+            const nr = row + dr;
+            const nc = col + dc;
+            if (nr < 0 || nr >= 15 || nc < 0 || nc >= 15) continue;
+            const nIdx = nr * 15 + nc;
+            const nTile = bm.tiles ? bm.tiles[nIdx] : null;
+            if (!nTile) continue;
+            if (typeof bm.isPassageWallBlockingBetween === 'function' && bm.isPassageWallBlockingBetween(curIdx, nIdx)) {
+                continue;
+            }
+            if ((typeof bm.isMonster === 'function' && bm.isMonster(nTile)) || (nTile.contains && (nTile.contains.type === 'monster' || nTile.contains.type === 'pygmies'))) {
+                return { tile: nTile, row: nr, col: nc, tileIdx: nIdx };
+            }
+        }
+        return null;
+    };
+
+    findWalkerPathToNearestMonster = (startR, startC) => {
+        const bm = this.props.boardManager;
+        if (!bm) return null;
+
+        const queue = [[startR, startC]];
+        const visited = new Set();
+        const parentMap = new Map();
+        visited.add(`${startR},${startC}`);
+
+        let targetTile = null;
+
+        while (queue.length > 0) {
+            const [cr, cc] = queue.shift();
+
+            // If any adjacent neighbor to [cr, cc] is a monster, [cr, cc] is our target adjacent attack position!
+            const adjMonster = this.getAdjacentMonsterForWalker(cr, cc);
+            if (adjMonster) {
+                targetTile = [cr, cc];
+                break;
+            }
+
+            const deltas = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+            for (const [dr, dc] of deltas) {
+                const nr = cr + dr;
+                const nc = cc + dc;
+                const key = `${nr},${nc}`;
+                if (visited.has(key)) continue;
+
+                if (this.isWalkerPassableTile(nr, nc, { fromCoords: [cr, cc] })) {
+                    visited.add(key);
+                    parentMap.set(key, [cr, cc]);
+                    queue.push([nr, nc]);
+                }
+            }
+        }
+
+        if (!targetTile) return null;
+
+        if (targetTile[0] === startR && targetTile[1] === startC) {
+            return []; // Already in attack range!
+        }
+
+        // Reconstruct path
+        let curr = targetTile;
+        const path = [];
+        while (curr) {
+            const key = `${curr[0]},${curr[1]}`;
+            const prev = parentMap.get(key);
+            if (!prev) break;
+            if (prev[0] === startR && prev[1] === startC) {
+                path.unshift(curr);
+                break;
+            }
+            path.unshift(curr);
+            curr = prev;
+        }
+        return path;
+    };
+
+    findWalkerPathToExplore = (startR, startC) => {
+        const bm = this.props.boardManager;
+        if (!bm) return null;
+
+        const queue = [[startR, startC]];
+        const visited = new Set();
+        const parentMap = new Map();
+        visited.add(`${startR},${startC}`);
+
+        let targetTile = null;
+
+        while (queue.length > 0) {
+            const [cr, cc] = queue.shift();
+            const tIdx = cr * 15 + cc;
+            const tile = bm.tiles ? bm.tiles[tIdx] : null;
+
+            const isDark = tile && (tile.color === 'black' || tile.color === '#000000' || tile.type === 'obscured_space');
+            if (isDark && !(cr === startR && cc === startC)) {
+                targetTile = [cr, cc];
+                break;
+            }
+
+            const deltas = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+            for (const [dr, dc] of deltas) {
+                const nr = cr + dr;
+                const nc = cc + dc;
+                const key = `${nr},${nc}`;
+                if (visited.has(key)) continue;
+
+                if (this.isWalkerPassableTile(nr, nc, { fromCoords: [cr, cc] })) {
+                    visited.add(key);
+                    parentMap.set(key, [cr, cc]);
+                    queue.push([nr, nc]);
+                }
+            }
+        }
+
+        if (!targetTile) {
+            // If all reachable tiles are revealed, step randomly to any passable neighbor
+            const deltas = [[0, 1], [1, 0], [0, -1], [-1, 0]];
+            for (const [dr, dc] of deltas.sort(() => Math.random() - 0.5)) {
+                const nr = startR + dr;
+                const nc = startC + dc;
+                if (this.isWalkerPassableTile(nr, nc, { fromCoords: [startR, startC] })) {
+                    return [[nr, nc]];
+                }
+            }
+            return null;
+        }
+
+        let curr = targetTile;
+        const path = [];
+        while (curr) {
+            const key = `${curr[0]},${curr[1]}`;
+            const prev = parentMap.get(key);
+            if (!prev) break;
+            if (prev[0] === startR && prev[1] === startC) {
+                path.unshift(curr);
+                break;
+            }
+            path.unshift(curr);
+            curr = prev;
+        }
+        return path;
+    };
+
+    revealWalkerTiles = (curRow, curCol, expiresAt = (Date.now() + 15000)) => {
+        const bm = this.props.boardManager;
+        if (!bm) return;
+        const lvlId = bm.currentLevel?.id ?? 0;
+        const orient = bm.currentOrientation ?? 'front';
+        const bIdx = (bm.playerTile?.boardIndex != null)
+            ? bm.playerTile.boardIndex
+            : ((bm.currentBoard?.id != null) ? bm.currentBoard.id : 0);
+
+        if (!this._walkerRevealedTiles) {
+            this._walkerRevealedTiles = new Map();
+        }
+
+        for (let dr = -1; dr <= 1; dr++) {
+            for (let dc = -1; dc <= 1; dc++) {
+                const r = curRow + dr;
+                const c = curCol + dc;
+                if (r >= 0 && r < 15 && c >= 0 && c < 15) {
+                    const tIdx = r * 15 + c;
+                    const key = `${lvlId}:${orient}:${bIdx}:${tIdx}`;
+                    this._walkerRevealedTiles.set(key, expiresAt);
+                    this._walkerRevealedTiles.set(tIdx, expiresAt);
+                    this._walkerRevealedTiles.set(`${r},${c}`, expiresAt);
+                }
+            }
+        }
+
+        if (bm.playerTile?.location && typeof bm.handleFogOfWar === 'function') {
+            bm.handleFogOfWar(bm.playerTile.location, bm.fogRadius || 2);
+        }
+        if (typeof bm.refreshTiles === 'function') {
+            bm.refreshTiles();
+        }
+        this.setState({
+            tiles: bm.tiles ? [...bm.tiles] : this.state.tiles,
+            overlayTiles: bm.overlayTiles ? [...bm.overlayTiles] : this.state.overlayTiles
+        });
+    };
+
+    deployDungeonWalker = (targetTileIdx) => {
+        const bm = this.props.boardManager;
+        if (!bm) return;
+
+        // Stop any previous walker
+        this.stopDungeonWalkerLoop();
+
+        let loc = null;
+        if (typeof targetTileIdx === 'number' && targetTileIdx >= 0 && targetTileIdx < 225) {
+            loc = [Math.floor(targetTileIdx / 15), targetTileIdx % 15];
+        } else if (bm.playerTile?.location) {
+            loc = [((Number(bm.playerTile.location[0]) % 15) + 15) % 15, ((Number(bm.playerTile.location[1]) % 15) + 15) % 15];
+        } else {
+            loc = [7, 7];
+        }
+
+        // If target tile is impassable (e.g. wall or void), find nearest passable neighbor
+        if (!this.isWalkerPassableTile(loc[0], loc[1], { allowPlayerTile: true })) {
+            const deltas = [[0, 1], [1, 0], [0, -1], [-1, 0]];
+            for (const [dr, dc] of deltas) {
+                const nr = loc[0] + dr;
+                const nc = loc[1] + dc;
+                if (this.isWalkerPassableTile(nr, nc, { allowPlayerTile: true })) {
+                    loc = [nr, nc];
+                    break;
+                }
+            }
+        }
+
+        const now = Date.now();
+        const expiresAt = now + 15000;
+        const bIdx = (bm.playerTile?.boardIndex != null)
+            ? bm.playerTile.boardIndex
+            : ((bm.currentBoard?.id != null) ? bm.currentBoard.id : 0);
+
+        const walkerState = {
+            id: `dungeon_walker_${now}`,
+            active: true,
+            boardIndex: bIdx,
+            location: [loc[0], loc[1]],
+            hp: 30,
+            maxHp: 30,
+            facing: 'right',
+            isMoving: false,
+            isAttacking: false,
+            monsterAttacking: false,
+            destroyed: false,
+            createdAt: now,
+            expiresAt,
+            remainingSec: 15,
+            damageNumbers: []
+        };
+
+        this.setState({ activeDungeonWalker: walkerState });
+
+        // 1-tile radius field of vision
+        this.revealWalkerTiles(loc[0], loc[1], expiresAt);
+
+        // Start autonomous loop
+        this.startDungeonWalkerLoop();
+
+        if (typeof bm.messaging === 'function') {
+            bm.messaging('⚙️ Mobile Combat Walker deployed! (30 HP, 15s lifespan)');
+        }
+    };
+
+    startDungeonWalkerLoop = () => {
+        this.stopDungeonWalkerLoop();
+        // Tick interval ~950ms for moving and attacking "a little slowly"
+        this._dungeonWalkerTimer = setInterval(() => {
+            this.tickDungeonWalker();
+        }, 950);
+    };
+
+    stopDungeonWalkerLoop = () => {
+        if (this._dungeonWalkerTimer) {
+            clearInterval(this._dungeonWalkerTimer);
+            this._dungeonWalkerTimer = null;
+        }
+        if (this._dungeonWalkerAttackResetTimeout) {
+            clearTimeout(this._dungeonWalkerAttackResetTimeout);
+            this._dungeonWalkerAttackResetTimeout = null;
+        }
+        if (this._dungeonWalkerDestroyTimeout) {
+            clearTimeout(this._dungeonWalkerDestroyTimeout);
+            this._dungeonWalkerDestroyTimeout = null;
+        }
+    };
+
+    dismissDungeonWalker = (immediate = false, reason = 'expired') => {
+        this.stopDungeonWalkerLoop();
+        const bm = this.props.boardManager;
+
+        if (reason === 'destroyed') {
+            if (bm && typeof bm.messaging === 'function') {
+                bm.messaging('💥 Combat Walker was destroyed in battle!');
+            }
+        } else if (reason === 'run_time_expired') {
+            if (bm && typeof bm.messaging === 'function') {
+                bm.messaging('⚙️ Walker run time expired (15s). Unit dismantled.');
+            }
+        }
+
+        if (this._walkerRevealedTiles) {
+            this._walkerRevealedTiles.clear();
+        }
+        if (bm && bm.walkerRevealedTiles) {
+            bm.walkerRevealedTiles.clear();
+        }
+
+        if (bm && bm.playerTile?.location && typeof bm.handleFogOfWar === 'function') {
+            bm.handleFogOfWar(bm.playerTile.location, bm.fogRadius || 2);
+        }
+        if (bm && typeof bm.refreshTiles === 'function') {
+            bm.refreshTiles();
+        }
+
+        this.setState({
+            activeDungeonWalker: null,
+            tiles: bm?.tiles ? [...bm.tiles] : this.state.tiles
+        });
+    };
+
+    tickDungeonWalker = () => {
+        const walker = this.state.activeDungeonWalker;
+        if (!walker || !walker.active || walker.destroyed) return;
+
+        const now = Date.now();
+        if (now >= walker.expiresAt) {
+            this.dismissDungeonWalker(false, 'run_time_expired');
+            return;
+        }
+
+        const remainingSec = Math.max(0, Math.ceil((walker.expiresAt - now) / 1000));
+        const bm = this.props.boardManager;
+        if (!bm) return;
+
+        const [curR, curC] = walker.location;
+        const updatedDamages = (walker.damageNumbers || []).filter(d => d.expiresAt > now);
+
+        // Check if an adjacent monster is present
+        const adjMonster = this.getAdjacentMonsterForWalker(curR, curC);
+
+        if (adjMonster) {
+            const { tile: mTile, row: mR, col: mC } = adjMonster;
+            const mSubtype = (typeof mTile.contains === 'object' ? (mTile.contains.subtype || mTile.contains.type || mTile.contains.key) : mTile.contains) || 'Monster';
+            const mName = (typeof mTile.contains === 'object' && mTile.contains.name)
+                ? mTile.contains.name
+                : (String(mSubtype).replace(/_/g, ' '));
+
+            let mHp = (typeof mTile.contains === 'object' && typeof mTile.contains.hp === 'number')
+                ? mTile.contains.hp
+                : 25;
+            let mMaxHp = (typeof mTile.contains === 'object' && typeof mTile.contains.maxHp === 'number')
+                ? mTile.contains.maxHp
+                : 25;
+            let mAtk = (typeof mTile.contains === 'object' && typeof mTile.contains.atk === 'number' && mTile.contains.atk > 0)
+                ? mTile.contains.atk
+                : (Math.floor(Math.random() * 4) + 8); // 8-11 monster damage
+
+            // Walker attacks dealing 15 damage
+            const walkerDmg = 15;
+            mHp -= walkerDmg;
+
+            if (typeof mTile.contains === 'object') {
+                mTile.contains.hp = mHp;
+                mTile.contains.maxHp = mMaxHp;
+            } else {
+                mTile.contains = {
+                    type: 'monster',
+                    subtype: mSubtype,
+                    name: mName,
+                    hp: mHp,
+                    maxHp: mMaxHp,
+                    atk: mAtk
+                };
+            }
+            if (bm.currentBoard?.tiles?.[mTile.id]) {
+                bm.currentBoard.tiles[mTile.id].contains = mTile.contains;
+            }
+
+            const facing = mC >= curC ? 'right' : 'left';
+            const walkerDamageNumber = {
+                id: `dmg_${now}_w`,
+                text: `-${walkerDmg}`,
+                isWalker: true,
+                targetRow: mR,
+                targetCol: mC,
+                expiresAt: now + 900
+            };
+
+            let newWalkerHp = walker.hp;
+            let monsterDamageNumber = null;
+            let monsterAttacking = false;
+            let isDestroyed = false;
+
+            if (mHp <= 0) {
+                // Monster eliminated!
+                if (typeof bm.removeDefeatedMonsterTile === 'function') {
+                    bm.removeDefeatedMonsterTile(mTile.id);
+                } else {
+                    mTile.contains = { type: 'empty_space', subtype: null };
+                    mTile.image = null;
+                }
+                if (typeof bm.refreshTiles === 'function') {
+                    bm.refreshTiles();
+                }
+                if (typeof bm.messaging === 'function') {
+                    bm.messaging(`⚙️ Walker sawblade dealt 15 damage, destroying ${mName}!`);
+                }
+            } else {
+                // Monster survived and counter-attacks!
+                monsterAttacking = true;
+                newWalkerHp = Math.max(0, walker.hp - mAtk);
+                monsterDamageNumber = {
+                    id: `dmg_${now}_m`,
+                    text: `-${mAtk}`,
+                    isWalker: false,
+                    targetRow: curR,
+                    targetCol: curC,
+                    expiresAt: now + 900
+                };
+                if (typeof bm.messaging === 'function') {
+                    bm.messaging(`⚙️ Walker struck ${mName} for 15 dmg! ${mName} counter-attacked for ${mAtk} dmg!`);
+                }
+                if (newWalkerHp <= 0) {
+                    isDestroyed = true;
+                }
+            }
+
+            const newDamageNumbers = [...updatedDamages, walkerDamageNumber];
+            if (monsterDamageNumber) newDamageNumbers.push(monsterDamageNumber);
+
+            this.setState(prev => ({
+                activeDungeonWalker: prev.activeDungeonWalker ? {
+                    ...prev.activeDungeonWalker,
+                    hp: newWalkerHp,
+                    facing,
+                    isAttacking: true,
+                    isMoving: false,
+                    monsterAttacking,
+                    destroyed: isDestroyed,
+                    remainingSec,
+                    damageNumbers: newDamageNumbers
+                } : null,
+                tiles: bm.tiles ? [...bm.tiles] : prev.tiles
+            }));
+
+            // Reset attack swing animation after 500ms
+            this._dungeonWalkerAttackResetTimeout = setTimeout(() => {
+                if (this.state.activeDungeonWalker && this.state.activeDungeonWalker.active) {
+                    this.setState(prev => ({
+                        activeDungeonWalker: prev.activeDungeonWalker ? {
+                            ...prev.activeDungeonWalker,
+                            isAttacking: false,
+                            monsterAttacking: false
+                        } : null
+                    }));
+                }
+            }, 500);
+
+            if (isDestroyed) {
+                // Walker destroyed by monster!
+                this._dungeonWalkerDestroyTimeout = setTimeout(() => {
+                    this.dismissDungeonWalker(false, 'destroyed');
+                }, 750);
+                return;
+            }
+
+            return;
+        }
+
+        // No adjacent monster: Pathfind towards nearest reachable monster
+        let path = this.findWalkerPathToNearestMonster(curR, curC);
+        if (!path || path.length === 0) {
+            // No reachable monster, pathfind to explore dark/unrevealed tiles
+            path = this.findWalkerPathToExplore(curR, curC);
+        }
+
+        if (path && path.length > 0) {
+            const [nextR, nextC] = path[0];
+            const facing = nextC >= curC ? 'right' : 'left';
+
+            this.setState(prev => ({
+                activeDungeonWalker: prev.activeDungeonWalker ? {
+                    ...prev.activeDungeonWalker,
+                    location: [nextR, nextC],
+                    facing,
+                    isMoving: true,
+                    isAttacking: false,
+                    monsterAttacking: false,
+                    remainingSec,
+                    damageNumbers: updatedDamages
+                } : null
+            }));
+
+            this.revealWalkerTiles(nextR, nextC, walker.expiresAt);
+        } else {
+            // Idle in place if completely trapped or no path
+            this.setState(prev => ({
+                activeDungeonWalker: prev.activeDungeonWalker ? {
+                    ...prev.activeDungeonWalker,
+                    isMoving: false,
+                    isAttacking: false,
+                    remainingSec,
+                    damageNumbers: updatedDamages
+                } : null
+            }));
+        }
+    };
+
+    activateShadowEffigy = () => {
+        const meta = (typeof getMeta === 'function' ? getMeta() : null) || {};
+        const curResolve = typeof meta.resolve === 'number' ? meta.resolve : 100;
+        if (curResolve < 3) {
+            this.displayMessage("❌ Shadow Effigy requires 3 Resolve!");
+            return;
+        }
+
+        const bm = this.props.boardManager;
+        const playerLocation = bm?.playerTile?.location || [0, 0];
+        const pRow = ((Number(playerLocation[0]) % 15) + 15) % 15;
+        const pCol = ((Number(playerLocation[1]) % 15) + 15) % 15;
+        const facing = this.state.playerFacing || 'right';
+
+        meta.resolve = Math.max(0, curResolve - 3);
+        if (typeof storeMeta === 'function') storeMeta(meta);
+        try {
+            if (typeof updateUserRequest === 'function' && typeof getUserId === 'function') {
+                updateUserRequest(getUserId(), meta).catch(() => {});
+            }
+        } catch (e) {}
+
+        this.displayMessage("👻 Summoner conjured a Shadow Effigy! The decoy strides forward into the shadows. (-3 Resolve)");
+
+        if (this._shadowEffigyInterval) {
+            clearInterval(this._shadowEffigyInterval);
+            this._shadowEffigyInterval = null;
+        }
+
+        const facingDeltas = {
+            right: [0, 1],
+            left: [0, -1],
+            down: [1, 0],
+            up: [-1, 0]
+        };
+        const delta = facingDeltas[facing] || [0, 1];
+
+        let curRow = pRow;
+        let curCol = pCol;
+        let stepsTaken = 0;
+        const maxSteps = 7;
+
+        this.setState({
+            activeShadowEffigy: {
+                row: curRow,
+                col: curCol,
+                facing,
+                bursting: false
+            }
+        });
+
+        const shatterEffigy = (burstRow, burstCol) => {
+            if (this._shadowEffigyInterval) {
+                clearInterval(this._shadowEffigyInterval);
+                this._shadowEffigyInterval = null;
+            }
+            const freezeUntil = Date.now() + 8000;
+            this.setState(prev => ({
+                stopwatchFrozenUntil: Math.max(prev.stopwatchFrozenUntil || 0, freezeUntil),
+                activeShadowEffigy: prev.activeShadowEffigy ? {
+                    ...prev.activeShadowEffigy,
+                    row: burstRow,
+                    col: burstCol,
+                    bursting: true
+                } : null
+            }));
+
+            this.displayMessage("❄️ Shadow Effigy shattered in a burst of wraith-frost! All monster patrols frozen for 8 seconds.");
+
+            setTimeout(() => {
+                this.setState({ activeShadowEffigy: null });
+            }, 650);
+        };
+
+        this._shadowEffigyInterval = setInterval(() => {
+            stepsTaken++;
+            const nextRow = curRow + delta[0];
+            const nextCol = curCol + delta[1];
+
+            if (nextRow < 0 || nextRow >= 15 || nextCol < 0 || nextCol >= 15) {
+                shatterEffigy(curRow, curCol);
+                return;
+            }
+
+            const nextTileIdx = (bm && typeof bm.getIndexFromCoordinates === 'function')
+                ? bm.getIndexFromCoordinates([nextRow, nextCol])
+                : (nextRow * 15 + nextCol);
+            const nextTile = (bm?.tiles && bm.tiles[nextTileIdx]) || (bm?.currentBoard?.tiles && bm.currentBoard.tiles[nextTileIdx]);
+
+            if (!nextTile || nextTile.isVoid || nextTile.type === 'void' || nextTile.contains === 'void') {
+                shatterEffigy(curRow, curCol);
+                return;
+            }
+
+            curRow = nextRow;
+            curCol = nextCol;
+
+            const contains = nextTile.contains;
+            const hasMonster = contains && (
+                contains === 'monster' ||
+                contains.type === 'monster' ||
+                nextTile.monster
+            );
+
+            this.setState({
+                activeShadowEffigy: {
+                    row: curRow,
+                    col: curCol,
+                    facing,
+                    bursting: false
+                }
+            });
+
+            if (hasMonster || stepsTaken >= maxSteps) {
+                shatterEffigy(curRow, curCol);
+            }
+        }, 360);
+    };
+
+    activateVoidFetch = () => {
+        const meta = (typeof getMeta === 'function' ? getMeta() : null) || {};
+        const curResolve = typeof meta.resolve === 'number' ? meta.resolve : 100;
+        if (curResolve < 2) {
+            this.displayMessage("❌ Void Fetch requires 2 Resolve!");
+            return;
+        }
+
+        const bm = this.props.boardManager;
+        const playerLocation = bm?.playerTile?.location || [0, 0];
+        const pRow = ((Number(playerLocation[0]) % 15) + 15) % 15;
+        const pCol = ((Number(playerLocation[1]) % 15) + 15) % 15;
+
+        const allTiles = (bm && Array.isArray(bm.tiles) && bm.tiles.length > 0)
+            ? bm.tiles
+            : (this.state.tiles || []);
+
+        let candidateLoot = [];
+        let candidateTraps = [];
+
+        allTiles.forEach(tile => {
+            if (!tile || !tile.location) return;
+            const tRow = ((Number(tile.location[0]) % 15) + 15) % 15;
+            const tCol = ((Number(tile.location[1]) % 15) + 15) % 15;
+            const dist = Math.hypot(tRow - pRow, tCol - pCol);
+            if (dist < 0.5 || dist > 5.5) return;
+
+            if (tile.hasTrap && !tile.trapDisarmed) {
+                candidateTraps.push({ tile, dist, type: 'trap' });
+            }
+
+            const c = tile.contains;
+            const cType = (c && typeof c === 'object') ? (c.type || c.subtype) : c;
+            const isLoot = [
+                'gold', 'food', 'treasure', 'item', 'chest', 'key',
+                'wood', 'stone', 'slate', 'mushrooms', 'chemicals',
+                'shimmering_dust', 'shimmering dust', 'resource', 'potion',
+                'scroll', 'rune', 'jewel', 'shard'
+            ].includes(cType) || !!tile.pickupItem;
+
+            if (isLoot) {
+                candidateLoot.push({ tile, dist, type: 'loot', cType });
+            }
+        });
+
+        candidateLoot.sort((a, b) => a.dist - b.dist);
+        candidateTraps.sort((a, b) => a.dist - b.dist);
+
+        const target = candidateLoot[0] || candidateTraps[0];
+        if (!target) {
+            this.displayMessage("🦇 Void Fetch: No reachable loot or traps within 5 tiles! Move closer to your target.");
+            return;
+        }
+
+        meta.resolve = Math.max(0, curResolve - 2);
+        if (typeof storeMeta === 'function') storeMeta(meta);
+        try {
+            if (typeof updateUserRequest === 'function' && typeof getUserId === 'function') {
+                updateUserRequest(getUserId(), meta).catch(() => {});
+            }
+        } catch (e) {}
+
+        const targetTile = target.tile;
+        const tRow = ((Number(targetTile.location[0]) % 15) + 15) % 15;
+        const tCol = ((Number(targetTile.location[1]) % 15) + 15) % 15;
+
+        this.setState({
+            activeVoidFetch: {
+                startRow: pRow,
+                startCol: pCol,
+                targetRow: tRow,
+                targetCol: tCol,
+                stage: 'flying_out'
+            }
+        });
+
+        if (target.type === 'trap') {
+            targetTile.hasTrap = false;
+            targetTile.trapRevealed = false;
+            targetTile.trapDisarmed = true;
+            if (bm?.currentBoard?.tiles?.[targetTile.id]) {
+                bm.currentBoard.tiles[targetTile.id].hasTrap = false;
+                bm.currentBoard.tiles[targetTile.id].trapRevealed = false;
+                bm.currentBoard.tiles[targetTile.id].trapDisarmed = true;
+            }
+            if (typeof bm?.refreshTiles === 'function') bm.refreshTiles();
+            if (this.state.tiles) this.setState({ tiles: [...this.state.tiles] });
+
+            setTimeout(() => {
+                this.setState(prev => prev.activeVoidFetch ? {
+                    activeVoidFetch: { ...prev.activeVoidFetch, stage: 'returning' }
+                } : null);
+                this.displayMessage("🦇 Void Fetch swooped over the trap and safely disarmed it with a summoned bone! (-2 Resolve)");
+                setTimeout(() => {
+                    this.setState({ activeVoidFetch: null });
+                }, 400);
+            }, 350);
+        } else {
+            const itemName = target.cType ? String(target.cType).replace(/_/g, ' ') : 'loot';
+            try {
+                if (typeof bm?.handleInteraction === 'function') {
+                    bm.handleInteraction(targetTile);
+                } else {
+                    if (target.cType === 'gold') {
+                        this.addCurrencyToInventory({ type: 'gold', amount: 35 }, targetTile);
+                    } else if (target.cType === 'food') {
+                        this.addCurrencyToInventory({ type: 'food', amount: 5 }, targetTile);
+                    }
+                    targetTile.contains = 'empty';
+                    targetTile.image = 'empty';
+                    if (typeof bm?.removeTileFromBoard === 'function') {
+                        bm.removeTileFromBoard(targetTile);
+                    }
+                }
+            } catch (err) {}
+
+            if (typeof bm?.refreshTiles === 'function') bm.refreshTiles();
+            if (this.state.tiles) this.setState({ tiles: [...this.state.tiles] });
+
+            setTimeout(() => {
+                this.setState(prev => prev.activeVoidFetch ? {
+                    activeVoidFetch: { ...prev.activeVoidFetch, stage: 'returning' }
+                } : null);
+                this.displayMessage(`🦇 Void Fetch flew across the dungeon and retrieved ${itemName}! (-2 Resolve)`);
+                setTimeout(() => {
+                    this.setState({ activeVoidFetch: null });
+                }, 400);
+            }, 350);
+        }
+    };
 
     activateHealingGround = () => {
         const bm = this.props.boardManager;
@@ -32276,6 +34783,34 @@ class DungeonPage extends React.Component {
                             <span>{this.state.showIsometric ? 'Isometric: ON' : 'Isometric: OFF'}</span>
                         </button>
                     )}
+                    {!this.state.inSuperboard && !this.state.isInPocketDimension && (
+                        <button
+                            className={`hud-timer-item organic-edges-toggle-btn ${this.state.showOrganicEdges ? 'active' : ''}`}
+                            onClick={() => this.toggleOrganicEdges()}
+                            data-testid="organic-edges-toggle-btn"
+                            title="Toggle Organic Void Edges"
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 6,
+                                background: this.state.showOrganicEdges ? 'rgba(74, 222, 128, 0.22)' : 'rgba(25, 20, 35, 0.85)',
+                                border: this.state.showOrganicEdges ? '1px solid #4ade80' : '1px solid rgba(255, 255, 255, 0.25)',
+                                borderRadius: '12px',
+                                padding: '2px 9px',
+                                cursor: 'pointer',
+                                pointerEvents: 'auto',
+                                color: this.state.showOrganicEdges ? '#86efac' : '#e2e8f0',
+                                fontSize: '11px',
+                                fontWeight: 700,
+                                boxShadow: this.state.showOrganicEdges ? '0 0 10px rgba(74, 222, 128, 0.5)' : 'none',
+                                transition: 'all 0.2s ease',
+                                userSelect: 'none'
+                            }}
+                        >
+                            <span style={{ fontSize: '12px' }}>🌿</span>
+                            <span>{this.state.showOrganicEdges ? 'Organic Edges: ON' : 'Organic Edges: OFF'}</span>
+                        </button>
+                    )}
                 </div>
                 <div
                     className="message-container"
@@ -32323,7 +34858,17 @@ class DungeonPage extends React.Component {
 
     // Delegates camping start to CampManager
     setUpCamp = async (maybeDuration, useResolveFallback = false) => {
-        this.setState({ activePygmyCompanion: null });
+        if (this._wanderingEyeFlightTimer) {
+            clearInterval(this._wanderingEyeFlightTimer);
+            this._wanderingEyeFlightTimer = null;
+        }
+        if (typeof this.stopAutonomousWanderingEye === 'function') {
+            this.stopAutonomousWanderingEye();
+        }
+        if (typeof this.dismissDungeonWalker === 'function') {
+            this.dismissDungeonWalker();
+        }
+        this.setState({ activePygmyCompanion: null, activeWanderingEye: null, wanderingEye: null, activeDungeonWalker: null });
         const res = await CampManager.setUpCamp(this, maybeDuration, useResolveFallback);
         if (this.props.boardManager && this.props.boardManager.playerTile && this.props.boardManager.playerTile.location) {
             this.updateFloatingPlayerPosition(this.props.boardManager.playerTile.location);
@@ -33181,6 +35726,22 @@ class DungeonPage extends React.Component {
             });
             return;
         }
+        // Open Homunculus Assembly overlay (Summoner)
+        if (action.type === 'homunculus_assembly') {
+            if (action.disabled) return;
+            const character = this.state.selectedCrewMember;
+            this.setState({
+                showHomunculusOverlay: true,
+                homunculusOverlayMemberId: character ? character.id : null,
+                homunculusSelectedSlot: null,
+                homunculusSelectedDesign: null,
+            });
+            return;
+        }
+        if (action.type === 'spirit_vessel' && isOpen) {
+            nextState.vesselBuilderOpen = null;
+            nextState.vesselBuilderSpirits = [];
+        }
         // Toggle tactics builder open/closed when the Battle Tactics action row is clicked
         if (action.type === 'tactics') {
             const character = this.state.selectedCrewMember;
@@ -33386,6 +35947,17 @@ class DungeonPage extends React.Component {
             }
             return;
         }
+        // For spirit vessel actions, open the spirit-slot builder instead of immediately starting
+        if (action.type === 'spirit_vessel' && subType.vesselTier) {
+            const currentTier = this.state.vesselBuilderOpen;
+            // Toggle: clicking same tier closes the builder
+            if (currentTier === subType.vesselTier) {
+                this.setState({ vesselBuilderOpen: null, vesselBuilderSpirits: [] });
+            } else {
+                this.setState({ vesselBuilderOpen: subType.vesselTier, vesselBuilderSpirits: [] });
+            }
+            return;
+        }
         // For tactics: commit directly on click (like monk disciplines)
         if (action.type === 'tactics' && subType.tacticKey) {
             this.handleTacticsCommit(subType.tacticKey);
@@ -33543,6 +36115,54 @@ class DungeonPage extends React.Component {
         this.setState({
             glyphBuilderOpen: null,
             glyphBuilderSpells: [],
+            actionMenuTypeExpanded: nextExpanded,
+            selectedCrewMember: updatedCrewMember ? { ...updatedCrewMember } : this.state.selectedCrewMember,
+        });
+    }
+
+    // Toggle a spirit in the vessel builder. spiritKey is the skills-matrix key.
+    handleVesselSpiritToggle = (spiritKey) => {
+        const tier = this.state.vesselBuilderOpen;
+        if (!tier || !SPIRIT_VESSELS[tier]) return;
+        const vesselSlots = SPIRIT_VESSELS[tier].slots;
+        const current = this.state.vesselBuilderSpirits || [];
+        const spiritDef = skillsMatrix[spiritKey];
+        if (!spiritDef) return;
+        const spiritCost = VESSEL_SPIRIT_SLOT_COST[spiritDef.tier] || 1;
+
+        // If already selected, remove it
+        const existingIdx = current.findIndex(s => s.id === spiritKey);
+        if (existingIdx !== -1) {
+            this.setState({ vesselBuilderSpirits: current.filter((_, i) => i !== existingIdx) });
+            return;
+        }
+        // Compute slots already used
+        const slotsUsed = current.reduce((sum, s) => sum + (VESSEL_SPIRIT_SLOT_COST[s.tier] || 1), 0);
+        if (slotsUsed + spiritCost > vesselSlots) return; // not enough room
+        this.setState({
+            vesselBuilderSpirits: [...current, { id: spiritKey, tier: spiritDef.tier, name: spiritDef.name }]
+        });
+    }
+
+    // Commit the built spirit vessel — starts the preparation timer.
+    handleVesselPrepare = () => {
+        const tier = this.state.vesselBuilderOpen;
+        const spiritDefs = this.state.vesselBuilderSpirits || [];
+        if (!tier || spiritDefs.length === 0) return;
+
+        const action = { type: 'spirit_vessel' };
+        const subType = { vesselTier: tier, spiritDefs };
+        const characterFromCrew = this.props.crewManager.crew.find(e => e.id === this.state.selectedCrewMember.id);
+        this.props.crewManager.beginSpecialAction(characterFromCrew, action, subType);
+        const nextExpanded = this.collapseActionMenu('spirit_vessel');
+        const meta = getMeta();
+        meta.crew = this.props.crewManager.crew;
+        storeMeta(meta);
+        this.props.saveUserData();
+        const updatedCrewMember = this.props.crewManager.crew.find(e => e.id === this.state.selectedCrewMember.id);
+        this.setState({
+            vesselBuilderOpen: null,
+            vesselBuilderSpirits: [],
             actionMenuTypeExpanded: nextExpanded,
             selectedCrewMember: updatedCrewMember ? { ...updatedCrewMember } : this.state.selectedCrewMember,
         });
@@ -34027,9 +36647,9 @@ class DungeonPage extends React.Component {
         } catch (e) { }
     }
     checkWhichSideOfBoard = () => {
-        let side = this.props.boardManager.playerTile.location[0] < 22 ? 'top' : 'bottom'
+        let side = (this.props.boardManager?.playerTile?.location?.[0] ?? 0) < 22 ? 'top' : 'bottom';
         // console.log('side of board: ', side);
-        return side
+        return side;
     }
     triggerRitualEncounter = () => {
         this.setState({
@@ -34389,8 +37009,18 @@ class DungeonPage extends React.Component {
 
         const combinedStr = `${cType} ${cSub} ${vGroup} ${anchorSub} ${anchorGroup}`;
 
+        const NON_VENDOR_STRUCTURE_KEYS = [
+            'sawmill', 'lumber_mill', 'larder', 'ore_mine', 'slate_mine', 'dust_collector',
+            'cultivation_vat', 'domain_monolith', 'dark_domain_monolith', 'domain_node', 'dark_domain_node',
+            'monolith', 'shrine', 'archaic', 'outpost', 'earthen_fort', 'war_fort', 'keep', 'fortress',
+            'house', 'farm', 'hut', 'windmill', 'healing_circle'
+        ];
+        if (NON_VENDOR_STRUCTURE_KEYS.some(k => combinedStr.includes(k))) {
+            return { isVendor: false, vendorType: null };
+        }
+
         const vendorKeys = ['war_camp', 'war camp', 'alchemist', 'fungal_nursery', 'dream_den', 'dream den', 'merchant', 'vendor'];
-        const isVendor = vendorKeys.some(k => combinedStr.includes(k)) || !!vCell || vAnchorId !== null || !!vGroup;
+        const isVendor = vendorKeys.some(k => combinedStr.includes(k));
 
         if (!isVendor) {
             return { isVendor: false, vendorType: null };
@@ -34424,8 +37054,24 @@ class DungeonPage extends React.Component {
         return str.includes('locus');
     };
 
+    isPortalTile = (tile) => {
+        if (!tile) return false;
+        const bm = this.props.boardManager;
+        const cObj = typeof tile.contains === 'object' && tile.contains !== null ? tile.contains : null;
+        if (cObj && (cObj.portalId || cObj.targetPortalId || cObj.isPortal || cObj.portal)) return true;
+        if (tile.portalId || tile.targetPortalId || tile.isPortal || tile.portal || tile['data-portal-id']) return true;
+        const ctype = String((bm && typeof bm.getContainsType === 'function' ? bm.getContainsType(tile.contains) : null) || cObj?.type || tile.contains || tile.type || '').toLowerCase();
+        const csubtype = String((bm && typeof bm.getContainsSubtype === 'function' ? bm.getContainsSubtype(tile.contains) : null) || cObj?.subtype || cObj?.key || tile.subtype || '').toLowerCase();
+        const img = String(tile.image || cObj?.image || '').toLowerCase();
+        const bldg = String(tile.building || cObj?.building || '').toLowerCase();
+        const name = String(cObj?.name || tile.name || '').toLowerCase();
+        const portalKeys = ['dungeon_portal', 'dungeon portal', 'portal', 'teleporter'];
+        return portalKeys.some(k => ctype.includes(k) || csubtype.includes(k) || img.includes(k) || bldg.includes(k) || name.includes(k));
+    };
+
     isBuildingOrGeneratorTile = (tile) => {
         if (!tile) return false;
+        if (this.isPortalTile(tile)) return false;
         if (this.getIsLocusHelper(tile)) return false;
         const bm = this.props.boardManager;
         if (bm && bm.isVoidTile && bm.isVoidTile(tile)) return false;
@@ -34451,6 +37097,9 @@ class DungeonPage extends React.Component {
         }
 
         const fullKeyStr = String(containsSubtype || bldg || img || cKey || containsType || '').toLowerCase();
+        if (fullKeyStr.includes('portal') || fullKeyStr.includes('teleporter')) {
+            return false;
+        }
         const vendorKeys = ['merchant', 'alchemist', 'vendor', 'fungal_nursery', 'buildable_merchant', 'buildable_alchemist'];
         if (vendorKeys.some(k => fullKeyStr.includes(k))) {
             return false;
@@ -34628,7 +37277,7 @@ class DungeonPage extends React.Component {
             },
             lumber_mill: {
                 key: 'lumber_mill',
-                name: 'Sawmill',
+                name: 'Lumber Mill',
                 resource: 'Wood',
                 currencyType: 'wood',
                 rate: 5,
@@ -36243,20 +38892,23 @@ class DungeonPage extends React.Component {
         }
         if (!rawClan && bm?.tiles) {
             const row = Math.floor(targetTile.id / 15), col = targetTile.id % 15;
-            const neighbors = [];
-            if (row > 0) neighbors.push((row - 1) * 15 + col);
-            if (row < 14) neighbors.push((row + 1) * 15 + col);
-            if (col > 0) neighbors.push(row * 15 + (col - 1));
-            if (col < 14) neighbors.push(row * 15 + (col + 1));
-            for (const nId of neighbors) {
-                const nTile = bm.tiles[nId] || (bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[nId]);
-                if (nTile && (nTile.territory || nTile.contains?.territory)) {
-                    rawClan = nTile.territory || nTile.contains?.territory;
-                    break;
+            for (let dr = -1; dr <= 1; dr++) {
+                for (let dc = -1; dc <= 1; dc++) {
+                    if (dr === 0 && dc === 0) continue;
+                    const nr = row + dr, nc = col + dc;
+                    if (nr >= 0 && nr < 15 && nc >= 0 && nc < 15) {
+                        const nId = nr * 15 + nc;
+                        const nTile = bm.tiles[nId] || (bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[nId]);
+                        if (nTile && (nTile.territory || nTile.contains?.territory)) {
+                            rawClan = nTile.territory || nTile.contains?.territory;
+                            break;
+                        }
+                    }
                 }
+                if (rawClan) break;
             }
         }
-        const rawClanStr = typeof rawClan === 'object' ? rawClan.clan || rawClan.type : (rawClan ? String(rawClan) : null);
+        const rawClanStr = typeof rawClan === 'object' ? rawClan.clan || rawClan.type || rawClan.affiliation : (rawClan ? String(rawClan) : null);
         const clan = rawClanStr ? (
             rawClanStr.toLowerCase().includes('mox') ? 'mox' :
                 rawClanStr.toLowerCase().includes('benthic') ? 'benthic' :
@@ -36267,15 +38919,37 @@ class DungeonPage extends React.Component {
                                     rawClanStr.toLowerCase().includes('shadow') ? 'shadow' :
                                         rawClanStr.toLowerCase().includes('paradox') ? 'paradox' :
                                             rawClanStr.toLowerCase().replace(/_clan$/i, '')
-        ) : 'cave';
+        ) : 'benthic';
 
         const contiguousTileIds = this.getContiguousTerritoryTileIds(targetTile.id, clan);
         contiguousTileIds.add(targetTile.id);
+
+        // Include any tiles assigned to this domain node by ID or within immediate domain radius
+        const targetMonolithId = targetTile.territoryMonolithId || targetTile.contains?.territoryMonolithId || targetTile.id || targetTile.contains?.id || `monolith_${targetTile.id}`;
+        const targetRow = Math.floor(targetTile.id / 15);
+        const targetCol = targetTile.id % 15;
+        const allBoardTiles = (bm?.currentBoard && bm.currentBoard.tiles) ? bm.currentBoard.tiles : (bm?.tiles || []);
+        allBoardTiles.forEach((t, idx) => {
+            if (!t) return;
+            const tId = t.id !== undefined ? t.id : idx;
+            const tMonoId = t.territoryMonolithId || (typeof t.contains === 'object' ? t.contains?.territoryMonolithId : null);
+            if (tMonoId && (tMonoId === targetMonolithId || String(tMonoId) === String(targetTile.id) || String(tMonoId) === `monolith_${targetTile.id}`)) {
+                contiguousTileIds.add(tId);
+            }
+        });
+
+        // Also flood-fill outward from each discovered seed in contiguousTileIds
+        const seeds = Array.from(contiguousTileIds);
+        seeds.forEach(sId => {
+            const connected = this.getContiguousTerritoryTileIds(sId, clan);
+            connected.forEach(cId => contiguousTileIds.add(cId));
+        });
 
         // Update target domain node
         targetTile.affiliation = targetAffiliation;
         targetTile.territory = targetAffiliation;
         targetTile.territoryAffiliation = targetAffiliation;
+        targetTile.territoryMonolithId = targetTile.id;
         targetTile.ownedByPlayer = true;
         targetTile.placedBy = 'player';
         targetTile.activated = true;
@@ -36283,6 +38957,7 @@ class DungeonPage extends React.Component {
             targetTile.contains.affiliation = targetAffiliation;
             targetTile.contains.territory = targetAffiliation;
             targetTile.contains.territoryAffiliation = targetAffiliation;
+            targetTile.contains.territoryMonolithId = targetTile.id;
             targetTile.contains.ownedByPlayer = true;
             targetTile.contains.placedBy = 'player';
             targetTile.contains.activated = true;
@@ -36302,27 +38977,34 @@ class DungeonPage extends React.Component {
                 t.territory = targetAffiliation;
                 t.affiliation = targetAffiliation;
                 t.territoryAffiliation = targetAffiliation;
+                t.territoryMonolithId = targetTile.id;
                 if (bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[tId]) {
                     bm.currentBoard.tiles[tId].territory = targetAffiliation;
                     bm.currentBoard.tiles[tId].affiliation = targetAffiliation;
                     bm.currentBoard.tiles[tId].territoryAffiliation = targetAffiliation;
+                    bm.currentBoard.tiles[tId].territoryMonolithId = targetTile.id;
                 }
                 if (t.contains && typeof t.contains === 'object') {
                     t.contains.territory = targetAffiliation;
                     t.contains.affiliation = targetAffiliation;
                     t.contains.territoryAffiliation = targetAffiliation;
+                    t.contains.territoryMonolithId = targetTile.id;
                     if (bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[tId]?.contains && typeof bm.currentBoard.tiles[tId].contains === 'object') {
                         bm.currentBoard.tiles[tId].contains.territory = targetAffiliation;
                         bm.currentBoard.tiles[tId].contains.affiliation = targetAffiliation;
                         bm.currentBoard.tiles[tId].contains.territoryAffiliation = targetAffiliation;
+                        bm.currentBoard.tiles[tId].contains.territoryMonolithId = targetTile.id;
                     }
                 }
 
-                // Check if this tile has an outpost: align it with the player!
+                // Check if this tile has an outpost or other military structure: align it with the player!
                 const bldg = t.building || (typeof t.contains === 'object' ? t.contains?.building || t.contains?.subtype : null) || '';
                 const img = String(t.image || '').toLowerCase();
-                const isOutpost = String(bldg).includes('outpost') || img.includes('outpost');
-                if (isOutpost) {
+                const isMilitaryStructure = String(bldg).includes('outpost') || img.includes('outpost') ||
+                    String(bldg).includes('earthen_fort') || img.includes('earthen_fort') ||
+                    String(bldg).includes('war_camp') || img.includes('war_camp') ||
+                    String(bldg).includes('war_fort') || img.includes('war_fort');
+                if (isMilitaryStructure) {
                     t.affiliation = targetAffiliation;
                     t.ownedByPlayer = true;
                     t.placedBy = 'player';
@@ -36361,6 +39043,35 @@ class DungeonPage extends React.Component {
                 }
             }
         });
+
+        // Synchronize with bm.dungeon if present
+        if (bm.dungeon && Array.isArray(bm.dungeon.levels)) {
+            bm.dungeon.levels.forEach(lvl => {
+                ['front', 'back'].forEach(planeKey => {
+                    const plane = lvl && lvl[planeKey];
+                    if (plane && Array.isArray(plane.miniboards)) {
+                        plane.miniboards.forEach(b => {
+                            if (b && b.id === bm.currentBoard?.id && b.tiles) {
+                                contiguousTileIds.forEach(tId => {
+                                    if (b.tiles[tId]) {
+                                        b.tiles[tId].territory = targetAffiliation;
+                                        b.tiles[tId].affiliation = targetAffiliation;
+                                        b.tiles[tId].territoryAffiliation = targetAffiliation;
+                                        b.tiles[tId].territoryMonolithId = targetTile.id;
+                                        if (b.tiles[tId].contains && typeof b.tiles[tId].contains === 'object') {
+                                            b.tiles[tId].contains.territory = targetAffiliation;
+                                            b.tiles[tId].contains.affiliation = targetAffiliation;
+                                            b.tiles[tId].contains.territoryAffiliation = targetAffiliation;
+                                            b.tiles[tId].contains.territoryMonolithId = targetTile.id;
+                                        }
+                                    }
+                                });
+                            }
+                        });
+                    }
+                });
+            });
+        }
 
         // Persist to meta
         try {
@@ -36931,69 +39642,7 @@ class DungeonPage extends React.Component {
         const monolithId = (anchorTile.contains && typeof anchorTile.contains === 'object' && anchorTile.contains.id) ? anchorTile.contains.id : `monolith_${anchorGx}_${anchorGy}`;
 
         superboardsToUpdate.forEach(superboard => {
-            if (!superboard || !superboard.miniboards) return;
-            superboard.miniboards.forEach((targetMb, targetMbIdx) => {
-                if (!targetMb || !targetMb.tiles) return;
-                const mbX = (targetMbIdx % 3) * 15;
-                const mbY = Math.floor(targetMbIdx / 3) * 15;
-
-                targetMb.tiles.forEach((targetTile, targetTidx) => {
-                    if (!targetTile) return;
-                    const gx = mbX + (targetTidx % 15);
-                    const gy = mbY + Math.floor(targetTidx / 15);
-
-                    if (gx >= minGx && gx <= maxGx && gy >= minGy && gy <= maxGy) {
-                        const existingC = typeof targetTile.contains === 'object' ? targetTile.contains : {};
-                        targetTile.contains = {
-                            ...existingC,
-                            affiliation: affiliation,
-                            growthCycles: cycle,
-                            lastGrowthTime: Date.now(),
-                            id: monolithId,
-                            activated: true,
-                            territory: affiliation,
-                            territoryAffiliation: affiliation,
-                            territoryMonolithId: monolithId,
-                            newlyClaimed: true,
-                            claimDelayMs: 0
-                        };
-                        targetTile.affiliation = affiliation;
-                        targetTile.growthCycles = cycle;
-                        targetTile.activated = true;
-                        targetTile.lastGrowthTime = Date.now();
-                        targetTile.territory = affiliation;
-                        targetTile.territoryAffiliation = affiliation;
-                        targetTile.territoryMonolithId = monolithId;
-                        targetTile.newlyClaimed = true;
-                        targetTile.claimDelayMs = 0;
-                        return;
-                    }
-
-                    let dx = 0;
-                    if (gx < minGx) dx = minGx - gx;
-                    else if (gx > maxGx) dx = gx - maxGx;
-
-                    let dy = 0;
-                    if (gy < minGy) dy = minGy - gy;
-                    else if (gy > maxGy) dy = gy - maxGy;
-
-                    const dist = Math.max(dx, dy);
-                    if (dist <= cycle) {
-                        targetTile.territory = affiliation;
-                        targetTile.territoryAffiliation = affiliation;
-                        targetTile.territoryMonolithId = monolithId;
-                        targetTile.newlyClaimed = true;
-                        targetTile.claimDelayMs = dist * 150;
-                        if (targetTile.contains && typeof targetTile.contains === 'object') {
-                            targetTile.contains.territory = affiliation;
-                            targetTile.contains.territoryAffiliation = affiliation;
-                            targetTile.contains.territoryMonolithId = monolithId;
-                            targetTile.contains.newlyClaimed = true;
-                            targetTile.contains.claimDelayMs = dist * 150;
-                        }
-                    }
-                });
-            });
+            this.convertSuperboardContiguousTerritory(superboard, monolithId, affiliation, anchorGx, anchorGy, isNode);
         });
 
         this.updateSuperboardViewport(true);
@@ -37053,6 +39702,10 @@ class DungeonPage extends React.Component {
         }
 
         if (def.key.includes('domain_node')) {
+            if (isInPocketDimension) {
+                this.startMonolithActivation(tile);
+                return;
+            }
             const meta = typeof getMeta === 'function' ? (getMeta() || {}) : {};
             const userAffiliation = meta.affiliation || 'mox';
             const nodeAff = tile.affiliation || tile.contains?.affiliation || gData.affiliation || (tile.generatorData && tile.generatorData.affiliation) || tile.territory || tile.contains?.territory;
@@ -38341,37 +40994,57 @@ class DungeonPage extends React.Component {
                 }
             }
         } else if (bm) {
-            footprint.forEach((tId, idx) => {
-                const tileObj = { ...buildingObj };
-                if (initialGeneratorData) {
-                    tileObj.generatorData = { ...initialGeneratorData };
-                }
-                if (isLarge) {
-                    tileObj.vendorGroupId = vendorGroupId;
-                    tileObj.vendorAnchorId = targetTileIdx;
-                    tileObj.vendorCell = vendorCells[idx] || 'anchor';
-                }
-                if (bm.tiles && bm.tiles[tId]) {
-                    bm.tiles[tId].contains = tileObj;
-                    bm.tiles[tId].building = buildingDef.key;
-                    bm.tiles[tId].image = buildingImageKey;
-                    if (initialGeneratorData) {
-                        bm.tiles[tId].generatorData = { ...initialGeneratorData };
+            if (buildingDef.key === 'walker') {
+                footprint.forEach(tId => {
+                    if (bm.tiles && bm.tiles[tId]) {
+                        bm.tiles[tId].contains = { type: 'empty_space', subtype: null };
+                        bm.tiles[tId].building = null;
+                        bm.tiles[tId].image = null;
+                        bm.tiles[tId].affiliation = null;
+                        bm.tiles[tId].placedBy = null;
                     }
-                    bm.tiles[tId].affiliation = 'friendly';
-                    bm.tiles[tId].placedBy = 'player';
-                }
-                if (bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[tId]) {
-                    bm.currentBoard.tiles[tId].contains = tileObj;
-                    bm.currentBoard.tiles[tId].building = buildingDef.key;
-                    bm.currentBoard.tiles[tId].image = buildingImageKey;
-                    if (initialGeneratorData) {
-                        bm.currentBoard.tiles[tId].generatorData = { ...initialGeneratorData };
+                    if (bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[tId]) {
+                        bm.currentBoard.tiles[tId].contains = { type: 'empty_space', subtype: null };
+                        bm.currentBoard.tiles[tId].building = null;
+                        bm.currentBoard.tiles[tId].image = null;
+                        bm.currentBoard.tiles[tId].affiliation = null;
+                        bm.currentBoard.tiles[tId].placedBy = null;
                     }
-                    bm.currentBoard.tiles[tId].affiliation = 'friendly';
-                    bm.currentBoard.tiles[tId].placedBy = 'player';
-                }
-            });
+                });
+                this.deployDungeonWalker(targetTileIdx);
+            } else {
+                footprint.forEach((tId, idx) => {
+                    const tileObj = { ...buildingObj };
+                    if (initialGeneratorData) {
+                        tileObj.generatorData = { ...initialGeneratorData };
+                    }
+                    if (isLarge) {
+                        tileObj.vendorGroupId = vendorGroupId;
+                        tileObj.vendorAnchorId = targetTileIdx;
+                        tileObj.vendorCell = vendorCells[idx] || 'anchor';
+                    }
+                    if (bm.tiles && bm.tiles[tId]) {
+                        bm.tiles[tId].contains = tileObj;
+                        bm.tiles[tId].building = buildingDef.key;
+                        bm.tiles[tId].image = buildingImageKey;
+                        if (initialGeneratorData) {
+                            bm.tiles[tId].generatorData = { ...initialGeneratorData };
+                        }
+                        bm.tiles[tId].affiliation = 'friendly';
+                        bm.tiles[tId].placedBy = 'player';
+                    }
+                    if (bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[tId]) {
+                        bm.currentBoard.tiles[tId].contains = tileObj;
+                        bm.currentBoard.tiles[tId].building = buildingDef.key;
+                        bm.currentBoard.tiles[tId].image = buildingImageKey;
+                        if (initialGeneratorData) {
+                            bm.currentBoard.tiles[tId].generatorData = { ...initialGeneratorData };
+                        }
+                        bm.currentBoard.tiles[tId].affiliation = 'friendly';
+                        bm.currentBoard.tiles[tId].placedBy = 'player';
+                    }
+                });
+            }
 
         }
 
@@ -38392,7 +41065,11 @@ class DungeonPage extends React.Component {
 
         if (typeof socketHandler !== 'undefined' && socketHandler.sendTileUpdate) {
             const loc = { levelId: Number(bm?.currentLevel?.id || 0), boardIndex: Number(bm?.playerTile?.boardIndex || 0), orientation: bm?.currentOrientation || 'F' };
-            socketHandler.sendTileUpdate(targetTileIdx, null, loc, buildingObj, buildingDef.key);
+            if (buildingDef.key === 'walker' && !this.state.inSuperboard) {
+                socketHandler.sendTileUpdate(targetTileIdx, null, loc, { type: 'empty_space', subtype: null }, null);
+            } else {
+                socketHandler.sendTileUpdate(targetTileIdx, null, loc, buildingObj, buildingDef.key);
+            }
         }
 
         // Apply post-construction stamina penalty to all living crew contributors
@@ -38466,14 +41143,19 @@ class DungeonPage extends React.Component {
                             if (mb && mb.tiles) {
                                 footprint.forEach((tId, idx) => {
                                     if (mb.tiles[tId]) {
-                                        const tileObj = { ...buildingObj };
-                                        if (isLarge) {
-                                            tileObj.vendorGroupId = vendorGroupId;
-                                            tileObj.vendorAnchorId = targetTileIdx;
-                                            tileObj.vendorCell = vendorCells[idx] || 'anchor';
+                                        if (buildingDef.key === 'walker') {
+                                            mb.tiles[tId].contains = { type: 'empty_space', subtype: null };
+                                            mb.tiles[tId].building = null;
+                                        } else {
+                                            const tileObj = { ...buildingObj };
+                                            if (isLarge) {
+                                                tileObj.vendorGroupId = vendorGroupId;
+                                                tileObj.vendorAnchorId = targetTileIdx;
+                                                tileObj.vendorCell = vendorCells[idx] || 'anchor';
+                                            }
+                                            mb.tiles[tId].contains = tileObj;
+                                            mb.tiles[tId].building = buildingDef.key;
                                         }
-                                        mb.tiles[tId].contains = tileObj;
-                                        mb.tiles[tId].building = buildingDef.key;
                                     }
                                 });
                                 await updateDungeonRequest(res.data[0]._id, dData);
@@ -40450,6 +43132,173 @@ class DungeonPage extends React.Component {
                                             </button>
                                             {tattoos.length < 8 && (
                                                 <div className="tattoo-slots-remaining">{8 - tattoos.length} slot{8 - tattoos.length !== 1 ? 's' : ''} remaining</div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    );
+                })()}
+                {/* ── Homunculus Assembly Overlay (Summoner) ── */}
+                {this.state.showHomunculusOverlay && (() => {
+                    const meta = getMeta() || {};
+                    const member = (meta.crew || []).find(m => m && m.id === this.state.homunculusOverlayMemberId)
+                        || ((this.props.crewManager && Array.isArray(this.props.crewManager.crew))
+                            ? this.props.crewManager.crew.find(m => m && m.id === this.state.homunculusOverlayMemberId)
+                            : null);
+                    if (!member) return null;
+                    const grafts = member.homunculusGrafts || [];
+                    const graftIndex = grafts.length;
+                    const durationMs = HOMUNCULUS_ASSEMBLY_DURATIONS_MS[graftIndex] || 0;
+                    const fmtDuration = (ms) => {
+                        const totalMin = Math.floor(ms / 60000);
+                        const days = Math.floor(totalMin / 1440);
+                        const hrs = Math.floor((totalMin % 1440) / 60);
+                        const mins = totalMin % 60;
+                        if (days > 0) return `${days}d ${hrs}h`;
+                        if (hrs > 0) return `${hrs}h ${mins}m`;
+                        return `${mins} min`;
+                    };
+
+                    const { homunculusSelectedSlot, homunculusSelectedDesign } = this.state;
+                    const canConfirm = !!homunculusSelectedSlot && !!homunculusSelectedDesign && !member.homunculusAssembling;
+
+                    const closeOverlay = () => this.setState({
+                        showHomunculusOverlay: false,
+                        homunculusOverlayMemberId: null,
+                        homunculusSelectedSlot: null,
+                        homunculusSelectedDesign: null
+                    });
+
+                    return (
+                        <div
+                            className="homunculus-overlay"
+                            onClick={(e) => { if (e.target === e.currentTarget) closeOverlay(); }}
+                        >
+                            <div className="homunculus-overlay-card">
+                                {/* Header */}
+                                <div className="homunculus-overlay-header">
+                                    <h2 className="homunculus-overlay-title">💀 Homunculus Assembly</h2>
+                                    <div className="homunculus-overlay-sub">{member.name} &nbsp;·&nbsp; {grafts.length} / 8 anatomical grafts</div>
+                                    <button
+                                        className="homunculus-close-btn"
+                                        onClick={closeOverlay}
+                                        aria-label="Close"
+                                    >✕</button>
+                                </div>
+
+                                {/* Body */}
+                                <div className="homunculus-overlay-body">
+                                    {/* Left — body silhouette with slots */}
+                                    <div className="homunculus-body-section">
+                                        <div className="homunculus-body-label">Select Anatomy Slot</div>
+                                        <div className="homunculus-body-container">
+                                            <img
+                                                src={images.body_male}
+                                                alt="homunculus anatomy diagram"
+                                                className="homunculus-body-img"
+                                            />
+                                            {HOMUNCULUS_SLOT_POSITIONS.map(({ key, top, left }) => {
+                                                const existing = grafts.find(g => g.slot === key);
+                                                const inProgress = member.homunculusAssembling?.slot === key;
+                                                const isSelected = homunculusSelectedSlot === key;
+                                                const design = existing ? HOMUNCULUS_GRAFT_DESIGNS[existing.design] : null;
+                                                return (
+                                                    <div
+                                                        key={key}
+                                                        className={`homunculus-slot${existing ? ' filled' : ''}${inProgress ? ' assembling' : ''}${isSelected ? ' selected' : ''}`}
+                                                        style={{
+                                                            top, left,
+                                                            backgroundColor: design ? design.color + 'aa' : undefined,
+                                                        }}
+                                                        title={HOMUNCULUS_SLOT_LABELS[key]}
+                                                        onClick={() => {
+                                                            if (existing || inProgress) return;
+                                                            this.setState({ homunculusSelectedSlot: isSelected ? null : key });
+                                                        }}
+                                                    >
+                                                        {existing ? '✓' : inProgress ? '⟳' : ''}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                        {/* Slot legend */}
+                                        <div className="homunculus-slot-legend">
+                                            {HOMUNCULUS_SLOT_POSITIONS.map(({ key }) => {
+                                                const existing = grafts.find(g => g.slot === key);
+                                                const design = existing ? HOMUNCULUS_GRAFT_DESIGNS[existing.design] : null;
+                                                return (
+                                                    <div key={key} className={`homunculus-legend-row${existing ? ' legend-filled' : ''}${homunculusSelectedSlot === key ? ' legend-selected' : ''}`}>
+                                                        <span className="homunculus-legend-dot" style={{ backgroundColor: design ? design.color : '#444' }} />
+                                                        <span className="homunculus-legend-name">{HOMUNCULUS_SLOT_LABELS[key]}</span>
+                                                        {existing && <span className="homunculus-legend-design">{HOMUNCULUS_GRAFT_DESIGNS[existing.design]?.name}</span>}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+
+                                    {/* Right — design picker + confirm */}
+                                    <div className="homunculus-design-panel">
+                                        <div className="homunculus-design-label">Choose Graft Design</div>
+                                        <div className="homunculus-design-grid">
+                                            {Object.keys(HOMUNCULUS_GRAFT_DESIGNS).map(designKey => {
+                                                const def = HOMUNCULUS_GRAFT_DESIGNS[designKey];
+                                                if (!def) return null;
+                                                const isSelected = homunculusSelectedDesign === designKey;
+                                                const alreadyApplied = grafts.some(g => g.design === designKey);
+                                                return (
+                                                    <div
+                                                        key={designKey}
+                                                        className={`homunculus-design-card${isSelected ? ' selected' : ''}${alreadyApplied ? ' applied' : ''}`}
+                                                        style={{ borderColor: isSelected ? def.color : undefined }}
+                                                        onClick={() => {
+                                                            if (alreadyApplied) return;
+                                                            this.setState({ homunculusSelectedDesign: isSelected ? null : designKey });
+                                                        }}
+                                                        title={alreadyApplied ? 'Already grafted' : def.flavor}
+                                                    >
+                                                        <div className="homunculus-design-icon" style={{ backgroundColor: def.color + '33' }}>
+                                                            <img
+                                                                src={images[def.iconKey] || images.whiteskull || images.avatar}
+                                                                alt={def.name}
+                                                            />
+                                                        </div>
+                                                        <div className="homunculus-design-info">
+                                                            <div className="homunculus-design-name" style={{ color: def.color }}>{def.name}</div>
+                                                            <div className="homunculus-design-desc">{def.desc}</div>
+                                                            {alreadyApplied && <div className="homunculus-design-applied-badge">✓ Grafted</div>}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+
+                                        {/* Confirm area */}
+                                        <div className="homunculus-confirm-area">
+                                            <div className="homunculus-selection-summary">
+                                                {grafts.length >= 8
+                                                    ? '⛔ All 8 homunculus slots are grafted'
+                                                    : member.homunculusAssembling
+                                                        ? `⟳ Graft assembly in progress (${HOMUNCULUS_SLOT_LABELS[member.homunculusAssembling.slot] || member.homunculusAssembling.slot})`
+                                                        : canConfirm
+                                                            ? `${HOMUNCULUS_SLOT_LABELS[homunculusSelectedSlot]} · ${HOMUNCULUS_GRAFT_DESIGNS[homunculusSelectedDesign]?.name} · ~${fmtDuration(durationMs)}`
+                                                            : homunculusSelectedSlot
+                                                                ? 'Now select a graft design →'
+                                                                : homunculusSelectedDesign
+                                                                    ? '← Select an anatomical location'
+                                                                    : 'Select a location and a graft design'}
+                                            </div>
+                                            <button
+                                                className={`homunculus-assemble-btn${canConfirm && grafts.length < 8 ? '' : ' disabled'}`}
+                                                disabled={!canConfirm || grafts.length >= 8}
+                                                onClick={() => this.handleAssembleHomunculusGraft()}
+                                            >
+                                                Assemble {canConfirm ? `(~${fmtDuration(durationMs)})` : ''}
+                                            </button>
+                                            {grafts.length < 8 && (
+                                                <div className="homunculus-slots-remaining">{8 - grafts.length} slot{8 - grafts.length !== 1 ? 's' : ''} remaining</div>
                                             )}
                                         </div>
                                     </div>
@@ -43046,6 +45895,7 @@ class DungeonPage extends React.Component {
                                             : 'none')
                                 }}>
                                 <div className={`board ${isIsoView ? 'iso-view' : ''}`}
+                                    ref={this.isoBoardRef || (this.isoBoardRef = React.createRef())}
                                     onTouchStart={this.handleBoardTouchStart}
                                     onTouchMove={this.handleBoardTouchMove}
                                     onTouchEnd={this.handleBoardTouchEnd}
@@ -43081,6 +45931,7 @@ class DungeonPage extends React.Component {
                                         }}
                                     >
                                     {/* front-skirt removed */}
+                                    <VoidOrganicLayer tiles={this.state.tiles} enabled={!!this.state.showOrganicEdges} active={!this.state.inSuperboard && !this.state.isInPocketDimension} boardManager={this.props.boardManager} isIsoView={isIsoView} />
                             {this.state.tiles && (() => {
                                 const touchTile = this.state.mobileTouchTileId !== null ? this.state.tiles[this.state.mobileTouchTileId] : null;
                                 let activeTouchAnchorId = this.state.mobileTouchTileId;
@@ -43231,15 +46082,14 @@ class DungeonPage extends React.Component {
                                         playerImgKey = 'avatar';
                                     }
 
-                                    const isVoidTile = (bm && typeof bm.isVoidTile === 'function')
-                                        ? bm.isVoidTile(tile)
-                                        : (tile.isVoid === true || (tile.contains === 'void' || (tile.contains && tile.contains.type === 'void')));
+                                    const isVoidTile = isTileVoid(tile, bm);
                                     const defaultEmptyColor = (this.state.inSuperboard && !isVoidTile)
                                         ? (this.state.superboardType === 'dark' ? 'rgba(25, 20, 45, 0.75)' : 'rgba(15, 15, 20, 0.55)')
                                         : 'black';
                                     const isExistingOpaqueTan = tile.color === '#6b6057' || tile.color === 'rgb(107, 96, 87)';
+                                    const useOrganicVoid = !this.state.inSuperboard && !this.state.isInPocketDimension;
                                     const rawColor = isVoidTile
-                                        ? 'black'
+                                        ? (useOrganicVoid ? 'transparent' : 'black')
                                         : (tile.color && tile.color !== 'null' && tile.color !== 'undefined' && (!this.state.inSuperboard || (tile.color !== 'black' && tile.color !== '#000000' && tile.color !== '#000' && !isExistingOpaqueTan))
                                             ? tile.color
                                             : (this.state.inSuperboard ? defaultEmptyColor : 'black'));
@@ -43415,6 +46265,7 @@ class DungeonPage extends React.Component {
                                         superboard={this.state.dungeon?.superboards?.[this.state.superboardType] || this.props.boardManager?.dungeon?.superboards?.[this.state.superboardType]}
                                         inSuperboard={!!(this.state.inSuperboard || this.state.isInPocketDimension)}
                                         isVoid={isVoidTile}
+                                        showOrganicEdges={!!this.state.showOrganicEdges}
                                         terrain={tile.terrain}
                                         color={safeColor}
                                         baseColor={tile.baseColor}
@@ -43505,6 +46356,7 @@ class DungeonPage extends React.Component {
                                         contains={tile.contains}
                                         boardTiles={this.state.tiles}
                                         inSuperboard={this.state.inSuperboard}
+                                        showOrganicEdges={!!this.state.showOrganicEdges}
                                         terrain={tile.terrain}
                                         color={(tile.color && tile.color !== 'null' && tile.color !== 'undefined' && tile.color !== 'black' && !String(tile.color).includes('ff0000')) ? tile.color : 'transparent'}
                                         borders={(this.state.tiles && this.state.tiles[i] && (this.state.tiles[i].color === 'black' || this.state.tiles[i].isVoid || this.state.tiles[i].color === '#000000' || this.state.tiles[i].color === '#000')) ? null : tile.borders}
@@ -43725,6 +46577,406 @@ class DungeonPage extends React.Component {
                             );
                         })}
 
+                        {/* Summoner Expedition Skill: Floating Wandering Eye Companion */}
+                        {(this.state.activeWanderingEye || this.state.wanderingEye) && (() => {
+                            const activeEye = this.state.activeWanderingEye;
+                            const eyeState = this.state.wanderingEye;
+                            const bm = this.props.boardManager;
+                            const currentBoardIndex = (bm?.playerTile?.boardIndex != null)
+                                ? bm.playerTile.boardIndex
+                                : ((bm?.currentBoard?.id != null) ? bm.currentBoard.id : 0);
+
+                            if (activeEye && activeEye.boardIndex != null && String(activeEye.boardIndex) !== String(currentBoardIndex)) {
+                                return null;
+                            }
+
+                            const ts = this.state.inSuperboard ? (this.state.tileSize * 0.65) : (this.state.tileSize || 48);
+                            const isFlightSurging = !!(activeEye?.roaming || eyeState?.roaming);
+
+                            let eyeLeft = 0;
+                            let eyeTop = 0;
+                            let eyeTransform = 'translate3d(0px, 0px, 0px)';
+
+                            const eyeLoc = activeEye?.location || (eyeState?.row != null ? [eyeState.row, eyeState.col] : null);
+                            if (isFlightSurging && eyeState?.x != null) {
+                                eyeLeft = eyeState.x - ts / 2;
+                                eyeTop = eyeState.y - ts / 2;
+                            } else if (eyeLoc) {
+                                const eyeRow = ((Number(eyeLoc[0]) % 15) + 15) % 15;
+                                const eyeCol = ((Number(eyeLoc[1]) % 15) + 15) % 15;
+                                eyeLeft = eyeCol * ts;
+                                eyeTop = eyeRow * ts;
+                            } else if (eyeState?.x != null) {
+                                eyeLeft = eyeState.x - ts / 2;
+                                eyeTop = eyeState.y - ts / 2;
+                            }
+
+                            const resolveImg = (img) => (img && typeof img === 'object' && img.default) ? img.default : img;
+                            const eyeImgSrc = resolveImg(images.wandering_eye_summoner)
+                                || resolveImg(images.wandering_eye)
+                                || resolveImg(images.the_watchful_eye)
+                                || resolveImg(images.eye_open)
+                                || resolveImg(images.eye);
+
+                            const isMelting = !!(activeEye?.melting || eyeState?.melting);
+                            const isAppearing = !!(activeEye?.appearing || eyeState?.appearing);
+                            const animStateClass = isMelting ? 'melting' : (isAppearing ? 'appearing' : '');
+
+                            return (
+                                <div
+                                    key="floating_wandering_eye"
+                                    className={`floating-wandering-eye ${animStateClass}`}
+                                    style={{
+                                        position: 'absolute',
+                                        left: `${eyeLeft}px`,
+                                        top: `${eyeTop}px`,
+                                        width: `${ts}px`,
+                                        height: `${ts}px`,
+                                        pointerEvents: 'none',
+                                        zIndex: 50,
+                                        transform: eyeTransform,
+                                        transition: (isFlightSurging || isMelting)
+                                            ? 'none'
+                                            : 'left 0.3s ease-in-out, top 0.3s ease-in-out'
+                                    }}
+                                >
+                                    <div className={`iso-contact-shadow wandering-eye-shadow ${animStateClass}`} />
+                                    {isMelting && (
+                                        <div className="wandering-eye-melt-puddle" />
+                                    )}
+                                    <div className={`wandering-eye-sprite iso-upright-sprite ${animStateClass}`}>
+                                        <div className="wandering-eye-aura" />
+                                        <img
+                                            src={eyeImgSrc}
+                                            alt="Wandering Eye"
+                                            className="wandering-eye-image"
+                                            style={{
+                                                borderRadius: '50%',
+                                                objectFit: 'cover'
+                                            }}
+                                            onError={(e) => {
+                                                try {
+                                                    e.target.style.display = 'none';
+                                                    if (e.target.nextSibling) {
+                                                        e.target.nextSibling.style.display = 'flex';
+                                                    }
+                                                } catch (err) {}
+                                            }}
+                                        />
+                                        <div
+                                            className="wandering-eye-fallback"
+                                            style={{
+                                                display: eyeImgSrc ? 'none' : 'flex',
+                                                fontSize: `${Math.round(ts * 0.7)}px`,
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                width: '100%',
+                                                height: '100%',
+                                                userSelect: 'none',
+                                                filter: 'drop-shadow(0 0 10px #a855f7) drop-shadow(0 0 16px #c084fc)'
+                                            }}
+                                        >
+                                            👁️
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })()}
+
+                        {/* Summoner Expedition Skill: Shadow Effigy */}
+                        {this.state.activeShadowEffigy && !this.state.inSuperboard && (() => {
+                            const effigy = this.state.activeShadowEffigy;
+                            const ts = this.state.tileSize || 48;
+                            const left = effigy.col * ts;
+                            const top = effigy.row * ts;
+                            return (
+                                <div
+                                    key="floating_shadow_effigy"
+                                    className={`floating-shadow-effigy ${effigy.bursting ? 'bursting' : ''}`}
+                                    style={{
+                                        position: 'absolute',
+                                        left: `${left}px`,
+                                        top: `${top}px`,
+                                        width: `${ts}px`,
+                                        height: `${ts}px`,
+                                        pointerEvents: 'none',
+                                        zIndex: 47,
+                                        transition: 'left 0.35s ease-out, top 0.35s ease-out'
+                                    }}
+                                >
+                                    <div className="iso-contact-shadow shadow-effigy-shadow" />
+                                    <div className="shadow-effigy-sprite iso-upright-sprite">
+                                        <div
+                                            className="shadow-effigy-inner"
+                                            style={{
+                                                width: '100%',
+                                                height: '100%',
+                                                backgroundImage: this.state.playerFloatStyle?.backgroundImage,
+                                                backgroundSize: 'contain',
+                                                backgroundRepeat: 'no-repeat',
+                                                backgroundPosition: 'center',
+                                                transform: effigy.facing === 'left' ? 'scaleX(-1)' : 'none',
+                                            }}
+                                        />
+                                        <div className="shadow-effigy-aura" />
+                                        {effigy.bursting && <div className="shadow-effigy-frost-blast" />}
+                                    </div>
+                                </div>
+                            );
+                        })()}
+
+                        {/* Summoner Expedition Skill: Void Fetch */}
+                        {this.state.activeVoidFetch && !this.state.inSuperboard && (() => {
+                            const vf = this.state.activeVoidFetch;
+                            const ts = this.state.tileSize || 48;
+                            const isOut = vf.stage === 'flying_out';
+                            const targetCol = isOut ? vf.targetCol : vf.startCol;
+                            const targetRow = isOut ? vf.targetRow : vf.startRow;
+                            const left = targetCol * ts;
+                            const top = targetRow * ts;
+                            return (
+                                <div
+                                    key="floating_void_fetch"
+                                    className={`floating-void-fetch ${vf.stage}`}
+                                    style={{
+                                        position: 'absolute',
+                                        left: `${left}px`,
+                                        top: `${top}px`,
+                                        width: `${ts}px`,
+                                        height: `${ts}px`,
+                                        pointerEvents: 'none',
+                                        zIndex: 49,
+                                        transition: 'left 0.35s cubic-bezier(0.2, 0.8, 0.2, 1), top 0.35s cubic-bezier(0.2, 0.8, 0.2, 1)'
+                                    }}
+                                >
+                                    <div className="iso-contact-shadow void-fetch-shadow" />
+                                    <div className="void-fetch-sprite iso-upright-sprite">
+                                        <div className="void-fetch-imp-icon">🦇</div>
+                                        <div className="void-fetch-aura" />
+                                    </div>
+                                </div>
+                            );
+                        })()}
+
+                        {/* Engineer Ziplines Overlay */}
+                        {!this.state.inSuperboard && (() => {
+                            const meta = getMeta() || {};
+                            const boardKey = this.getEngineerBoardKey();
+                            const lines = (meta.ziplines && meta.ziplines[boardKey]) || [];
+                            if (!lines.length) return null;
+                            const ts = this.state.tileSize || 48;
+                            return (
+                                <svg
+                                    className="engineer-ziplines-layer"
+                                    style={{
+                                        position: 'absolute',
+                                        left: 0,
+                                        top: 0,
+                                        width: '100%',
+                                        height: '100%',
+                                        pointerEvents: 'none',
+                                        zIndex: 38
+                                    }}
+                                >
+                                    <defs>
+                                        <filter id="zipline-glow" x="-20%" y="-20%" width="140%" height="140%">
+                                            <feDropShadow dx="0" dy="1" stdDeviation="1.5" floodColor="#f59e0b" floodOpacity="0.8" />
+                                        </filter>
+                                    </defs>
+                                    {lines.map((zl, zIdx) => {
+                                        const x1 = zl.from[1] * ts + ts / 2;
+                                        const y1 = zl.from[0] * ts + ts / 2;
+                                        const x2 = zl.to[1] * ts + ts / 2;
+                                        const y2 = zl.to[0] * ts + ts / 2;
+                                        return (
+                                            <g key={`zipline-${zIdx}`}>
+                                                <line
+                                                    x1={x1} y1={y1} x2={x2} y2={y2}
+                                                    stroke="#1e293b" strokeWidth="4" strokeLinecap="round"
+                                                />
+                                                <line
+                                                    x1={x1} y1={y1} x2={x2} y2={y2}
+                                                    stroke="#f59e0b" strokeWidth="2" strokeDasharray="6 3" strokeLinecap="round"
+                                                    filter="url(#zipline-glow)"
+                                                />
+                                                <circle cx={x1} cy={y1} r="4" fill="#d97706" stroke="#fff" strokeWidth="1" />
+                                                <circle cx={x2} cy={y2} r="4" fill="#d97706" stroke="#fff" strokeWidth="1" />
+                                            </g>
+                                        );
+                                    })}
+                                </svg>
+                            );
+                        })()}
+
+                        {/* Engineer Forward Emplacement */}
+                        {!this.state.inSuperboard && (() => {
+                            const meta = getMeta() || {};
+                            const emp = meta.forwardEmplacement;
+                            const boardKey = this.getEngineerBoardKey();
+                            if (!emp || emp.boardKey !== boardKey || !emp.coords) return null;
+                            const ts = this.state.tileSize || 48;
+                            const [row, col] = emp.coords;
+                            const left = col * ts;
+                            const top = row * ts;
+                            const isEngSelected = String(this.state.selectedCrewMember?.type || this.state.selectedCrewMember?.image || '').toLowerCase() === 'engineer';
+                            const ringRadiusPx = EMPLACEMENT_RADIUS * ts;
+                            return (
+                                <React.Fragment key="engineer_forward_emplacement_marker">
+                                    {isEngSelected && (
+                                        <div
+                                            className="crew-range-ring emplacement-range-ring"
+                                            style={{
+                                                position: 'absolute',
+                                                left: `${left + ts / 2 - ringRadiusPx}px`,
+                                                top: `${top + ts / 2 - ringRadiusPx}px`,
+                                                width: `${ringRadiusPx * 2}px`,
+                                                height: `${ringRadiusPx * 2}px`,
+                                                borderRadius: '50%',
+                                                border: '2px dashed rgba(245, 158, 11, 0.65)',
+                                                backgroundColor: 'rgba(245, 158, 11, 0.08)',
+                                                pointerEvents: 'none',
+                                                zIndex: 37,
+                                                boxShadow: '0 0 12px rgba(245, 158, 11, 0.25)'
+                                            }}
+                                        />
+                                    )}
+                                    <div
+                                        className="engineer-forward-emplacement-overlay"
+                                        style={{
+                                            position: 'absolute',
+                                            left: `${left}px`,
+                                            top: `${top}px`,
+                                            width: `${ts}px`,
+                                            height: `${ts}px`,
+                                            pointerEvents: 'none',
+                                            zIndex: 42
+                                        }}
+                                    >
+                                        <div className="iso-contact-shadow emplacement-shadow" />
+                                        <div className="emplacement-sprite iso-upright-sprite" style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                            <img
+                                                src={images.engineer_forward_emplacement?.default || images.engineer_forward_emplacement || images.turret}
+                                                alt="Forward Emplacement"
+                                                style={{ width: '80%', height: '80%', objectFit: 'contain', filter: 'drop-shadow(0 0 6px rgba(245, 158, 11, 0.7))' }}
+                                            />
+                                            <div className="emplacement-pulse-beacon" />
+                                        </div>
+                                    </div>
+                                </React.Fragment>
+                            );
+                        })()}
+
+                        {/* Engineer Combat Walker Unit (Main Dungeon Board) */}
+                        {this.state.activeDungeonWalker && !this.state.inSuperboard && (() => {
+                            const walker = this.state.activeDungeonWalker;
+                            const bm = this.props.boardManager;
+                            const currentBoardIndex = (bm?.playerTile?.boardIndex != null)
+                                ? bm.playerTile.boardIndex
+                                : ((bm?.boardIndex != null) ? bm.boardIndex : ((bm?.currentBoard?.id != null) ? bm.currentBoard.id : 0));
+
+                            if (walker.boardIndex != null && Number(walker.boardIndex) !== Number(currentBoardIndex)) {
+                                return null;
+                            }
+
+                            const ts = this.state.tileSize || 48;
+                            const [row, col] = walker.location || [0, 0];
+                            const left = col * ts;
+                            const top = row * ts;
+
+                            const hpPct = Math.max(0, Math.min(100, ((walker.hp || 0) / (walker.maxHp || 30)) * 100));
+                            const hpColor = hpPct > 50 ? '#22c55e' : (hpPct > 25 ? '#eab308' : '#ef4444');
+                            const remainingSec = Math.max(0, walker.remainingSec ?? Math.ceil(((walker.expiresAt || Date.now()) - Date.now()) / 1000));
+
+                            return (
+                                <React.Fragment key={walker.id || 'dungeon_walker_overlay'}>
+                                    <div
+                                        className={`floating-dungeon-walker ${walker.destroyed ? 'destroyed' : ''}`}
+                                        style={{
+                                            position: 'absolute',
+                                            left: `${left}px`,
+                                            top: `${top}px`,
+                                            width: `${ts}px`,
+                                            height: `${ts}px`,
+                                            pointerEvents: 'none',
+                                            zIndex: 48,
+                                            transition: 'left 0.4s ease-in-out, top 0.4s ease-in-out'
+                                        }}
+                                    >
+                                        {/* Contact Shadow on floor plane */}
+                                        <div className="dungeon-walker-shadow iso-contact-shadow" />
+
+                                        {/* Upright billboarded container matching player avatar portrait */}
+                                        <div
+                                            className="dungeon-walker-sprite iso-upright-sprite"
+                                            style={{
+                                                width: '100%',
+                                                height: '100%'
+                                            }}
+                                        >
+                                            {/* HP Bar */}
+                                            <div className="dungeon-walker-hp-bar">
+                                                <div
+                                                    className="dungeon-walker-hp-fill"
+                                                    style={{
+                                                        width: `${hpPct}%`,
+                                                        backgroundColor: hpColor
+                                                    }}
+                                                />
+                                            </div>
+
+                                            {/* Remaining Duration Timer Badge */}
+                                            <div className="dungeon-walker-timer-badge">
+                                                {remainingSec}s
+                                            </div>
+
+                                            {/* Monster Retaliation Claw Attack Effect */}
+                                            {walker.monsterAttacking && (
+                                                <div className="monster-retaliation-attack">
+                                                    <div className="monster-claw-slash-1" />
+                                                    <div className="monster-claw-slash-2" />
+                                                    <div className="monster-claw-slash-3" />
+                                                </div>
+                                            )}
+
+                                            {/* Animated Walker Unit with inner direction flipping wrapper */}
+                                            <div
+                                                className="dungeon-walker-flip-wrapper"
+                                                style={{
+                                                    width: '100%',
+                                                    height: '100%',
+                                                    transform: walker.facing === 'left' ? 'scaleX(-1)' : 'none',
+                                                    transition: 'transform 0.15s ease'
+                                                }}
+                                            >
+                                                <WalkerAnimatedUnit
+                                                    isMoving={!!walker.isMoving}
+                                                    isAttacking={!!walker.isAttacking}
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Floating Damage Numbers */}
+                                    {(walker.damageNumbers || []).map(dmg => {
+                                        const dmgLeft = (dmg.targetCol != null ? dmg.targetCol : col) * ts + (ts / 2);
+                                        const dmgTop = (dmg.targetRow != null ? dmg.targetRow : row) * ts + 4;
+                                        return (
+                                            <div
+                                                key={dmg.id}
+                                                className={`floating-combat-damage ${dmg.isWalker ? 'walker-damage' : 'monster-damage'}`}
+                                                style={{
+                                                    left: `${dmgLeft}px`,
+                                                    top: `${dmgTop}px`
+                                                }}
+                                            >
+                                                {dmg.text}
+                                            </div>
+                                        );
+                                    })}
+                                </React.Fragment>
+                            );
+                        })()}
+
                         {/* Floating player overlay element - positioned absolutely within board wrapper */}
                         {this.state.playerFloatVisible && !this.state.activeConstruction && (() => {
                             const floatMeta = getMeta() || {};
@@ -43763,23 +47015,32 @@ class DungeonPage extends React.Component {
                                                 style={{ width: '100%', height: '100%' }}
                                             >
                                                 <div
+                                                    className="avatar-facing-flip-wrapper"
                                                     style={{
                                                         width: '100%',
                                                         height: '100%',
-                                                        backgroundImage: this.state.playerFloatStyle.backgroundImage,
-                                                        backgroundSize: 'contain',
-                                                        backgroundRepeat: 'no-repeat',
-                                                        backgroundPosition: 'center',
                                                         transform: (this.state.playerFacing === 'left') ? 'scaleX(-1)' : 'scaleX(1)',
+                                                        transformOrigin: 'center center',
                                                     }}
-                                                    className="avatar-image-inner"
-                                                />
+                                                >
+                                                    <div
+                                                        style={{
+                                                            width: '100%',
+                                                            height: '100%',
+                                                            backgroundImage: this.state.playerFloatStyle.backgroundImage,
+                                                            backgroundSize: 'contain',
+                                                            backgroundRepeat: 'no-repeat',
+                                                            backgroundPosition: 'center',
+                                                        }}
+                                                        className="avatar-image-inner"
+                                                    />
+                                                </div>
                                             </div>
                                         );
                                     })()}
                                     {/* Directional facing indicator — faint glow on the avatar tile edge (dungeon + pocket dimension) */}
                                     {(() => {
-                                        if (this.state.isRecuperating) return null;
+                                        if (this.state.isRecuperating || isFloatCamping) return null;
                                         const moveAge = Date.now() - (this._lastMoveTime || 0);
                                         const isVisible = Boolean(this._lastMoveTime && moveAge <= 3000);
                                         if (!isVisible) return null;
@@ -44456,6 +47717,33 @@ class DungeonPage extends React.Component {
                         </div>
                     </div>
 
+                        {/* Flying Gold Coins Animation Overlay */}
+                        {this.state.flyingGoldCoins && this.state.flyingGoldCoins.length > 0 && (
+                            <div className="flying-gold-container" data-testid="flying-gold-container">
+                                {this.state.flyingGoldCoins.map(coin => (
+                                    <div
+                                        key={coin.id}
+                                        className="flying-gold-particle"
+                                        style={{
+                                            backgroundImage: coin.iconUrl ? `url("${coin.iconUrl}")` : 'none',
+                                            backgroundSize: 'contain',
+                                            backgroundRepeat: 'no-repeat',
+                                            backgroundPosition: 'center',
+                                            '--gold-start-x': `${coin.startX}px`,
+                                            '--gold-start-y': `${coin.startY}px`,
+                                            '--gold-mid-x': `${coin.startX + coin.curveOffsetX}px`,
+                                            '--gold-mid-y': `${coin.startY + coin.curveOffsetY}px`,
+                                            '--gold-target-x': `${coin.targetX}px`,
+                                            '--gold-target-y': `${coin.targetY}px`,
+                                            animation: `flyingGoldArc ${coin.duration}ms cubic-bezier(0.25, 0.9, 0.35, 1) ${coin.delay}ms forwards`
+                                        }}
+                                    >
+                                        {!coin.iconUrl && <span style={{ fontSize: '20px' }}>🪙</span>}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
                         {/* Floating 'Locked' Chest Indicator Badge */}
                         {this.state.lockedChestNotice && (
                             <div
@@ -44559,6 +47847,8 @@ class DungeonPage extends React.Component {
                             ref={this.projectileCanvasRef}
                             boardSize={this.state.boardSize}
                             tileSize={this.state.tileSize}
+                            isIsoView={isIsoView}
+                            tiles={this.state.tiles}
                             playerTileIdx={(() => {
                                 if (this.state.inSuperboard && this.state.superboardPlayerPos) {
                                     const { superboardViewMinX = 0, superboardViewMinY = 0 } = this.state;
@@ -44831,7 +48121,7 @@ class DungeonPage extends React.Component {
                                     onClick={() => this.setState({ showDungeonInscriptionModal: false })}
                                     style={{
                                         padding: '8px 20px',
-                                        borderRadius: '20px',
+                                        borderRadius: '8px',
                                         border: '1px solid rgba(255, 255, 255, 0.2)',
                                         background: 'rgba(255, 255, 255, 0.06)',
                                         color: '#ccc',
@@ -44851,7 +48141,7 @@ class DungeonPage extends React.Component {
                                     onClick={() => this.setState({ dungeonInscriptionTextInput: getRandomInscription() })}
                                     style={{
                                         padding: '8px 20px',
-                                        borderRadius: '20px',
+                                        borderRadius: '8px',
                                         border: '1px solid rgba(229, 181, 79, 0.4)',
                                         background: 'rgba(229, 181, 79, 0.12)',
                                         color: '#e5b54f',
@@ -44871,7 +48161,7 @@ class DungeonPage extends React.Component {
                                     onClick={this.confirmDungeonInscription}
                                     style={{
                                         padding: '8px 20px',
-                                        borderRadius: '20px',
+                                        borderRadius: '8px',
                                         border: 'none',
                                         background: 'linear-gradient(135deg, rgba(201, 132, 10, 0.35) 0%, rgba(249, 177, 21, 0.5) 100%)',
                                         outline: '1px solid rgba(249, 177, 21, 0.6)',

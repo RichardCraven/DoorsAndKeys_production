@@ -694,8 +694,13 @@ export class AnimationManagerRedux {
   }
 
   _darkApotheosis(src, tgt, sourceUnitId = null) {
-    const srcPx = this._px(src);
-    const tgtPx = this._getImpactTargetPx(tgt || src);
+    let sourceCoords = src;
+    if (this.combatManager && this.combatManager.combatants && sourceUnitId && this.combatManager.combatants[sourceUnitId]) {
+      const caster = this.combatManager.combatants[sourceUnitId];
+      if (caster.coordinates) sourceCoords = caster.coordinates;
+    }
+    const srcPx = this._px(sourceCoords);
+    const tgtPx = this._getImpactTargetPx(tgt || sourceCoords);
 
     this._emit({
       type: 'dark_apotheosis_pillar',

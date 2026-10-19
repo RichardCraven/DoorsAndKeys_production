@@ -164,12 +164,9 @@ export async function setUpCamp(component, maybeDuration, useResolveFallback = f
         meta.campElapsedSeconds = 0;
         meta.campTotalSeconds = durationSeconds;
         storeMeta(meta);
-        try { await updateUserRequest(getUserId(), meta); } catch (e) {}
-        // Persist meta via the higher-level save helper so location and session
-        // state are stored consistently (ensures position is saved on refresh).
-        try { if (component.props.saveUserData) await component.props.saveUserData(); } catch (e) {}
+
         // camping started
-        // lock movement hotkeys while camping
+        // lock movement hotkeys while camping and immediately swap to campfire image without async network delay
         try { 
             const stateUpdate = { keysLocked: true };
             if (component.state.poiPanelExpanded) {
@@ -194,6 +191,11 @@ export async function setUpCamp(component, maybeDuration, useResolveFallback = f
             component._forcedDraw = true;
             if (!component.cooldownAnimationFrame) component.cooldownAnimationFrame = requestAnimationFrame(component.drawCooldowns);
         } catch (e) {}
+
+        try { await updateUserRequest(getUserId(), meta); } catch (e) {}
+        // Persist meta via the higher-level save helper so location and session
+        // state are stored consistently (ensures position is saved on refresh).
+        try { if (component.props.saveUserData) await component.props.saveUserData(); } catch (e) {}
         // schedule end
         try {
             component.campTimeout = component._setTimeout(() => {
@@ -447,7 +449,6 @@ export async function endCamp(component) {
             try { if (component.props.crewManager) component.props.crewManager.crew = restoredCrew; } catch(e){}
         } catch(e){}
         storeMeta(m);
-        try { await updateUserRequest(getUserId(), m); } catch(e){}
         if (component.props.boardManager && typeof component.props.boardManager.placePlayer === 'function') {
             try{ component.props.boardManager.placePlayer(component.props.boardManager.playerTile.location); } catch(e){}
         }
@@ -456,6 +457,7 @@ export async function endCamp(component) {
                 component.updateFloatingPlayerPosition(component.props.boardManager.playerTile.location);
             }
         } catch (e) {}
+        try { await updateUserRequest(getUserId(), m); } catch(e){}
 
         // Permanently place dead_campfire tile object at player tile location
         try {

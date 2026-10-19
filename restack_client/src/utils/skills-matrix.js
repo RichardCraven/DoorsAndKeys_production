@@ -842,6 +842,19 @@ const skillsMatrix = {
         isPassive: true,
         knownByDefault: false
     },
+    far_sight: {
+        class: 'wizard',
+        id: 'far_sight',
+        tier: 2,
+        name: 'Far Sight',
+        desc: 'Temporarily expand vision radius by +2 tiles for 5 movement units. Costs 2 Resolve.',
+        icon: images.the_watchful_eye || images.eye_open || images.eye,
+        cooldown: 0,
+        type: 'utility',
+        treePath: 'global',
+        knownByDefault: true,
+        resolveCost: 2
+    },
     fireball: {
         class: 'wizard',
         treePath: 'combat_a',
@@ -1243,6 +1256,21 @@ const skillsMatrix = {
         isPassive: true,
         knownByDefault: false
     },
+    ethereal_speed: {
+        class: 'monk',
+        treePath: 'combat_a',
+        id: 'monk_ethereal_speed',
+        tier: 1,
+        knownByDefault: true,
+        name: 'Ethereal Speed',
+        desc: 'Flow like wind, gaining extreme speed.',
+        icon: images['monk_ethereal_speed'],
+        cooldown: 6,
+        duration: 'short',
+        range: 'self',
+        type: 'buff',
+        effect: ['buff_self']
+    },
     monk_ethereal_speed: {
         class: 'monk',
         treePath: 'combat_a',
@@ -1509,8 +1537,68 @@ const skillsMatrix = {
         id: 'wandering_eye',
         name: 'Wandering Eye',
         desc: 'Summons a floating ethereal eyeball to scout the dungeon.',
-        icon: images.wandering_eye_summoner || images.wandering_eye,
+        icon: (images.wandering_eye_summoner && images.wandering_eye_summoner.default) || images.wandering_eye_summoner || (images.wandering_eye && images.wandering_eye.default) || images.wandering_eye || images.the_watchful_eye || images.eye_open || images.eye,
         cooldown: 0,
+        type: 'utility',
+        treePath: 'global',
+        knownByDefault: true
+    },
+    shadow_effigy: {
+        class: 'summoner',
+        id: 'shadow_effigy',
+        name: 'Shadow Effigy',
+        desc: 'Weaves an autonomous spectral decoy that strides forward, drawing monster patrols before bursting into freezing wraith-frost.',
+        icon: (images.reaper_spectral_surge && images.reaper_spectral_surge.default) || images.reaper_spectral_surge || (images.spirit_sight_summoner && images.spirit_sight_summoner.default) || images.spirit_sight_summoner || images.shade,
+        cooldown: 0,
+        resolveCost: 3,
+        type: 'utility',
+        treePath: 'global',
+        knownByDefault: true
+    },
+    void_fetch: {
+        class: 'summoner',
+        id: 'void_fetch',
+        name: 'Void Fetch',
+        desc: 'Sends a fleeting winged shade across the dungeon to retrieve distant loot or safely trigger revealed traps.',
+        icon: (images.summon_imp_icon && images.summon_imp_icon.default) || images.summon_imp_icon || (images.imp && images.imp.default) || images.imp || images.shadow_rune,
+        cooldown: 0,
+        resolveCost: 2,
+        type: 'utility',
+        treePath: 'global',
+        knownByDefault: true
+    },
+    // === ENGINEER EXPEDITION ===
+    engineer_salvage: {
+        class: 'engineer',
+        id: 'engineer_salvage',
+        name: 'Salvage',
+        desc: 'Dismantle adjacent dungeon clutter into 1–3 Scrap (scales with DEX). Clears the tile.',
+        icon: (images.engineer_salvage && images.engineer_salvage.default) || images.engineer_salvage || images.wrench || images.shortsword,
+        cooldown: 0,
+        type: 'utility',
+        treePath: 'global',
+        knownByDefault: true
+    },
+    engineer_grapple_winch: {
+        class: 'engineer',
+        id: 'engineer_grapple_winch',
+        name: 'Grapple Winch',
+        desc: 'Fire a zipline across void tiles in your facing direction (range 4, +1 every 3 levels, max 7). Costs 3 Scrap; the line stays for the rest of your visit to this board.',
+        icon: (images.engineer_grapple_winch && images.engineer_grapple_winch.default) || images.engineer_grapple_winch || images.rope || images.shortsword,
+        cooldown: 0,
+        scrapCost: 3,
+        type: 'utility',
+        treePath: 'global',
+        knownByDefault: true
+    },
+    engineer_forward_emplacement: {
+        class: 'engineer',
+        id: 'engineer_forward_emplacement',
+        name: 'Forward Emplacement',
+        desc: 'Place a folded turret here. If a fight starts within 3 tiles, it begins with a free turret. Costs 5 Scrap. Lost when you leave the board. Step back on it to refund 3.',
+        icon: (images.engineer_forward_emplacement && images.engineer_forward_emplacement.default) || images.engineer_forward_emplacement || images.turret || images.shortsword,
+        cooldown: 0,
+        scrapCost: 5,
         type: 'utility',
         treePath: 'global',
         knownByDefault: true
