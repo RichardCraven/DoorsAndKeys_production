@@ -118,6 +118,7 @@ export function MapMaker(props){
     this.vendorOptions = [
         { key: 'merchant', name: 'Merchant', image: 'merchant' },
         { key: 'alchemist', name: 'Alchemist', image: 'alchemist' },
+        { key: 'hex_doctor', name: 'Hex Doctor', image: 'hex_doctor' },
     ];
 
     this.passageOptions = [

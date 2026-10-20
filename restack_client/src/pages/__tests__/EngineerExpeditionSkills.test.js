@@ -140,7 +140,86 @@ describe("Engineer Expedition Skills: Salvage, Grapple Winch, Forward Emplacemen
             expect(targetTile.isPocketLitter).toBeUndefined();
         });
 
+        test('recognizes and dismantles standard dungeon litter (e.g. litter_edge_wood, broken crates)', () => {
+            const edgeWoodTile = { image: 'litter_edge_wood', contains: 'dungeon_litter' };
+            const brokenWoodTile = { image: 'litter_broken_wood', isDungeonLitter: true };
+            const cratesTile = { contains: { type: 'dungeon_litter', subtype: 'litter_broken_crates' } };
+            const rocksTile = { optionType: 'dungeon litter', image: 'litter_scattered_rocks' };
+
+            expect(isSalvageableTile(edgeWoodTile)).toBe(true);
+            expect(isSalvageableTile(brokenWoodTile)).toBe(true);
+            expect(isSalvageableTile(cratesTile)).toBe(true);
+            expect(isSalvageableTile(rocksTile)).toBe(true);
+
+            // Test adjacent dismantle of litter_edge_wood south of player at (8, 7)
+            const southTile = mockBoardManager.tiles[8 * 15 + 7];
+            southTile.image = 'litter_edge_wood';
+            southTile.contains = { type: 'dungeon_litter', subtype: 'litter_edge_wood' };
+
+            page.triggerSelectedExpeditionSkill(0);
+
+            expect(southTile.salvaged).toBe(true);
+            expect(southTile.image).toBeNull();
+            expect(southTile.contains.type).toBe('empty_space');
+        });
+
+        test('allows salvaging clutter on the player own tile when standing on it', () => {
+            // Clear adjacent
+            mockBoardManager.tiles[7 * 15 + 8].image = null;
+            mockBoardManager.tiles[8 * 15 + 7].image = null;
+
+            // Player is at (7, 7)
+            const currentTile = mockBoardManager.tiles[7 * 15 + 7];
+            currentTile.image = 'litter_broken_crates';
+            currentTile.isDungeonLitter = true;
+
+            page.triggerSelectedExpeditionSkill(0);
+
+            expect(currentTile.salvaged).toBe(true);
+            expect(currentTile.image).toBeNull();
+        });
+
+        test('works with BoardManager global coordinates offset by +15 (e.g. [22, 22])', () => {
+            // Player at (22, 22) -> local (7, 7)
+            mockBoardManager.playerTile.location = [22, 22];
+
+            // Place litter to the east at (7, 8) -> global (22, 23)
+            const eastTile = mockBoardManager.tiles[7 * 15 + 8];
+            eastTile.image = 'litter_edge_wood';
+            eastTile.contains = { type: 'dungeon_litter', subtype: 'litter_edge_wood' };
+
+            page.triggerSelectedExpeditionSkill(0);
+
+            expect(eastTile.salvaged).toBe(true);
+            expect(eastTile.image).toBeNull();
+            expect(eastTile.contains.type).toBe('empty_space');
+
+            // Reset player location
+            mockBoardManager.playerTile.location = [7, 7];
+        });
+
+        test('dismantles diagonal adjacent clutter (e.g. down-right)', () => {
+            // Player at (7, 7), clutter at (8, 8)
+            const diagTile = mockBoardManager.tiles[8 * 15 + 8];
+            diagTile.image = 'litter_old_barrels';
+            diagTile.contains = { type: 'dungeon_litter', subtype: 'litter_old_barrels' };
+
+            page.triggerSelectedExpeditionSkill(0);
+
+            expect(diagTile.salvaged).toBe(true);
+            expect(diagTile.image).toBeNull();
+        });
+
         test('reports message if no clutter is adjacent', () => {
+            // Ensure no clutter near player
+            for (let r = 6; r <= 8; r++) {
+                for (let c = 6; c <= 8; c++) {
+                    const t = mockBoardManager.tiles[r * 15 + c];
+                    t.image = null;
+                    t.contains = { type: 'empty_space' };
+                }
+            }
+
             page.displayMessage = jest.fn();
             page.triggerSelectedExpeditionSkill(0);
             expect(page.displayMessage).toHaveBeenCalledWith(

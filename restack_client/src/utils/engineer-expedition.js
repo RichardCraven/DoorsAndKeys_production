@@ -21,8 +21,13 @@ export const ENGINEER_EXPEDITION_SKILLS = ['engineer_salvage', 'engineer_grapple
 // Single-tile clutter that can be dismantled. Multi-tile props (rift_embers,
 // fractured_monolith) are intentionally excluded so footprints never half-vanish.
 const SALVAGEABLE_KEYS = [
-    'pocket_litter', 'dimension_litter', 'mana_crystals', 'ruined_arch', 'broken_wagon',
-    'forge_remnants', 'astral_obelisk', 'ancient_reliquary', 'celestial_geode', 'rubble', 'debris'
+    'pocket_litter', 'dimension_litter', 'dungeon_litter', 'litter',
+    'mana_crystals', 'ruined_arch', 'broken_wagon', 'forge_remnants',
+    'astral_obelisk', 'ancient_reliquary', 'celestial_geode',
+    'rubble', 'debris', 'broken_wood', 'edge_wood', 'scattered_rocks',
+    'old_barrels', 'broken_crates', 'broken_urns', 'battle_debris',
+    'iron_chains', 'melted_candles', 'scattered_coins', 'shattered_potions',
+    'small_barrel', 'edge_bones', 'edge_rocks'
 ];
 const NON_SALVAGEABLE_KEYS = ['rift_embers', 'fractured_monolith'];
 
@@ -30,7 +35,11 @@ const DIRS = {
     up: [-1, 0],
     down: [1, 0],
     left: [0, -1],
-    right: [0, 1]
+    right: [0, 1],
+    'up-right': [-1, 1],
+    'up-left': [-1, -1],
+    'down-right': [1, 1],
+    'down-left': [1, -1]
 };
 
 export function getScrap(meta) {
@@ -54,23 +63,31 @@ const tileKey = (tile) => {
     if (!tile) return '';
     const c = tile.contains;
     const cObj = (c && typeof c === 'object') ? c : null;
+    const imgVal = tile.image?.default || tile.image;
     return [
         cObj ? cObj.type : c,
         cObj && cObj.subtype,
         cObj && cObj.building,
+        cObj && cObj.name,
         tile.building,
-        tile.image
+        typeof imgVal === 'string' ? imgVal : '',
+        tile.optionType,
+        tile.name
     ].filter(Boolean).join(' ').toLowerCase();
 };
 
 export function isSalvageableTile(tile) {
     if (!tile) return false;
     const key = tileKey(tile);
-    if (!key) return false;
     if (NON_SALVAGEABLE_KEYS.some(k => key.includes(k))) return false;
-    if (tile.isDimensionLitter || tile.isPocketLitter) return true;
+    if (tile.isDimensionLitter || tile.isPocketLitter || tile.isDungeonLitter) return true;
     const cObj = (tile.contains && typeof tile.contains === 'object') ? tile.contains : null;
-    if (cObj && (cObj.isDimensionLitter || cObj.isPocketLitter)) return true;
+    if (cObj && (cObj.isDimensionLitter || cObj.isPocketLitter || cObj.isDungeonLitter)) return true;
+    
+    const imgStr = String(tile.image?.default || tile.image || cObj?.image?.default || cObj?.image || '').toLowerCase();
+    if (imgStr.includes('litter') || imgStr.includes('debris') || imgStr.includes('rubble')) return true;
+    
+    if (key.includes('litter') || key.includes('debris') || key.includes('rubble')) return true;
     return SALVAGEABLE_KEYS.some(k => key.includes(k));
 }
 
@@ -82,19 +99,51 @@ export function computeSalvageYield(dex, rand = Math.random) {
 }
 
 export const indexToCoords = (idx) => [Math.floor(idx / BOARD_WIDTH), idx % BOARD_WIDTH];
-export const coordsToIndex = ([r, c]) => r * BOARD_WIDTH + c;
-const inBounds = ([r, c]) => r >= 0 && c >= 0 && r < BOARD_WIDTH && c < BOARD_WIDTH;
 
-export function findAdjacentSalvageTarget(tiles, playerCoords, facing) {
+// Support both local [0..14, 0..14] and global BoardManager coordinates [15..29, 15..29]
+export const coordsToIndex = ([r, c]) => {
+    const lr = ((r % BOARD_WIDTH) + BOARD_WIDTH) % BOARD_WIDTH;
+    const lc = ((c % BOARD_WIDTH) + BOARD_WIDTH) % BOARD_WIDTH;
+    return lr * BOARD_WIDTH + lc;
+};
+
+export function isStepInBounds(playerCoords, [dr, dc], step = 1) {
+    if (!playerCoords) return false;
+    const lr = ((playerCoords[0] % BOARD_WIDTH) + BOARD_WIDTH) % BOARD_WIDTH;
+    const lc = ((playerCoords[1] % BOARD_WIDTH) + BOARD_WIDTH) % BOARD_WIDTH;
+    const targetR = lr + dr * step;
+    const targetC = lc + dc * step;
+    return targetR >= 0 && targetR < BOARD_WIDTH && targetC >= 0 && targetC < BOARD_WIDTH;
+}
+
+export function findAdjacentSalvageTarget(tiles, playerCoords, facing, boardTiles = null) {
     if (!Array.isArray(tiles) || !playerCoords) return null;
-    const order = [facing, 'up', 'down', 'left', 'right'].filter((d, i, a) => d && DIRS[d] && a.indexOf(d) === i);
+    
+    const facingDir = (facing && DIRS[facing]) ? facing : null;
+    const cardinals = ['up', 'down', 'left', 'right'];
+    const diagonals = ['up-right', 'down-right', 'down-left', 'up-left'];
+    const order = [facingDir, ...cardinals, ...diagonals].filter((d, i, a) => d && a.indexOf(d) === i);
+
     for (const d of order) {
         const [dr, dc] = DIRS[d];
+        if (!isStepInBounds(playerCoords, [dr, dc])) continue;
         const coords = [playerCoords[0] + dr, playerCoords[1] + dc];
-        if (!inBounds(coords)) continue;
         const idx = coordsToIndex(coords);
-        if (isSalvageableTile(tiles[idx])) return { idx, coords, tile: tiles[idx] };
+        const t = tiles[idx];
+        const bt = boardTiles && boardTiles[idx];
+        if (isSalvageableTile(t) || isSalvageableTile(bt)) {
+            return { idx, coords, tile: t || bt, dir: d };
+        }
     }
+    
+    // Also allow salvaging clutter on the player's own tile if standing directly on it
+    const currentIdx = coordsToIndex(playerCoords);
+    const curT = tiles[currentIdx];
+    const curBt = boardTiles && boardTiles[currentIdx];
+    if (isSalvageableTile(curT) || isSalvageableTile(curBt)) {
+        return { idx: currentIdx, coords: playerCoords, tile: curT || curBt, dir: 'here' };
+    }
+    
     return null;
 }
 
@@ -102,9 +151,14 @@ export function salvageTile(tile) {
     if (!tile) return;
     tile.contains = { type: 'empty_space', subtype: null };
     tile.image = null;
+    tile.imageOverride = null;
     tile.building = null;
     delete tile.isDimensionLitter;
     delete tile.isPocketLitter;
+    delete tile.isDungeonLitter;
+    if (tile.optionType === 'dungeon litter' || tile.optionType === 'dungeon_litter' || tile.optionType === 'pocket litter' || tile.optionType === 'dimension litter') {
+        tile.optionType = null;
+    }
     tile.salvaged = true;
 }
 
@@ -121,8 +175,8 @@ export function computeGrapplePath(tiles, playerCoords, facing, helpers, range =
     const { isVoid, isBlocking, isWalkable } = helpers || {};
     let gap = 0;
     for (let step = 1; step <= range; step++) {
+        if (!isStepInBounds(playerCoords, dir, step)) return { ok: false, reason: 'edge' };
         const coords = [playerCoords[0] + dir[0] * step, playerCoords[1] + dir[1] * step];
-        if (!inBounds(coords)) return { ok: false, reason: 'edge' };
         const idx = coordsToIndex(coords);
         const t = tiles[idx];
         if (isBlocking && isBlocking(t)) return { ok: false, reason: 'blocked' };

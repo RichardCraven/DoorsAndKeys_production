@@ -3,6 +3,7 @@ import { MonsterManager } from './monster-manager';
 import { REAGENT_KEYS } from './reagents';
 import { BREW_INGREDIENT_KEYS } from './brew-ingredients';
 import { getDomainExpansionIntervalMs } from './user-perks';
+import { addScrap, SCRAP_CAP } from './engineer-expedition';
 
 // Gate configuration: maps closed gate types to their requirements and opened versions
 export const GATE_CONFIG = {
@@ -151,6 +152,25 @@ export function BoardManager(){
     }
     this.establishAddFoodToSuppliesCallback = (callback) => {
         this.addFoodToSupplies = callback
+    }
+    this.establishAddScrapToInventoryCallback = (callback) => {
+        this.addScrapToInventory = callback;
+    }
+    this.establishAddScrapToSuppliesCallback = (callback) => {
+        this.addScrapToInventory = callback;
+    }
+    this.handleScrapPickup = (tile) => {
+        try {
+            const meta = getMeta() || {};
+            const amount = (tile && tile.contains && typeof tile.contains === 'object' && typeof tile.contains.amount === 'number')
+                ? tile.contains.amount
+                : 1;
+            const total = addScrap(meta, amount);
+            storeMeta(meta);
+            if (this.messaging) {
+                this.messaging(`⚙️ You found ${amount} Scrap! (${total}/${SCRAP_CAP})`);
+            }
+        } catch (e) {}
     }
     this.establishGetCrewCallback = (callback) => {
         this.getCrew = callback
@@ -465,7 +485,7 @@ export function BoardManager(){
                 const aBldg = aTile.building || aTile.contains?.building;
                 const aImg = aTile.image || aTile.contains?.image;
                 const aKey = String(aContainsSub || aBldg || aImg || aContainsType || '').toLowerCase();
-                const vendorKeys = ['fungal_nursery', 'alchemist', 'merchant', 'dream_den'];
+                const vendorKeys = ['fungal_nursery', 'alchemist', 'merchant', 'hex_doctor', 'hex doctor', 'dream_den'];
                 if (!vendorKeys.some(k => aKey.includes(k)) && !aKey.includes('hut') && !aKey.includes('healing_circle') && !aKey.includes('archaic') && !aKey.includes('portal') && !aKey.includes('teleporter') && !this.isPortalTile(aTile)) {
                     const aIsDestroyed = aTile.contains && typeof aTile.contains === 'object' && (aTile.contains.hp <= 0 || !!aTile.contains.destroyedAt);
                     if (!aIsDestroyed) return true;
@@ -497,7 +517,7 @@ export function BoardManager(){
                         const multi2x2 = [
                             'ore_mine', 'slate_mine', 'sawmill', 'lumber_mill', 'larder', 'dust_collector',
                             'cultivation_vat', 'domain_monolith', 'dark_domain_monolith', 'war_camp', 'war_fort',
-                            'fungal_nursery', 'alchemist', 'merchant', 'dream_den', 'dream den',
+                            'fungal_nursery', 'alchemist', 'merchant', 'hex_doctor', 'hex doctor', 'dream_den', 'dream den',
                             'rift_embers', 'pocket_litter_rift_embers'
                         ];
                         const is2x2 = multi2x2.some(k => aKey.includes(k)) || aTile.isLarge || aTile.contains?.isLarge || aTile.isMultiTile || aTile.contains?.isMultiTile;
@@ -574,17 +594,17 @@ export function BoardManager(){
             return true;
         }
 
-        // Explicitly check for vendor buildings (merchant, alchemist, fungal nursery, dream den)
-        const isVendorBuilding = containsType === 'vendor' || containsType === 'merchant' || containsType === 'alchemist' || containsType === 'fungal_nursery' || containsType === 'dream_den' || containsType === 'dream den' ||
-            (typeof containsSubtype === 'string' && ['merchant', 'alchemist', 'fungal_nursery', 'dream_den', 'dream den', 'vendor'].includes(containsSubtype)) ||
-            ['merchant', 'alchemist', 'fungal_nursery', 'dream_den', 'dream den', 'vendor'].some(k => sKey.includes(k));
+        // Explicitly check for vendor buildings (merchant, alchemist, hex doctor, fungal nursery, dream den)
+        const isVendorBuilding = containsType === 'vendor' || containsType === 'merchant' || containsType === 'alchemist' || containsType === 'hex_doctor' || containsType === 'hex doctor' || containsType === 'fungal_nursery' || containsType === 'dream_den' || containsType === 'dream den' ||
+            (typeof containsSubtype === 'string' && ['merchant', 'alchemist', 'hex_doctor', 'hex doctor', 'fungal_nursery', 'dream_den', 'dream den', 'vendor'].includes(containsSubtype)) ||
+            ['merchant', 'alchemist', 'hex_doctor', 'hex doctor', 'fungal_nursery', 'dream_den', 'dream den', 'vendor'].some(k => sKey.includes(k));
 
         if (isVendorBuilding && !isDestroyed) {
             return true;
         }
 
         const buildingSubtypes = [
-            'merchant', 'pocket_merchant', 'alchemist', 'pocket_alchemist', 'vendor',
+            'merchant', 'pocket_merchant', 'alchemist', 'pocket_alchemist', 'hex_doctor', 'hex doctor', 'buildable_hex_doctor', 'vendor',
             'dream_den', 'dream den', 'buildable_dream_den', 'dream_den_under_construction',
             'outpost', 'buildable_outpost',
             'observer_platform', 'buildable_observer_platform',
@@ -669,7 +689,7 @@ export function BoardManager(){
             return { isVendor: false, vendorType: null };
         }
 
-        const vendorKeys = ['war_camp', 'war camp', 'alchemist', 'fungal_nursery', 'dream_den', 'dream den', 'merchant', 'vendor'];
+        const vendorKeys = ['war_camp', 'war camp', 'alchemist', 'hex_doctor', 'hex doctor', 'fungal_nursery', 'dream_den', 'dream den', 'merchant', 'vendor'];
         const isVendor = vendorKeys.some(k => combinedStr.includes(k));
 
         if (!isVendor) {
@@ -681,6 +701,8 @@ export function BoardManager(){
             vendorType = 'war_camp';
         } else if (combinedStr.includes('alchemist')) {
             vendorType = 'alchemist';
+        } else if (combinedStr.includes('hex_doctor') || combinedStr.includes('hex doctor')) {
+            vendorType = 'hex_doctor';
         } else if (combinedStr.includes('fungal_nursery')) {
             vendorType = 'fungal_nursery';
         } else if (combinedStr.includes('dream_den') || combinedStr.includes('dream den')) {
@@ -2597,6 +2619,76 @@ export function BoardManager(){
         // Random dungeon load spawning has been removed.
     };
 
+    this.ensureScrapSpawned = (board, spawnTileIndex = -1) => {
+        if (!board || !Array.isArray(board.tiles)) return;
+
+        const isTutorialDungeon = !!(this.dungeon && (this.dungeon.id === 'tutorial_dungeon' || this.dungeon.name === 'tutorial' || this.dungeon.isTutorial));
+        if (isTutorialDungeon) return;
+
+        const isScrapTile = (t) => {
+            if (!t) return false;
+            const c = t.contains;
+            if (!c) return false;
+            if (typeof c === 'string') return c === 'scrap';
+            return c.type === 'scrap' || c.subtype === 'scrap';
+        };
+
+        const existingScrapCount = board.tiles.filter(isScrapTile).length;
+        const maxScrapOnBoard = 4;
+        if (existingScrapCount >= maxScrapOnBoard) return;
+
+        const spawnTarget = Math.floor(Math.random() * 3) + 2; // 2 to 4 scrap piles
+        const toSpawn = Math.min(spawnTarget, maxScrapOnBoard - existingScrapCount);
+        if (toSpawn <= 0) return;
+
+        const eligibleTiles = board.tiles.filter(t => {
+            if (!t) return false;
+            if (t.id === spawnTileIndex) return false;
+            if (this.isVoidTile(t) || t.isVoid === true || t.type === 'void') return false;
+            if (this.isConnectingPathTile(t) || t.isConnectingPath || t.isPassage) return false;
+            if (this.isPortalTile(t)) return false;
+            if (this.isImpassableBuildingTile(t) || t.building || t.isBuilding) return false;
+            if (this.isMonster(t)) return false;
+            if (t.hasTrap || t.inscriptions) return false;
+
+            const row = Math.floor(t.id / 15);
+            const col = t.id % 15;
+            if (board.tiles.length >= 225) {
+                if (row <= 0 || row >= 14 || col <= 0 || col >= 14) return false;
+            }
+
+            if (t.color === 'black' || t.color === '#000000' || t.color === '#000') return false;
+
+            const c = t.contains;
+            if (!c) return true;
+            if (typeof c === 'string') {
+                return c === 'empty' || c === 'empty_space' || c === 'obscured_space';
+            }
+            if (typeof c === 'object') {
+                const type = c.type;
+                return !type || type === 'empty' || type === 'empty_space' || type === 'obscured_space';
+            }
+            return false;
+        });
+
+        if (eligibleTiles.length === 0) return;
+
+        const shuffled = [...eligibleTiles].sort(() => Math.random() - 0.5);
+        const count = Math.min(toSpawn, shuffled.length);
+
+        for (let i = 0; i < count; i++) {
+            const tile = shuffled[i];
+            const amount = Math.random() < 0.25 ? 2 : 1;
+            tile.contains = {
+                type: 'scrap',
+                subtype: 'scrap',
+                name: 'Scrap',
+                amount
+            };
+            tile.image = 'scrap';
+        }
+    };
+
         // Cleanup malformed monster tile shapes that may have been saved in
         // older formats. Ensure every monster tile has the canonical object
         // shape: { type: 'monster', subtype: '<monster_key>' }.
@@ -2687,6 +2779,13 @@ export function BoardManager(){
                     spawnCoords = this.getCoordinatesFromIndex(resolvedSpawnIndex);
                 }
             }
+        }
+
+        // Ensure scrap is randomly placed on empty tiles
+        try {
+            this.ensureScrapSpawned(board, resolvedSpawnIndex !== null && resolvedSpawnIndex !== undefined ? resolvedSpawnIndex : spawnTileIndex);
+        } catch (e) {
+            console.warn('[Scrap Spawn] Failed to spawn scrap', e);
         }
 
         this.playerTile = {
@@ -3306,6 +3405,15 @@ export function BoardManager(){
                         if (chestResult) return chestResult;
                     }
                 } else {
+                    if (subtype === 'scrap') {
+                        if (this.addScrapToInventory) {
+                            this.addScrapToInventory(destinationTile);
+                        } else if (typeof this.handleScrapPickup === 'function') {
+                            this.handleScrapPickup(destinationTile);
+                        }
+                        this.removeTileFromBoard(destinationTile);
+                        return 'scrap';
+                    }
                     // destinationTile.contains may be object; callers expect string contains
                     try {
                         const itemKey = (subtype && !['key', 'item', 'rune', 'jewel', 'shard', 'consumable', 'spellbook', 'book', 'tome', 'grimoire', 'folio', 'manual', 'engine', 'magical', 'weapon', 'armor', 'potion'].includes(subtype))
@@ -3324,6 +3432,8 @@ export function BoardManager(){
                 this.removeTileFromBoard(destinationTile);
                 this.triggerRitualEncounter();
             break;
+            case 'hex doctor':
+            case 'hex_doctor':
             case 'dream den':
             case 'dream_den':
             case 'merchant':
@@ -3332,6 +3442,7 @@ export function BoardManager(){
             case 'vendor':
                 try {
                     const vType = (type === 'alchemist' || subtype === 'alchemist') ? 'alchemist' :
+                                  (type === 'hex_doctor' || type === 'hex doctor' || subtype === 'hex_doctor' || subtype === 'hex doctor') ? 'hex_doctor' :
                                   (type === 'fungal_nursery' || subtype === 'fungal_nursery') ? 'fungal_nursery' :
                                   (type === 'dream_den' || type === 'dream den' || subtype === 'dream_den') ? 'dream_den' :
                                   (subtype || 'merchant');
@@ -3366,6 +3477,14 @@ export function BoardManager(){
                 }
                 this.removeTileFromBoard(destinationTile);
             break;
+            case 'scrap':
+                if (this.addScrapToInventory) {
+                    this.addScrapToInventory(destinationTile);
+                } else if (typeof this.handleScrapPickup === 'function') {
+                    this.handleScrapPickup(destinationTile);
+                }
+                this.removeTileFromBoard(destinationTile);
+                return 'scrap';
             case 'treasure':
                 this.treasurePickupInProgress = true;
                 let treasureFactor, treasureNum = Math.random();
@@ -4153,7 +4272,7 @@ export function BoardManager(){
                              !!destinationTile.portalId || !!destinationTile.portal || !!destinationTile.isPortal ||
                              (destinationTile.contains && typeof destinationTile.contains === 'object' && (destinationTile.contains.portalId || destinationTile.contains.portal || destinationTile.contains.isPortal)) ||
                              (typeof destinationTile.building === 'string' && (destinationTile.building.includes('portal') || destinationTile.building.includes('teleporter')));
-        const isBuildingTile = !isDestPortal && (['building', 'outpost', 'generator', 'war_camp', 'war_fort', 'alchemist', 'merchant', 'shrine', 'observer_platform', 'earthen_fort'].includes(destType) ||
+        const isBuildingTile = !isDestPortal && (['building', 'outpost', 'generator', 'war_camp', 'war_fort', 'alchemist', 'merchant', 'hex_doctor', 'shrine', 'observer_platform', 'earthen_fort'].includes(destType) ||
                                ['outpost', 'outpost_under_construction', 'observer_platform', 'observer_platform_under_construction', 'earthen_fort', 'earthen_fort_under_construction', 'war_camp', 'war_camp_under_construction', 'war_fort', 'war_fort_under_construction'].includes(destSubtype) ||
                                ['outpost', 'outpost_under_construction', 'observer_platform', 'observer_platform_under_construction', 'earthen_fort', 'earthen_fort_under_construction', 'war_camp', 'war_camp_under_construction', 'war_fort', 'war_fort_under_construction'].includes(destinationTile.building) ||
                                !!destinationTile.generatorData);
@@ -5316,6 +5435,6 @@ export function BoardManager(){
             try { if (this.refreshTiles) this.refreshTiles(); } catch (e) {}
         }
 
-        return visibleTileIds
+        return visibleTileIds;
     }
 }

@@ -479,7 +479,7 @@ export function MonsterManager() {
             portrait: images['mummy_portrait'],
             greetings: ['time is unravelling'],
             deathCries: ['at last'],
-            skills: ['claw_strike', 'induce_fear', 'energy_drain', 'undead_grasp'],
+            skills: ['claw_strike', 'induce_fear', 'energy_drain', 'undead_grasp', 'mummification'],
             weaknesses: ['arcane', 'fire', 'electricity'],
             minions: ['skeleton', 'shade'],
             drops: [
@@ -669,7 +669,7 @@ export function MonsterManager() {
             portrait: images['high_priest_of_the_basilisk_portrait'],
             greetings: ['*chants in tongues of the cosmos*', 'The stars demand your blood!'],
             deathCries: ['*cosmic screams*'],
-            skills: ['voidbite', 'paradox_engine', 'void_rake', 'invoke_darkness', 'eldritch_wind'],
+            skills: ['voidbite', 'paradox_engine', 'void_rake', 'invoke_darkness', 'eldritch_wind', 'gaze_of_ruin'],
             weaknesses: ['holy', 'fire'],
             minions: ['basilisk_cultists', 'blalok', 'blalok'],
             drops: [
@@ -770,7 +770,7 @@ export function MonsterManager() {
             portrait: images['witch_p1_1'],
             greetings: ['Thy blood is quickening'],
             deathCries: ['Mercy'],
-            skills: ['greater_magic_missile', 'hex', 'shadow_curse', 'spiderweb', 'summon_spiders', 'dispell', 'demonic_whispers', 'transform'],
+            skills: ['greater_magic_missile', 'hex', 'shadow_curse', 'spiderweb', 'summon_spiders', 'dispell', 'demonic_whispers', 'transform', 'withering'],
             weaknesses: ['arcane', 'holy'],
             minions: ['beholder_minion', 'horned_pet', 'beholder_minion'],
             drops: [

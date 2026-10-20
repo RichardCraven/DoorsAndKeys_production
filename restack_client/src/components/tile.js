@@ -984,7 +984,7 @@ function Tile(props) {
             return false;
         }
         const multiKeys = [
-            'vendor', 'alchemist', 'merchant',
+            'vendor', 'alchemist', 'merchant', 'hex_doctor', 'hex doctor',
             'war_camp', 'war_fort',
             'dream_den', 'dream den',
             'keep', 'fortress',
@@ -1771,9 +1771,9 @@ function Tile(props) {
         allKeys.includes('broken_wagon') || allKeys.includes('forge_remnants')
     );
 
-    const isItemCell = !isLitterCell && (props.type === 'item' || 
-                       (containsObj && (containsObj.type === 'item' || containsObj.type === 'key')) ||
-                       ['key', 'items', 'jewels', 'runes', 'treasure'].includes(props.optionType) ||
+    const isItemCell = !isLitterCell && (props.type === 'item' || props.type === 'scrap' || 
+                       (containsObj && (containsObj.type === 'item' || containsObj.type === 'key' || containsObj.type === 'scrap')) ||
+                       ['key', 'items', 'jewels', 'runes', 'treasure', 'scrap'].includes(props.optionType) ||
                        isItemImage);
 
     const isKeyTile = (() => {
@@ -1866,13 +1866,13 @@ function Tile(props) {
     const isPickupObject = !isLitterCell && !isDimensionDebrisOrLitter && !isArchTile && !isSpawnPoint && !isStructureTile && !isMonsterOrPygmyTile && !isHut && !isArchaicEndpoint && !isVendorCell && !sKey.includes('gate') && !sKey.includes('door') && !sKey.includes('tower') && !sKey.includes('vendor') && (
         isItemCell ||
         isKeyTile ||
-        props.type === 'gold' || props.type === 'food' || props.type === 'treasure' || props.type === 'item' || props.type === 'chest' ||
-        props.contains === 'gold' || props.contains === 'food' || props.contains === 'treasure' || props.contains === 'chest' ||
-        currentContains === 'gold' || currentContains === 'food' || currentContains === 'treasure' || currentContains === 'chest' ||
-        (containsObj && ['gold', 'food', 'treasure', 'item', 'key', 'materials', 'chest'].includes(containsObj.type)) ||
-        sKey.includes('gold') || sKey.includes('food') || sKey.includes('treasure') || sKey.includes('chest') ||
-        imageString.includes('food') || imageString.includes('gold') || imageString.includes('treasure') || imageString.includes('chest') ||
-        ['gold', 'food', 'treasure', 'key', 'item', 'chest'].includes(props.optionType)
+        props.type === 'gold' || props.type === 'food' || props.type === 'treasure' || props.type === 'item' || props.type === 'chest' || props.type === 'scrap' ||
+        props.contains === 'gold' || props.contains === 'food' || props.contains === 'treasure' || props.contains === 'chest' || props.contains === 'scrap' ||
+        currentContains === 'gold' || currentContains === 'food' || currentContains === 'treasure' || currentContains === 'chest' || currentContains === 'scrap' ||
+        (containsObj && ['gold', 'food', 'treasure', 'item', 'key', 'materials', 'chest', 'scrap'].includes(containsObj.type)) ||
+        sKey.includes('gold') || sKey.includes('food') || sKey.includes('treasure') || sKey.includes('chest') || sKey.includes('scrap') ||
+        imageString.includes('food') || imageString.includes('gold') || imageString.includes('treasure') || imageString.includes('chest') || imageString.includes('scrap') ||
+        ['gold', 'food', 'treasure', 'key', 'item', 'chest', 'scrap'].includes(props.optionType)
     );
 
     const dungeonObjectBehavior = isPickupObject ? 'floating' : (isEnlargingObject ? 'enlarging' : 'static');

@@ -612,6 +612,10 @@ import cryptic_chest from '../assets/icons/loot/chests/cryptic_chest.png'
 import curse_doll from '../assets/icons/misc/loot/curse doll.png'
 import merchant from '../assets/icons/misc/vendors/merchant.png'
 import alchemist from '../assets/icons/misc/vendors/alchemist.png'
+import hex_doctor from '../assets/icons/misc/vendors/hex_doctor.png'
+import mummification from '../assets/icons/combat-icons/specials/monsters/mummy/mummification.png'
+import gaze_of_ruin from '../assets/icons/combat-icons/specials/monsters/high priest of the basilisk/gaze_of_ruin.png'
+import withering from '../assets/icons/combat-icons/specials/monsters/witch/withering.png'
 
 // crew
 import archer from '../assets/icons/crew_icons/archer.png'
@@ -1052,6 +1056,7 @@ import camping from '../assets/gemini_images/camping.png';
 import merchant_bg from '../assets/gemini_images/merchant.png';
 import alchemist_bg from '../assets/gemini_images/alchemist.png';
 import dream_den_bg from '../assets/gemini_images/dream_den.png';
+import hex_doctor_bg from '../assets/gemini_images/hex_doctor.png';
 import litter_scattered_rocks from '../assets/gemini_images/litter_scattered_rocks.png';
 import litter_broken_wood from '../assets/gemini_images/litter_broken_wood.png';
 import litter_old_barrels from '../assets/gemini_images/litter_old_barrels.png';
@@ -2259,6 +2264,11 @@ export {
     curse_doll,
     merchant,
     alchemist,
+    hex_doctor,
+    hex_doctor as buildable_hex_doctor,
+    mummification,
+    gaze_of_ruin,
+    withering,
 
     archer,
     barbarian,
@@ -2811,6 +2821,7 @@ export {
     alchemist_bg,
     dream_den,
     dream_den_bg,
+    hex_doctor_bg,
     awake_refreshed_sage,
     awake_refreshed_soldier,
     strong_resolve_soldier,
@@ -2848,6 +2859,7 @@ export {
     engineer_salvage,
     engineer_salvage as wrench,
     engineer_salvage as salvage,
+    engineer_salvage as scrap,
     engineer_grapple_winch,
     engineer_grapple_winch as grapple_winch,
     engineer_grapple_winch as rope,

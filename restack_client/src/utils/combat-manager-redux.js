@@ -132,6 +132,11 @@ export function CombatManagerRedux() {
             actualCost = cost * 3;
         }
 
+        // Apply Withering Curse penalty (+2 stamina cost to actions)
+        if (unit.curseStaminaCostPenalty || unit.curse?.id === 'withering' || (Array.isArray(unit.curses) && unit.curses.some(c => c && c.id === 'withering'))) {
+            actualCost += (unit.curseStaminaCostPenalty || 2);
+        }
+
         // Apply Temprance Amulet (reduces stamina cost by 20%)
         const hasTemprance = this._getEquippedAmulet && this._getEquippedAmulet(unit, 'temprance_amulet');
         if (hasTemprance) {
@@ -1039,6 +1044,34 @@ export function CombatManagerRedux() {
             fighter.actionsTakenThisRound = 0;
             fighter.power = typeof e.power === 'number' ? e.power : 0;
             fighter.ultimateActive = typeof e.ultimateActive === 'boolean' ? e.ultimateActive : (fighter.power >= 100);
+
+            // Inherit lingering active curses from persistent crew state
+            if (e.curse || (Array.isArray(e.curses) && e.curses.length > 0)) {
+                const activeCurse = e.curse || e.curses[0];
+                fighter.curse = activeCurse;
+                fighter.curses = [activeCurse];
+                if (activeCurse.statPenalties) {
+                    fighter.stats = fighter.stats || {};
+                    Object.entries(activeCurse.statPenalties).forEach(([stat, penalty]) => {
+                        if (typeof fighter.stats[stat] === 'number') {
+                            fighter.stats[stat] = Math.max(1, fighter.stats[stat] + penalty);
+                            if (stat === 'atk' && typeof fighter.atk === 'number') {
+                                fighter.atk = fighter.stats.atk;
+                            }
+                        }
+                    });
+                }
+                if (activeCurse.healingMultiplier) {
+                    fighter.curseHealingPenalty = activeCurse.healingMultiplier;
+                }
+                if (activeCurse.damageMultiplier) {
+                    fighter.curseDamageMultiplier = activeCurse.damageMultiplier;
+                }
+                if (activeCurse.staminaCostPenalty) {
+                    fighter.curseStaminaCostPenalty = activeCurse.staminaCostPenalty;
+                }
+                this.appendCombatLog(`⚠️ ${this.getCombatantLogName(fighter)} enters battle burdened by ${activeCurse.name}!`);
+            }
 
             this.combatants[e.id] = fighter;
             this._initializeInitialCooldowns(fighter);
@@ -2319,6 +2352,12 @@ export function CombatManagerRedux() {
         const hasPlatinum = this._getEquippedAmulet && this._getEquippedAmulet(target, 'platinum_amulet');
         if (hasPlatinum) {
             finalDamage = Math.max(1, Math.round(finalDamage * 0.85));
+        }
+
+        // Apply Gaze of Ruin Curse (+25% damage taken)
+        if (target && (target.curseDamageMultiplier || target.curse?.id === 'gaze_of_ruin' || (Array.isArray(target.curses) && target.curses.some(c => c && c.id === 'gaze_of_ruin')))) {
+            const mult = target.curseDamageMultiplier || 1.25;
+            finalDamage = Math.round(finalDamage * mult);
         }
 
         // Award power to PC callers for damage dealt (excluding minions/summons)
@@ -3910,6 +3949,124 @@ export function CombatManagerRedux() {
         unit.activeDebuffs.push(applied);
     };
 
+    this._applyCurse = (target, curseDef, caster) => {
+        if (!target || target.dead) return;
+        if (!curseDef || !curseDef.id) return;
+
+        const alreadyAfflicted = (target.curse && target.curse.id === curseDef.id) ||
+            (Array.isArray(target.curses) && target.curses.some(c => c && c.id === curseDef.id));
+        if (alreadyAfflicted) {
+            this.appendCombatLog(`${this.getCombatantLogName(target)} is already burdened by ${curseDef.name}!`);
+            return;
+        }
+
+        // Apply stat reductions in active combatant
+        if (curseDef.statPenalties) {
+            target.stats = target.stats || {};
+            Object.entries(curseDef.statPenalties).forEach(([stat, penalty]) => {
+                if (stat === 'spd') {
+                    if (typeof target.stats.spd === 'number') {
+                        target.stats.spd = Math.max(1, target.stats.spd + penalty);
+                    }
+                    if (typeof target.stats.speed === 'number') {
+                        target.stats.speed = Math.max(1, target.stats.speed + penalty);
+                    }
+                    if (typeof target.stats.spd !== 'number' && typeof target.stats.speed === 'number') {
+                        target.stats.spd = target.stats.speed;
+                    }
+                } else if (typeof target.stats[stat] === 'number') {
+                    target.stats[stat] = Math.max(1, target.stats[stat] + penalty);
+                    if (stat === 'atk' && typeof target.atk === 'number') {
+                        target.atk = target.stats.atk;
+                    }
+                }
+            });
+        }
+        if (curseDef.healingMultiplier) {
+            target.curseHealingPenalty = curseDef.healingMultiplier;
+        }
+        if (curseDef.damageMultiplier) {
+            target.curseDamageMultiplier = curseDef.damageMultiplier;
+        }
+        if (curseDef.staminaCostPenalty) {
+            target.curseStaminaCostPenalty = curseDef.staminaCostPenalty;
+        }
+
+        target.curse = curseDef;
+        target.curses = [curseDef];
+
+        // Add CURSED! floating text indicator
+        if (!Array.isArray(target.damageIndicators)) target.damageIndicators = [];
+        const indId = combatClock.now() + Math.random();
+        target.damageIndicators.push({
+            id: indId,
+            value: 'CURSED!',
+            source: curseDef.name,
+            type: 'curse'
+        });
+        combatClock.setTimeout(() => {
+            if (target.damageIndicators) {
+                const idx = target.damageIndicators.findIndex(e => e && e.id === indId);
+                if (idx !== -1) target.damageIndicators.splice(idx, 1);
+            }
+            if (typeof this.broadcastDataUpdate === 'function') this.broadcastDataUpdate();
+        }, 2500);
+
+        this.appendCombatLog(`🔮 ${this.getCombatantLogName(target)} is cursed with ${curseDef.name} (${curseDef.desc})! This curse lingers until lifted by the Hex Doctor.`);
+
+        // Persist curse to crew and session meta
+        try {
+            const crewList = (this.data && Array.isArray(this.data.crew)) ? this.data.crew : [];
+            const crewMember = crewList.find(c => c && (c.id === target.id || c.name === target.name));
+            if (crewMember) {
+                crewMember.curse = curseDef;
+                crewMember.curses = [curseDef];
+                if (crewMember !== target && curseDef.statPenalties) {
+                    crewMember.stats = crewMember.stats || {};
+                    Object.entries(curseDef.statPenalties).forEach(([stat, penalty]) => {
+                        if (stat === 'spd') {
+                            if (typeof crewMember.stats.spd === 'number') crewMember.stats.spd = Math.max(1, crewMember.stats.spd + penalty);
+                            if (typeof crewMember.stats.speed === 'number') crewMember.stats.speed = Math.max(1, crewMember.stats.speed + penalty);
+                        } else if (typeof crewMember.stats[stat] === 'number') {
+                            crewMember.stats[stat] = Math.max(1, crewMember.stats[stat] + penalty);
+                            if (stat === 'atk' && typeof crewMember.atk === 'number') {
+                                crewMember.atk = crewMember.stats.atk;
+                            }
+                        }
+                    });
+                }
+            }
+
+            const meta = getMeta() || {};
+            if (Array.isArray(meta.crew)) {
+                const metaMember = meta.crew.find(m => m && (m.id === target.id || m.name === target.name));
+                if (metaMember) {
+                    metaMember.curse = curseDef;
+                    metaMember.curses = [curseDef];
+                    if (metaMember !== target && metaMember !== crewMember && curseDef.statPenalties) {
+                        metaMember.stats = metaMember.stats || {};
+                        Object.entries(curseDef.statPenalties).forEach(([stat, penalty]) => {
+                            if (stat === 'spd') {
+                                if (typeof metaMember.stats.spd === 'number') metaMember.stats.spd = Math.max(1, metaMember.stats.spd + penalty);
+                                if (typeof metaMember.stats.speed === 'number') metaMember.stats.speed = Math.max(1, metaMember.stats.speed + penalty);
+                            } else if (typeof metaMember.stats[stat] === 'number') {
+                                metaMember.stats[stat] = Math.max(1, metaMember.stats[stat] + penalty);
+                                if (stat === 'atk' && typeof metaMember.atk === 'number') {
+                                    metaMember.atk = metaMember.stats.atk;
+                                }
+                            }
+                        });
+                    }
+                }
+                storeMeta(meta);
+            }
+        } catch (e) {
+            console.warn('[Curse] Failed to persist curse to crew meta', e);
+        }
+
+        if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
+    };
+
     // ── Main AI Entry Point ───────────────────────────────────────────────────
     // Routes each unit through their class-specific decision logic.
     this.executeUnitAI = (unit) => {
@@ -4558,6 +4715,14 @@ export function CombatManagerRedux() {
                 }
             }
 
+            // Curses (e.g. mummification, gaze_of_ruin, withering)
+            else if (resolved.type === 'curse' || key === 'mummification' || key === 'gaze_of_ruin' || key === 'withering' || effects.some(e => typeof e === 'object' && e.type === 'curse')) {
+                score += 25;
+                if (target && (target.curse || (Array.isArray(target.curses) && target.curses.length > 0))) {
+                    score -= 20; // Deprioritize if target is already cursed
+                }
+            }
+
             // Damage
             else if (resolved.type === 'damage' || (resolved.type && resolved.type.includes('damage'))) {
                 score += 8;
@@ -5135,7 +5300,10 @@ export function CombatManagerRedux() {
             if (pick && woundedAlly) {
                 const healRange = pick.range || 'close';
                 if (this.targetInRange(unit, woundedAlly, healRange)) {
-                    const healAmount = Math.abs(typeof pick.flatDamage === 'number' ? pick.flatDamage : -30);
+                    let healAmount = Math.abs(typeof pick.flatDamage === 'number' ? pick.flatDamage : -30);
+                    if (woundedAlly.curseHealingPenalty || woundedAlly.curse?.id === 'mummification' || (Array.isArray(woundedAlly.curses) && woundedAlly.curses.some(c => c && c.id === 'mummification'))) {
+                        healAmount = Math.max(1, Math.round(healAmount * (woundedAlly.curseHealingPenalty || 0.5)));
+                    }
                     woundedAlly.hp = Math.min(woundedAlly.starting_hp || woundedAlly.hp, woundedAlly.hp + healAmount);
                     woundedAlly.damageIndicators = woundedAlly.damageIndicators || [];
                     woundedAlly.damageIndicators.push({ id: combatClock.now() + Math.random(), value: `+${healAmount}`, source: 'Healing Hands', type: 'heal' });
@@ -7595,6 +7763,16 @@ export function CombatManagerRedux() {
             const whispersSpec = this.resolveSpecial(unit, 'demonic_whispers');
             if (whispersSpec && this.targetInRange(unit, target, whispersSpec.range || 'medium')) {
                 this.useAbility(unit, whispersSpec, target);
+                unit.actionsTakenThisRound += 1;
+                return;
+            }
+        }
+
+        // 5b. Withering (Curse)
+        if (this._abilityReady(unit, 'withering') && (!target.curse || target.curse.id !== 'withering')) {
+            const witheringSpec = this.resolveSpecial(unit, 'withering');
+            if (witheringSpec && this.targetInRange(unit, target, witheringSpec.range || 'far')) {
+                this.useAbility(unit, witheringSpec, target);
                 unit.actionsTakenThisRound += 1;
                 return;
             }
@@ -10752,6 +10930,66 @@ export function CombatManagerRedux() {
                 }
             });
             this.appendCombatLog(`${this.getCombatantLogName(unit)} casts Eldritch Wind, fully restoring stamina and healing 10% HP for: ${healedUnits.join(', ')}.`);
+            if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
+            return;
+        }
+
+        // ── CURSES: Mummification, Gaze of Ruin, Withering ──────────────────────────
+        if (abilityId === 'mummification') {
+            if (this.animManagerRedux && typeof this.animManagerRedux.triggerAbility === 'function') {
+                this.animManagerRedux.triggerAbility(unit.coordinates, target.coordinates, 'mummification', false, null, unit.id);
+            }
+            const curseDef = {
+                id: 'mummification',
+                name: 'Mummification',
+                desc: '-3 Spd, -3 Dex, -50% healing received',
+                icon: 'mummification',
+                statPenalties: { spd: -3, dex: -3 },
+                healingMultiplier: 0.5,
+                source: 'Mummy'
+            };
+            this._applyCurse(target, curseDef, unit);
+            if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
+            return;
+        }
+
+        if (abilityId === 'gaze_of_ruin' || abilityId === 'gaze of ruin') {
+            if (this.animManagerRedux && typeof this.animManagerRedux.triggerAbility === 'function') {
+                this.animManagerRedux.triggerAbility(unit.coordinates, target.coordinates, 'gaze_of_ruin', false, null, unit.id);
+            }
+            const curseDef = {
+                id: 'gaze_of_ruin',
+                name: 'Gaze of Ruin',
+                desc: '-4 Def, +25% damage taken',
+                icon: 'gaze_of_ruin',
+                statPenalties: { def: -4 },
+                damageMultiplier: 1.25,
+                source: 'High Priest of the Basilisk'
+            };
+            this._applyCurse(target, curseDef, unit);
+            if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
+            return;
+        }
+
+        if (abilityId === 'withering') {
+            if (this.animManagerRedux && typeof this.animManagerRedux.triggerAbility === 'function') {
+                this.animManagerRedux.triggerAbility(unit.coordinates, target.coordinates, 'withering', false, null, unit.id);
+            }
+            const targetAtk = (target.stats && typeof target.stats.atk === 'number')
+                ? target.stats.atk
+                : (typeof target.atk === 'number' ? target.atk : 10);
+            const atkReduction = Math.max(1, Math.round(targetAtk * 0.40));
+            const curseDef = {
+                id: 'withering',
+                name: 'Withering',
+                desc: '-40% Atk, +2 stamina cost per action',
+                icon: 'withering',
+                statPenalties: { atk: -atkReduction },
+                atkPenaltyPct: 40,
+                staminaCostPenalty: 2,
+                source: 'Witch'
+            };
+            this._applyCurse(target, curseDef, unit);
             if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
             return;
         }
@@ -15450,6 +15688,9 @@ export function CombatManagerRedux() {
                 healAmount = effect.healFlat;
             }
             if (healAmount > 0) {
+                if (user.curseHealingPenalty || user.curse?.id === 'mummification' || (Array.isArray(user.curses) && user.curses.some(c => c && c.id === 'mummification'))) {
+                    healAmount = Math.max(1, Math.round(healAmount * (user.curseHealingPenalty || 0.5)));
+                }
                 user.hp = Math.min(user.starting_hp, user.hp + healAmount);
                 // Add damage indicator (as healing)
                 const indicatorId = combatClock.now() + Math.random();

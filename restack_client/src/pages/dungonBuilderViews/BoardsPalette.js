@@ -40,6 +40,8 @@ class BoardsPalette extends React.Component {
         if (optionType === 'archaic_tunnel_endpoint') return 'Archaic Tunnel Endpoint';
         if (optionType === 'archaic tunnel' || optionType === 'archaic_tunnel') return 'Archaic Tunnel';
         if (optionType === 'dream den' || optionType === 'dream_den') return 'Dream Den';
+        if (optionType === 'hex doctor' || optionType === 'hex_doctor') return 'Hex Doctor';
+        if (optionType === 'vendors') return 'Vendors';
         if (optionType === 'dungeon portal' || optionType === 'dungeon_portal') return 'Dungeon Portal';
         if (optionType === 'terrain') return 'Terrain';
         return optionType;

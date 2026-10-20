@@ -57,7 +57,7 @@ describe('Witch AI debug', () => {
     };
 
     // Execute multiple rounds and check Witch actions
-    for (let round = 1; round <= 15; round++) {
+    for (let round = 1; round <= 16; round++) {
       console.log(`--- ROUND ${round} ---`);
       cm.round = round;
       
@@ -99,6 +99,12 @@ describe('Witch AI debug', () => {
         expect(spiderwebLog).toBeDefined();
         // Target should be ensnared!
         expect(soldier.ensnared).toBe(true);
+      }
+
+      if (round === 7) {
+        // Round 7: Witch casts Withering curse on target
+        const witheringLog = combatLogs.find(log => log.includes('Withering'));
+        expect(witheringLog).toBeDefined();
       }
     }
 

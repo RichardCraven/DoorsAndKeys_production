@@ -55,8 +55,12 @@ export function Mummy(data, utilMethods, animationManager, overlayManager) {
         const mostRecovered = (list) => list.reduce((best, a) => (a.cooldown_position > best.cooldown_position ? a : best), list[0]);
 
         if (isAdjacent) {
+            // Prioritize mummification if target is not already afflicted by it
+            const mummify = available.find(a => a.name === 'mummification' || a.id === 'mummification' || a.key === 'mummification');
+            if (mummify && (!target.curse || target.curse.id !== 'mummification')) return mummify;
+
             // Adjacent — always try grasp first
-            const grasp = available.find(a => a.name === 'grasp');
+            const grasp = available.find(a => a.name === 'grasp' || a.name === 'undead_grasp' || a.id === 'undead_grasp');
             if (grasp) return grasp;
             // grasp on cooldown — pick most-recovered close attack, then any
             const closeAttacks = caller.attacks.filter(a => a.range === 'close');

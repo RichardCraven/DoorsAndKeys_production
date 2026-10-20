@@ -467,6 +467,7 @@ function hexToRgba(hex, alpha = 1) {
 // Small subcomponent to render modal header + body based on modalType
 const ModalInner = ({ modalType, showModal = true, updates, crew, tileSize, handleMemberClickRitual, handleCrewTileHover, setMemberRitualOptions, onLearnRitual, inventoryManager, saveUserData, onForceUpdate, onClose, onDreamDenSelect, onSpawnPygmy, tutorialMerchantHighlight }) => {
     const [merchantStock, setMerchantStock] = React.useState([]);
+    const [hexDoctorStock, setHexDoctorStock] = React.useState([]);
     const [buybackStock, setBuybackStock] = React.useState([]);
     const [feedbackMsg, setFeedbackMsg] = React.useState('');
     const [feedbackColor, setFeedbackColor] = React.useState('#fff');
@@ -519,9 +520,9 @@ const ModalInner = ({ modalType, showModal = true, updates, crew, tileSize, hand
     React.useEffect(() => {
         if (modalType === 'Dream Den') {
             setShowContent(true);
-        } else if (modalType === 'Merchant' || modalType === 'Alchemist') {
+        } else if (modalType === 'Merchant' || modalType === 'Alchemist' || modalType === 'Hex Doctor') {
             setShowContent(false);
-            const imgKey = modalType === 'Merchant' ? 'merchant_bg' : 'alchemist_bg';
+            const imgKey = modalType === 'Merchant' ? 'merchant_bg' : (modalType === 'Hex Doctor' ? 'hex_doctor_bg' : 'alchemist_bg');
             const imgAsset = images[imgKey];
             const imgSrc = imgAsset?.default || imgAsset;
 
@@ -632,6 +633,142 @@ const ModalInner = ({ modalType, showModal = true, updates, crew, tileSize, hand
             setMerchantStock(stock);
         }
     }, [modalType, showModal, inventoryManager]);
+
+    React.useEffect(() => {
+        if (modalType === 'Hex Doctor' && inventoryManager && showModal) {
+            if ((!inventoryManager.allItems || Object.keys(inventoryManager.allItems).length === 0) && typeof inventoryManager.initializeItems === 'function') {
+                inventoryManager.initializeItems();
+            }
+
+            const getItemDef = (key, fallbackObj) => {
+                const def = inventoryManager.allItems?.[key] || inventoryManager.consumables?.[key] || inventoryManager.misc?.[key] || inventoryManager.weapons?.[key] || inventoryManager.armor?.[key] || inventoryManager.magical?.[key];
+                if (def) return { ...def, _im_key: key };
+                return { ...fallbackObj, _im_key: key };
+            };
+
+            const stock = [];
+            stock.push({
+                ...getItemDef('curse_doll', {
+                    name: 'curse doll',
+                    icon: 'curse_doll',
+                    type: 'special',
+                    description: 'A dark effigy bristling with needles and malevolent focus.'
+                }),
+                price: 80
+            });
+            stock.push({
+                ...getItemDef('voodoo_amulet', {
+                    name: 'Voodoo Amulet',
+                    icon: 'voodoo_amulet',
+                    type: 'magical',
+                    subtype: 'amulet',
+                    description: 'Doubles the duration of curses and debuffs on enemies.'
+                }),
+                price: 150
+            });
+            stock.push({
+                ...getItemDef('elasi_amulet', {
+                    name: 'Elasi Amulet',
+                    icon: 'elasi_amulet',
+                    type: 'magical',
+                    subtype: 'amulet',
+                    description: 'Whispers ancient wards against curses and binding magics.'
+                }),
+                price: 160
+            });
+            stock.push({
+                ...getItemDef('yaga_amulet', {
+                    name: 'Yaga Amulet',
+                    icon: 'yaga_amulet',
+                    type: 'magical',
+                    subtype: 'amulet',
+                    description: 'Pulses with occult witch fire and ancient forest mysteries.'
+                }),
+                price: 140
+            });
+            stock.push({
+                name: 'Purifying Elixir',
+                icon: 'major_health_potion',
+                type: 'consumable',
+                price: 65,
+                description: 'A bitter herbal tonic that restores 40% total HP and invigorates spirit.'
+            });
+            stock.push({
+                name: 'shimmering dust',
+                icon: 'shimmering_dust',
+                type: 'currency',
+                currencyType: 'shimmering_dust',
+                price: 10,
+                description: 'Occult dust used for dark crafts and ritual apothecary brewing.'
+            });
+
+            setHexDoctorStock(stock);
+        }
+    }, [modalType, showModal, inventoryManager]);
+
+    const handleSeverCurse = (member) => {
+        if (!member) return;
+        const curseCost = 50;
+        if (inventoryManager.gold < curseCost) {
+            setFeedbackMsg('Not enough gold to appease the spirits! (Requires 50 Gold)');
+            setFeedbackColor('#ff4d4d');
+            return;
+        }
+
+        inventoryManager.gold -= curseCost;
+        const activeCurse = member.curse || (Array.isArray(member.curses) && member.curses[0]);
+        const curseName = activeCurse?.name || 'Curse';
+
+        // Revert stat penalties on member.stats
+        if (activeCurse && activeCurse.statPenalties && member.stats) {
+            Object.entries(activeCurse.statPenalties).forEach(([stat, penalty]) => {
+                if (stat === 'spd') {
+                    if (typeof member.stats.spd === 'number') member.stats.spd = Math.max(1, member.stats.spd - penalty);
+                    if (typeof member.stats.speed === 'number') member.stats.speed = Math.max(1, member.stats.speed - penalty);
+                } else if (typeof member.stats[stat] === 'number') {
+                    member.stats[stat] = Math.max(1, member.stats[stat] - penalty);
+                    if (stat === 'atk' && typeof member.atk === 'number') {
+                        member.atk = member.stats.atk;
+                    }
+                }
+            });
+        }
+        delete member.curse;
+        delete member.curses;
+
+        // Persist to meta.crew
+        try {
+            const meta = getMeta() || {};
+            if (Array.isArray(meta.crew)) {
+                const metaMember = meta.crew.find(m => m && (m.id === member.id || m.name === member.name));
+                if (metaMember) {
+                    if (metaMember !== member && activeCurse && activeCurse.statPenalties && metaMember.stats) {
+                        Object.entries(activeCurse.statPenalties).forEach(([stat, penalty]) => {
+                            if (stat === 'spd') {
+                                if (typeof metaMember.stats.spd === 'number') metaMember.stats.spd = Math.max(1, metaMember.stats.spd - penalty);
+                                if (typeof metaMember.stats.speed === 'number') metaMember.stats.speed = Math.max(1, metaMember.stats.speed - penalty);
+                            } else if (typeof metaMember.stats[stat] === 'number') {
+                                metaMember.stats[stat] = Math.max(1, metaMember.stats[stat] - penalty);
+                                if (stat === 'atk' && typeof metaMember.atk === 'number') {
+                                    metaMember.atk = metaMember.stats.atk;
+                                }
+                            }
+                        });
+                    }
+                    delete metaMember.curse;
+                    delete metaMember.curses;
+                }
+            }
+            storeMeta(meta);
+        } catch (e) {
+            console.warn('[Hex Doctor] Failed to update meta.crew', e);
+        }
+
+        setFeedbackMsg(`✨ ${member.name}'s curse (${curseName}) has been completely severed!`);
+        setFeedbackColor('#a855f7');
+        if (saveUserData) saveUserData().catch(() => {});
+        if (onForceUpdate) onForceUpdate();
+    };
 
     const getItemSellPrice = (item) => {
         if (item.type === 'consumable') {
@@ -889,6 +1026,188 @@ const ModalInner = ({ modalType, showModal = true, updates, crew, tileSize, hand
         if (hours >= 1) return hours === 1 ? '1 hour' : `${hours} hours`;
         const mins = ms / (1000 * 60);
         return mins === 1 ? '1 minute' : `${Math.round(mins)} minutes`;
+    };
+
+    const renderInspectedItemOverlay = () => {
+        if (!inspectedItem) return null;
+        const largeImgSrc = resolveItemImgSrc(inspectedItem.icon);
+        const isStock = !!inspectedItem.isStock;
+        const itemType = inspectedItem.type || 'Item';
+        const itemSubtype = inspectedItem.subtype || '';
+        const itemTier = inspectedItem.tier != null ? `Tier ${inspectedItem.tier}` : 'Tier 1';
+        const atkDmg = inspectedItem.damage || inspectedItem.attack || inspectedItem.stats?.damage || inspectedItem.stats?.atk;
+        const defArm = inspectedItem.armor || inspectedItem.defense || inspectedItem.stats?.armor || inspectedItem.stats?.def;
+        const rangeVal = inspectedItem.range != null ? inspectedItem.range : (inspectedItem.isRanged ? 'Ranged' : null);
+        const healVal = inspectedItem.healAmount || inspectedItem.hp || inspectedItem.heal;
+        const foodVal = inspectedItem.amount;
+        const displayPrice = isStock ? inspectedItem.price : (inspectedItem.sellPrice ?? getItemSellPrice(inspectedItem));
+        const priceLabel = isStock ? (inspectedItem.isBuyback ? 'Buyback Cost' : 'Acquisition Cost') : 'Liquidation Value';
+        const currencyGlyph = (isStock && inspectedItem.currencyType === 'dust') ? '✦' : '◆';
+        const currencyUnit = (isStock && inspectedItem.currencyType === 'dust') ? 'Dust' : 'Gold';
+
+        return (
+            <div
+                className="ambush-popup-overlay esoteric-item-details-overlay"
+                onClick={() => setInspectedItem(null)}
+            >
+                <div
+                    className="ambush-popup-card esoteric-item-details-card"
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <div className="card-corner top-left" />
+                    <div className="card-corner top-right" />
+                    <div className="card-corner bottom-left" />
+                    <div className="card-corner bottom-right" />
+
+                    <button
+                        className="esoteric-item-close-btn"
+                        onClick={() => setInspectedItem(null)}
+                        aria-label="Close"
+                        title="Close (Esc)"
+                    >
+                        ×
+                    </button>
+
+                    <div className="ambush-eyebrow">
+                        <span className="glyph">◆</span> ITEM SPECIFICATION <span className="glyph">◆</span>
+                    </div>
+
+                    <h2 className="ambush-title" style={{ fontSize: '20px', letterSpacing: '2px' }}>
+                        {inspectedItem.name}
+                    </h2>
+
+                    <div className="ambush-divider">
+                        <span className="divider-line" />
+                        <span className="divider-glyph">❖</span>
+                        <span className="divider-line" />
+                    </div>
+
+                    <div className="ambush-portrait-frame">
+                        {largeImgSrc ? (
+                            <img
+                                src={largeImgSrc}
+                                alt={inspectedItem.name}
+                                className="ambush-portrait item-large-icon"
+                            />
+                        ) : (
+                            <div style={{
+                                width: 64,
+                                height: 64,
+                                backgroundColor: '#241916',
+                                borderRadius: 6,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                color: '#ffd700',
+                                fontSize: '24px'
+                            }}>
+                                ◆
+                            </div>
+                        )}
+                        <div className="ambush-badge">
+                            <span className="badge-glyph">❖</span> {itemTier.toUpperCase()} • {itemType.toUpperCase()} <span className="badge-glyph">❖</span>
+                        </div>
+                    </div>
+
+                    {inspectedItem.description && (
+                        <p className="ambush-subtitle" style={{ fontSize: '13px', fontStyle: 'italic', marginBottom: '14px' }}>
+                            {inspectedItem.description}
+                        </p>
+                    )}
+
+                    <div className="ambush-stats-grid">
+                        <div className="ambush-stat-item stat-type">
+                            <span className="stat-label">CLASS</span>
+                            <span className="stat-value">{itemSubtype ? `${itemType} / ${itemSubtype}` : itemType}</span>
+                        </div>
+                        <div className="ambush-stat-item stat-tier">
+                            <span className="stat-label">TIER</span>
+                            <span className="stat-value">{itemTier}</span>
+                        </div>
+                        {atkDmg != null && (
+                            <div className="ambush-stat-item stat-atk">
+                                <span className="stat-label">DAMAGE</span>
+                                <span className="stat-value">+{atkDmg}</span>
+                            </div>
+                        )}
+                        {defArm != null && (
+                            <div className="ambush-stat-item stat-def">
+                                <span className="stat-label">ARMOR</span>
+                                <span className="stat-value">+{defArm}</span>
+                            </div>
+                        )}
+                        {rangeVal != null && (
+                            <div className="ambush-stat-item stat-range">
+                                <span className="stat-label">RANGE</span>
+                                <span className="stat-value">{rangeVal}</span>
+                            </div>
+                        )}
+                        {healVal != null && (
+                            <div className="ambush-stat-item stat-hp">
+                                <span className="stat-label">RESTORES</span>
+                                <span className="stat-value">+{healVal} HP</span>
+                            </div>
+                        )}
+                        {foodVal != null && (
+                            <div className="ambush-stat-item stat-hp">
+                                <span className="stat-label">SUPPLY</span>
+                                <span className="stat-value">+{foodVal} Food</span>
+                            </div>
+                        )}
+                        {inspectedItem.count > 1 && (
+                            <div className="ambush-stat-item stat-count">
+                                <span className="stat-label">HELD</span>
+                                <span className="stat-value">x{inspectedItem.count}</span>
+                            </div>
+                        )}
+                        <div className="ambush-stat-item stat-gold">
+                            <span className="stat-label">{priceLabel}</span>
+                            <span className="stat-value">
+                                <span style={{ color: currencyGlyph === '✦' ? '#b388ff' : '#ffd700', marginRight: '4px' }}>{currencyGlyph}</span>
+                                {displayPrice} {currencyUnit}
+                            </span>
+                        </div>
+                    </div>
+
+                    <div className="ambush-actions">
+                        {isStock ? (
+                            <button
+                                className="ambush-fight-btn buy-action"
+                                onClick={() => {
+                                    handleBuyItem(inspectedItem);
+                                    setInspectedItem(null);
+                                }}
+                            >
+                                <span>{inspectedItem.isBuyback ? 'Buy Back' : 'Buy Item'}</span>
+                            </button>
+                        ) : (
+                            <button
+                                className="ambush-fight-btn sell-action"
+                                onClick={() => {
+                                    let targetIndex = inspectedItem.originalIndex;
+                                    const currentInv = inventoryManager?.inventory || [];
+                                    if (!currentInv[targetIndex] || currentInv[targetIndex].name !== inspectedItem.name) {
+                                        targetIndex = currentInv.findIndex(it => it && it.name === inspectedItem.name && it.equippedBy == null);
+                                    }
+                                    if (targetIndex !== -1 && targetIndex != null) {
+                                        handleSellItem(inspectedItem, targetIndex);
+                                    }
+                                    setInspectedItem(null);
+                                }}
+                            >
+                                <span>Sell Item</span>
+                            </button>
+                        )}
+                        <button
+                            className="ambush-fight-btn dismiss-action"
+                            onClick={() => setInspectedItem(null)}
+                        >
+                            <span>Dismiss</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
     };
 
     return (
@@ -1251,186 +1570,7 @@ const ModalInner = ({ modalType, showModal = true, updates, crew, tileSize, hand
                         )}
                     </div>
 
-                    {inspectedItem && (() => {
-                        const largeImgSrc = resolveItemImgSrc(inspectedItem.icon);
-                        const isStock = !!inspectedItem.isStock;
-                        const itemType = inspectedItem.type || 'Item';
-                        const itemSubtype = inspectedItem.subtype || '';
-                        const itemTier = inspectedItem.tier != null ? `Tier ${inspectedItem.tier}` : 'Tier 1';
-                        const atkDmg = inspectedItem.damage || inspectedItem.attack || inspectedItem.stats?.damage || inspectedItem.stats?.atk;
-                        const defArm = inspectedItem.armor || inspectedItem.defense || inspectedItem.stats?.armor || inspectedItem.stats?.def;
-                        const rangeVal = inspectedItem.range != null ? inspectedItem.range : (inspectedItem.isRanged ? 'Ranged' : null);
-                        const healVal = inspectedItem.healAmount || inspectedItem.hp || inspectedItem.heal;
-                        const foodVal = inspectedItem.amount;
-                        const displayPrice = isStock ? inspectedItem.price : (inspectedItem.sellPrice ?? getItemSellPrice(inspectedItem));
-                        const priceLabel = isStock ? (inspectedItem.isBuyback ? 'Buyback Cost' : 'Acquisition Cost') : 'Liquidation Value';
-                        const currencyGlyph = (isStock && inspectedItem.currencyType === 'dust') ? '✦' : '◆';
-                        const currencyUnit = (isStock && inspectedItem.currencyType === 'dust') ? 'Dust' : 'Gold';
-
-                        return (
-                            <div
-                                className="ambush-popup-overlay esoteric-item-details-overlay"
-                                onClick={() => setInspectedItem(null)}
-                            >
-                                <div
-                                    className="ambush-popup-card esoteric-item-details-card"
-                                    onClick={(e) => e.stopPropagation()}
-                                >
-                                    <div className="card-corner top-left" />
-                                    <div className="card-corner top-right" />
-                                    <div className="card-corner bottom-left" />
-                                    <div className="card-corner bottom-right" />
-
-                                    <button
-                                        className="esoteric-item-close-btn"
-                                        onClick={() => setInspectedItem(null)}
-                                        aria-label="Close"
-                                        title="Close (Esc)"
-                                    >
-                                        ×
-                                    </button>
-
-                                    <div className="ambush-eyebrow">
-                                        <span className="glyph">◆</span> ITEM SPECIFICATION <span className="glyph">◆</span>
-                                    </div>
-
-                                    <h2 className="ambush-title" style={{ fontSize: '20px', letterSpacing: '2px' }}>
-                                        {inspectedItem.name}
-                                    </h2>
-
-                                    <div className="ambush-divider">
-                                        <span className="divider-line" />
-                                        <span className="divider-glyph">❖</span>
-                                        <span className="divider-line" />
-                                    </div>
-
-                                    <div className="ambush-portrait-frame">
-                                        {largeImgSrc ? (
-                                            <img
-                                                src={largeImgSrc}
-                                                alt={inspectedItem.name}
-                                                className="ambush-portrait item-large-icon"
-                                            />
-                                        ) : (
-                                            <div style={{
-                                                width: 64,
-                                                height: 64,
-                                                backgroundColor: '#241916',
-                                                borderRadius: 6,
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                color: '#ffd700',
-                                                fontSize: '24px'
-                                            }}>
-                                                ◆
-                                            </div>
-                                        )}
-                                        <div className="ambush-badge">
-                                            <span className="badge-glyph">❖</span> {itemTier.toUpperCase()} • {itemType.toUpperCase()} <span className="badge-glyph">❖</span>
-                                        </div>
-                                    </div>
-
-                                    {inspectedItem.description && (
-                                        <p className="ambush-subtitle" style={{ fontSize: '13px', fontStyle: 'italic', marginBottom: '14px' }}>
-                                            {inspectedItem.description}
-                                        </p>
-                                    )}
-
-                                    <div className="ambush-stats-grid">
-                                        <div className="ambush-stat-item stat-type">
-                                            <span className="stat-label">CLASS</span>
-                                            <span className="stat-value">{itemSubtype ? `${itemType} / ${itemSubtype}` : itemType}</span>
-                                        </div>
-                                        <div className="ambush-stat-item stat-tier">
-                                            <span className="stat-label">TIER</span>
-                                            <span className="stat-value">{itemTier}</span>
-                                        </div>
-                                        {atkDmg != null && (
-                                            <div className="ambush-stat-item stat-atk">
-                                                <span className="stat-label">DAMAGE</span>
-                                                <span className="stat-value">+{atkDmg}</span>
-                                            </div>
-                                        )}
-                                        {defArm != null && (
-                                            <div className="ambush-stat-item stat-def">
-                                                <span className="stat-label">ARMOR</span>
-                                                <span className="stat-value">+{defArm}</span>
-                                            </div>
-                                        )}
-                                        {rangeVal != null && (
-                                            <div className="ambush-stat-item stat-range">
-                                                <span className="stat-label">RANGE</span>
-                                                <span className="stat-value">{rangeVal}</span>
-                                            </div>
-                                        )}
-                                        {healVal != null && (
-                                            <div className="ambush-stat-item stat-hp">
-                                                <span className="stat-label">RESTORES</span>
-                                                <span className="stat-value">+{healVal} HP</span>
-                                            </div>
-                                        )}
-                                        {foodVal != null && (
-                                            <div className="ambush-stat-item stat-hp">
-                                                <span className="stat-label">SUPPLY</span>
-                                                <span className="stat-value">+{foodVal} Food</span>
-                                            </div>
-                                        )}
-                                        {inspectedItem.count > 1 && (
-                                            <div className="ambush-stat-item stat-count">
-                                                <span className="stat-label">HELD</span>
-                                                <span className="stat-value">x{inspectedItem.count}</span>
-                                            </div>
-                                        )}
-                                        <div className="ambush-stat-item stat-gold">
-                                            <span className="stat-label">{priceLabel}</span>
-                                            <span className="stat-value">
-                                                <span style={{ color: currencyGlyph === '✦' ? '#b388ff' : '#ffd700', marginRight: '4px' }}>{currencyGlyph}</span>
-                                                {displayPrice} {currencyUnit}
-                                            </span>
-                                        </div>
-                                    </div>
-
-                                    <div className="ambush-actions">
-                                        {isStock ? (
-                                            <button
-                                                className="ambush-fight-btn buy-action"
-                                                onClick={() => {
-                                                    handleBuyItem(inspectedItem);
-                                                    setInspectedItem(null);
-                                                }}
-                                            >
-                                                <span>{inspectedItem.isBuyback ? 'Buy Back' : 'Buy Item'}</span>
-                                            </button>
-                                        ) : (
-                                            <button
-                                                className="ambush-fight-btn sell-action"
-                                                onClick={() => {
-                                                    let targetIndex = inspectedItem.originalIndex;
-                                                    const currentInv = inventoryManager?.inventory || [];
-                                                    if (!currentInv[targetIndex] || currentInv[targetIndex].name !== inspectedItem.name) {
-                                                        targetIndex = currentInv.findIndex(it => it && it.name === inspectedItem.name && it.equippedBy == null);
-                                                    }
-                                                    if (targetIndex !== -1 && targetIndex != null) {
-                                                        handleSellItem(inspectedItem, targetIndex);
-                                                    }
-                                                    setInspectedItem(null);
-                                                }}
-                                            >
-                                                <span>Sell Item</span>
-                                            </button>
-                                        )}
-                                        <button
-                                            className="ambush-fight-btn dismiss-action"
-                                            onClick={() => setInspectedItem(null)}
-                                        >
-                                            <span>Dismiss</span>
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        );
-                    })()}
+                    {renderInspectedItemOverlay()}
                 </div>
             )}
 
@@ -1793,6 +1933,256 @@ const ModalInner = ({ modalType, showModal = true, updates, crew, tileSize, hand
                     >
                         {(inventoryManager?.shimmering_dust || 0) >= 5 ? 'Spawn Pygmy Companion (5 Dust)' : 'Insufficient Dust (Needs 5 ✦)'}
                     </button>
+                </div>
+            )}
+
+            {modalType === 'Hex Doctor' && (
+                <div className="hex-doctor-screen vendor-modal-content" style={{
+                    opacity: showContent ? 1 : 0,
+                    transform: showContent ? 'scale(1)' : 'scale(0.98)',
+                    transition: 'opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1), transform 0.6s cubic-bezier(0.16, 1, 0.3, 1)',
+                    pointerEvents: showContent ? 'auto' : 'none',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '16px',
+                    position: 'relative',
+                    zIndex: 2
+                }}>
+                    <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        background: 'linear-gradient(90deg, rgba(88, 28, 135, 0.3) 0%, rgba(59, 7, 100, 0.15) 60%, transparent 100%)',
+                        border: '1px solid rgba(168, 85, 247, 0.3)',
+                        borderRadius: '8px',
+                        padding: '12px 18px'
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                            <div style={{
+                                width: '46px',
+                                height: '46px',
+                                borderRadius: '8px',
+                                overflow: 'hidden',
+                                border: '1px solid #a855f7',
+                                boxShadow: '0 0 12px rgba(168, 85, 247, 0.45)',
+                                background: '#120d1c',
+                                flexShrink: 0
+                            }}>
+                                <img
+                                    src={images.hex_doctor?.default || images.hex_doctor}
+                                    alt="Hex Doctor"
+                                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                />
+                            </div>
+                            <div>
+                                <div style={{ color: '#e9d5ff', fontSize: '14px', fontWeight: 600, letterSpacing: '0.6px' }}>
+                                    The Witch Doctor & Occultist
+                                </div>
+                                <div style={{ color: '#a7a3b3', fontSize: '11px', marginTop: '2px', lineHeight: 1.4 }}>
+                                    A sanctuary of bone runes and smoking censers. Sever persistent curses binding your companions or acquire esoteric fetishes.
+                                </div>
+                            </div>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0, paddingLeft: '12px' }}>
+                            <span style={{ fontSize: '11px', color: '#c084fc', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 600 }}>Purge Fee:</span>
+                            <span style={{ fontSize: '13px', fontWeight: 700, color: '#ffd700', background: 'rgba(0,0,0,0.4)', padding: '4px 10px', borderRadius: '4px', border: '1px solid rgba(255, 215, 0, 0.3)' }}>
+                                <span style={{ color: '#ffd700', marginRight: '4px' }}>◆</span> 50 Gold
+                            </span>
+                        </div>
+                    </div>
+
+                    <div className="vendor-split-container">
+                        {/* Left Panel: Purge Lingering Curses */}
+                        <div className="vendor-panel curse-panel">
+                            <h3 className="panel-title" style={{ color: '#c084fc', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <span>🔮 Purge Lingering Curses</span>
+                                <span style={{ fontSize: '11px', color: '#a7a3b3', fontWeight: 400, textTransform: 'none' }}>
+                                    {(() => {
+                                        const rawCrew = Array.isArray(crew) && crew.length > 0 ? crew : ((getMeta() || {}).crew || []);
+                                        const cursedCount = rawCrew.filter(m => m && (m.curse || (Array.isArray(m.curses) && m.curses.length > 0))).length;
+                                        return `${cursedCount} afflicted companion${cursedCount === 1 ? '' : 's'}`;
+                                    })()}
+                                </span>
+                            </h3>
+                            <div className="item-list scroll-container">
+                                {(() => {
+                                    const rawCrew = Array.isArray(crew) && crew.length > 0 ? crew : ((getMeta() || {}).crew || []);
+                                    const cursedMembers = rawCrew.filter(m => m && (m.curse || (Array.isArray(m.curses) && m.curses.length > 0)));
+
+                                    if (cursedMembers.length === 0) {
+                                        return (
+                                            <div className="empty-message" style={{ padding: '36px 16px', textAlign: 'center' }}>
+                                                <div style={{ fontSize: '26px', marginBottom: '8px', opacity: 0.8 }}>✨</div>
+                                                <div style={{ color: '#d8b4fe', fontWeight: 600, fontSize: '13px', marginBottom: '4px' }}>
+                                                    No Companions Afflicted
+                                                </div>
+                                                <div style={{ color: 'rgba(255, 255, 255, 0.45)', fontSize: '11px', maxWidth: '320px', margin: '0 auto', lineHeight: 1.4 }}>
+                                                    None of your companions currently carry lingering dark curses. The spirits sense no active hexes or banes.
+                                                </div>
+                                            </div>
+                                        );
+                                    }
+
+                                    return cursedMembers.map((member, idx) => {
+                                        const activeCurse = member.curse || (Array.isArray(member.curses) && member.curses[0]);
+                                        const curseIconKey = activeCurse?.icon || activeCurse?.id || 'curse_doll';
+                                        const curseIcon = (curseIconKey && (images[curseIconKey] || images[curseIconKey]?.default)) || images.curse_doll;
+                                        const curseIconSrc = curseIcon?.default || curseIcon;
+
+                                        let memberPortrait = member.portrait || member.image;
+                                        if (memberPortrait && typeof memberPortrait === 'object') {
+                                            memberPortrait = memberPortrait.default || '';
+                                        }
+                                        if (typeof memberPortrait === 'string' && images && images[memberPortrait]) {
+                                            memberPortrait = images[memberPortrait].default || images[memberPortrait];
+                                        }
+
+                                        const canAfford = (inventoryManager?.gold || 0) >= 50;
+
+                                        return (
+                                            <div key={member.id || idx} className="curse-item-card">
+                                                <div style={{ position: 'relative', width: 44, height: 44, flexShrink: 0 }}>
+                                                    {memberPortrait ? (
+                                                        <img
+                                                            src={memberPortrait}
+                                                            alt={member.name}
+                                                            style={{
+                                                                width: '100%',
+                                                                height: '100%',
+                                                                borderRadius: '6px',
+                                                                objectFit: 'cover',
+                                                                border: '1px solid rgba(168, 85, 247, 0.4)'
+                                                            }}
+                                                        />
+                                                    ) : (
+                                                        <div style={{
+                                                            width: '100%',
+                                                            height: '100%',
+                                                            borderRadius: '6px',
+                                                            backgroundColor: '#231535',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            fontSize: '18px',
+                                                            color: '#c084fc'
+                                                        }}>
+                                                            👤
+                                                        </div>
+                                                    )}
+                                                    {curseIconSrc && (
+                                                        <img
+                                                            src={curseIconSrc}
+                                                            alt={activeCurse?.name || 'Curse'}
+                                                            style={{
+                                                                position: 'absolute',
+                                                                bottom: -4,
+                                                                right: -4,
+                                                                width: 20,
+                                                                height: 20,
+                                                                borderRadius: '50%',
+                                                                border: '1px solid #a855f7',
+                                                                backgroundColor: '#0f0a17',
+                                                                boxShadow: '0 0 6px rgba(168, 85, 247, 0.8)'
+                                                            }}
+                                                        />
+                                                    )}
+                                                </div>
+                                                <div className="item-details" style={{ flex: 1, minWidth: 0 }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                        <span style={{ fontWeight: 700, fontSize: '13px', color: '#f5f3ff' }}>{member.name}</span>
+                                                        {member.type && (
+                                                            <span style={{ fontSize: '10px', textTransform: 'capitalize', color: '#a78bfa', background: 'rgba(167, 139, 250, 0.15)', padding: '1px 6px', borderRadius: '4px' }}>
+                                                                {member.type}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <div style={{ color: '#f43f5e', fontSize: '11px', fontWeight: 600, marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                        <span>💀</span> {activeCurse?.name || 'Curse'}
+                                                    </div>
+                                                    <div style={{ color: 'rgba(255, 255, 255, 0.55)', fontSize: '10.5px', marginTop: '1px', lineHeight: 1.3 }}>
+                                                        {activeCurse?.desc || 'Weakened by dark affliction.'}
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    className="sever-btn"
+                                                    disabled={!canAfford}
+                                                    onClick={() => handleSeverCurse(member)}
+                                                    title={canAfford ? `Sever ${activeCurse?.name || 'Curse'} for 50 Gold` : 'Insufficient Gold (Requires 50 Gold)'}
+                                                >
+                                                    <span>Sever Curse</span>
+                                                    <span style={{ fontSize: '10px', color: canAfford ? '#ffd700' : '#888' }}>
+                                                        <span style={{ color: '#ffd700', marginRight: '3px' }}>◆</span> 50
+                                                    </span>
+                                                </button>
+                                            </div>
+                                        );
+                                    });
+                                })()}
+                            </div>
+                        </div>
+
+                        {/* Right Panel: Exotic Wares & Relics */}
+                        <div className="vendor-panel">
+                            <h3 className="panel-title" style={{ color: '#c084fc' }}>
+                                🧿 Exotic Wares & Relics
+                            </h3>
+                            <div className="item-list scroll-container">
+                                {hexDoctorStock.map((item, idx) => {
+                                    const canAfford = (inventoryManager?.gold || 0) >= item.price;
+                                    return (
+                                        <div key={idx} className="item-card">
+                                            <div
+                                                className="merchant-item-icon-btn"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setInspectedItem({ ...item, isStock: true });
+                                                }}
+                                                title={`Inspect ${item.name}`}
+                                                style={{ borderColor: 'rgba(168, 85, 247, 0.4)', background: 'radial-gradient(circle, rgba(58, 28, 90, 0.5) 0%, rgba(15, 12, 22, 0.8) 100%)' }}
+                                            >
+                                                {renderItemIcon(item.icon)}
+                                                <span className="merchant-icon-inspect-cue" style={{ borderColor: '#a855f7', color: '#c084fc' }}>🔍</span>
+                                            </div>
+                                            <div className="item-details">
+                                                <div className="item-name" style={{ color: '#e9d5ff' }}>{item.name}</div>
+                                                <div className="item-description">{item.description || item.type}</div>
+                                            </div>
+                                            <button
+                                                className="buy-btn"
+                                                disabled={!canAfford}
+                                                onClick={() => handleBuyItem(item)}
+                                                style={{
+                                                    borderColor: canAfford ? 'rgba(168, 85, 247, 0.45)' : 'rgba(255,255,255,0.1)',
+                                                    color: canAfford ? '#e9d5ff' : '#666',
+                                                    background: canAfford ? 'rgba(168, 85, 247, 0.12)' : 'rgba(0,0,0,0.2)',
+                                                    cursor: canAfford ? 'pointer' : 'not-allowed'
+                                                }}
+                                            >
+                                                <span>Buy</span>
+                                                <span className="price-tag">
+                                                    <span style={{ color: '#ffd700', marginRight: '4px' }}>◆</span> {item.price}
+                                                </span>
+                                            </button>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Vendor Status Bar */}
+                    <div className="vendor-status-bar">
+                        <div className="wallet-info">
+                            <span>Gold: <strong style={{ color: '#ffd700' }}><span style={{ color: '#ffd700', marginRight: '4px' }}>◆</span>{inventoryManager?.gold || 0}</strong></span>
+                            <span>Dust: <strong style={{ color: '#b388ff' }}><span style={{ color: '#b388ff', marginRight: '4px' }}>✦</span>{inventoryManager?.shimmering_dust || 0}</strong></span>
+                            <span>Totems: <strong style={{ color: '#4db8ff' }}>{(images.totem || images.totems) ? <img src={images.totem?.default || images.totem || images.totems?.default || images.totems} alt="totem" style={{ width: '14px', height: '14px', verticalAlign: '-2px', objectFit: 'contain', marginRight: '3px' }} /> : <span style={{ color: '#4db8ff', marginRight: '3px' }}>⬡</span>} {inventoryManager?.totems || 0}</strong></span>
+                        </div>
+                        {feedbackMsg && (
+                            <div className="feedback-message" style={{ color: feedbackColor }}>{feedbackMsg}</div>
+                        )}
+                    </div>
+
+                    {renderInspectedItemOverlay()}
                 </div>
             )}
 
@@ -5751,6 +6141,9 @@ class DungeonPage extends React.Component {
         this.props.boardManager.establishAddTreasureToInventoryCallback(this.addTreasureToInventory)
         this.props.boardManager.establishAddCurrencyToInventoryCallback(this.addCurrencyToInventory)
         this.props.boardManager.establishAddFoodToSuppliesCallback(this.addFoodToSupplies)
+        if (typeof this.props.boardManager.establishAddScrapToInventoryCallback === 'function') {
+            this.props.boardManager.establishAddScrapToInventoryCallback(this.addScrapToSupplies);
+        }
         this.props.boardManager.establishGetCrewCallback(() => this.props.crewManager?.crew || [])
         if (typeof this.props.boardManager.establishGetBreadcrumbsCallback === 'function') {
             this.props.boardManager.establishGetBreadcrumbsCallback(() => this._breadcrumbs);
@@ -19162,6 +19555,7 @@ class DungeonPage extends React.Component {
 
                         Object.values(entities).forEach(c => {
                             if (!c || (c.hp || 0) <= 0 || c.id === 'player') return;
+                            if (c.type === 'monster' || c.type === 'monsters' || c.isMonster) return;
                             const isAutomaton = c.isAutomaton || c.subtype === 'automaton';
                             const isWorker = c.isWorkerPygmy || c.subtype === 'worker_pygmy';
                             const isPygmy = (c.isPocketPygmy || c.subtype === 'pocket_pygmy' || c.type === 'pygmies' || c.type === 'pygmy' || c.isPygmy || c.isWalker || c.subtype === 'walker') && !isWorker;
@@ -19186,6 +19580,7 @@ class DungeonPage extends React.Component {
                                 if (!t || !t.contains || typeof t.contains !== 'object') return;
                                 const c = t.contains;
                                 if ((c.hp || 0) <= 0 || c.id === 'player' || targetCandidates.some(tc => tc.entityId === c.id)) return;
+                                if (c.type === 'monster' || c.type === 'monsters' || c.isMonster) return;
                                 const gx = (mbIdx % 3) * 15 + (tIdx % 15);
                                 const gy = Math.floor(mbIdx / 3) * 15 + Math.floor(tIdx / 15);
                                 const isAutomaton = c.isAutomaton || c.subtype === 'automaton';
@@ -19341,22 +19736,43 @@ class DungeonPage extends React.Component {
                             }
                         }
                     } else {
-                        // Hostile / Neutral Outpost in pocket dimension shooting at player avatar
+                        // Hostile / Neutral Outpost in pocket dimension shooting at player avatar or player summoned units (like the mech walker)
+                        const pCandidates = [];
                         if (superboardPlayerPos) {
                             const pGx = superboardPlayerPos.gx;
                             const pGy = superboardPlayerPos.gy;
                             const dist = Math.abs(outpost.gx - pGx) + Math.abs(outpost.gy - pGy);
                             if (dist <= 6) {
-                                outpost.tile._lastFiredAt = now;
-                                const outVx = Math.floor(outpost.gx - superboardViewMinX);
-                                const outVy = Math.floor(outpost.gy - superboardViewMinY);
-                                const pVx = Math.floor(pGx - superboardViewMinX);
-                                const pVy = Math.floor(pGy - superboardViewMinY);
-                                const isOutVisible = outVx >= 0 && outVx < 15 && outVy >= 0 && outVy < 15;
-                                const isPVisible = pVx >= 0 && pVx < 15 && pVy >= 0 && pVy < 15;
+                                pCandidates.push({ type: 'player', gx: pGx, gy: pGy, dist });
+                            }
+                        }
+                        const entities = this.state.superboardEntities || {};
+                        Object.values(entities).forEach(c => {
+                            if (!c || (c.hp || 0) <= 0 || c.id === 'player') return;
+                            const isWalker = c.isWalker || c.subtype === 'walker' || c.building === 'walker';
+                            if (isWalker) {
+                                const dist = Math.abs(outpost.gx - c.gx) + Math.abs(outpost.gy - c.gy);
+                                if (dist <= 6) {
+                                    pCandidates.push({ type: 'walker', entity: c, gx: c.gx, gy: c.gy, dist });
+                                }
+                            }
+                        });
 
-                                const targetGx = pGx;
-                                const targetGy = pGy;
+                        if (pCandidates.length > 0) {
+                            pCandidates.sort((a, b) => a.dist - b.dist);
+                            const chosen = pCandidates[0];
+                            outpost.tile._lastFiredAt = now;
+
+                            const outVx = Math.floor(outpost.gx - superboardViewMinX);
+                            const outVy = Math.floor(outpost.gy - superboardViewMinY);
+                            const tVx = Math.floor(chosen.gx - superboardViewMinX);
+                            const tVy = Math.floor(chosen.gy - superboardViewMinY);
+                            const isOutVisible = outVx >= 0 && outVx < 15 && outVy >= 0 && outVy < 15;
+                            const isTgtVisible = tVx >= 0 && tVx < 15 && tVy >= 0 && tVy < 15;
+
+                            if (chosen.type === 'player') {
+                                const targetGx = chosen.gx;
+                                const targetGy = chosen.gy;
                                 const onHitPlayer = () => {
                                     const currentPos = this.state.superboardPlayerPos;
                                     if (!currentPos || Math.round(currentPos.gx) !== Math.round(targetGx) || Math.round(currentPos.gy) !== Math.round(targetGy)) {
@@ -19367,19 +19783,40 @@ class DungeonPage extends React.Component {
                                     this.displayMessage('⚠️ An enemy Outpost fired at your avatar!');
                                 };
 
-                                if (isOutVisible && isPVisible && this.projectileCanvasRef && this.projectileCanvasRef.current) {
+                                if (isOutVisible && isTgtVisible && this.projectileCanvasRef && this.projectileCanvasRef.current) {
                                     const startTileIdx = outVy * 15 + outVx;
-                                    const endTileIdx = pVy * 15 + pVx;
+                                    const endTileIdx = tVy * 15 + tVx;
                                     this.projectileCanvasRef.current.fireProjectile(startTileIdx, endTileIdx, onHitPlayer, 'fireball', { aimedAtPlayer: true });
-                                } else if (isPVisible && this.projectileCanvasRef && this.projectileCanvasRef.current) {
+                                } else if (isTgtVisible && this.projectileCanvasRef && this.projectileCanvasRef.current) {
                                     const tileSize = this.state.tileSize || 40;
                                     const startX = outVx * tileSize + tileSize / 2;
                                     const startY = outVy * tileSize + tileSize / 2;
-                                    const endX = pVx * tileSize + tileSize / 2;
-                                    const endY = pVy * tileSize + tileSize / 2;
+                                    const endX = tVx * tileSize + tileSize / 2;
+                                    const endY = tVy * tileSize + tileSize / 2;
                                     this.projectileCanvasRef.current.fireProjectileCoords(startX, startY, endX, endY, onHitPlayer, 'fireball', { aimedAtPlayer: true });
                                 } else {
                                     onHitPlayer();
+                                }
+                            } else if (chosen.type === 'walker') {
+                                const onHitWalker = () => {
+                                    const dmg = Math.floor(Math.random() * 3) + 2;
+                                    chosen.entity.hp = Math.max(0, (chosen.entity.hp || 30) - dmg);
+                                    this.displayMessage(`⚠️ An enemy Outpost fired at your Walker for ${dmg} damage!`);
+                                    this.updateSuperboardViewport();
+                                };
+                                if (isOutVisible && isTgtVisible && this.projectileCanvasRef && this.projectileCanvasRef.current) {
+                                    const startTileIdx = outVy * 15 + outVx;
+                                    const endTileIdx = tVy * 15 + tVx;
+                                    this.projectileCanvasRef.current.fireProjectile(startTileIdx, endTileIdx, onHitWalker, 'fireball', { isOutpost: true });
+                                } else if (isTgtVisible && this.projectileCanvasRef && this.projectileCanvasRef.current) {
+                                    const tileSize = this.state.tileSize || 40;
+                                    const startX = outVx * tileSize + tileSize / 2;
+                                    const startY = outVy * tileSize + tileSize / 2;
+                                    const endX = tVx * tileSize + tileSize / 2;
+                                    const endY = tVy * tileSize + tileSize / 2;
+                                    this.projectileCanvasRef.current.fireProjectileCoords(startX, startY, endX, endY, onHitWalker, 'fireball', { isOutpost: true });
+                                } else {
+                                    onHitWalker();
                                 }
                             }
                         }
@@ -19409,16 +19846,17 @@ class DungeonPage extends React.Component {
             });
 
             if (outposts.length === 0) return;
-
             outposts.forEach(outpost => {
                 const gData = outpost.generatorData || outpost.contains?.generatorData || {};
                 const now = Date.now();
                 const cooldown = gData.automated ? 2000 : 4000;
                 if (now - (outpost._lastFiredAt || 0) < cooldown) {
+                    console.log('[DEBUG] return on cooldown');
                     return;
                 }
 
                 if (outpost.disabledUntil && Date.now() < outpost.disabledUntil) {
+                    console.log('[DEBUG] return on disabledUntil');
                     return; // A disabled outpost will NOT fire projectiles!
                 }
 
@@ -19426,7 +19864,7 @@ class DungeonPage extends React.Component {
                 const currentUserId = typeof getUserId === 'function' ? getUserId() : null;
                 const meta = typeof getMeta === 'function' ? (getMeta() || {}) : {};
                 const userAffiliation = meta.affiliation;
-                const isFriendly = gData.owned === true || gData.ownerId === currentUserId || outpost.placedBy === 'player' || containsObj?.placedBy === 'player' || containsObj?.isAllied || outpost.affiliation === 'friendly' || containsObj?.affiliation === 'friendly' || outpost.ownedByPlayer === true || (userAffiliation && (outpost.affiliation === userAffiliation || containsObj?.affiliation === userAffiliation || outpost.territory === userAffiliation || containsObj?.territory === userAffiliation));
+                const isFriendly = gData.owned === true || (gData.ownerId && gData.ownerId === currentUserId) || outpost.placedBy === 'player' || containsObj?.placedBy === 'player' || containsObj?.isAllied || outpost.affiliation === 'friendly' || containsObj?.affiliation === 'friendly' || outpost.ownedByPlayer === true || (userAffiliation && (outpost.affiliation === userAffiliation || containsObj?.affiliation === userAffiliation || outpost.territory === userAffiliation || containsObj?.territory === userAffiliation));
 
                 let rawClan = outpost.territory || outpost.contains?.territory;
                 if (!rawClan && bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[outpost.id]) {
@@ -19471,10 +19909,12 @@ class DungeonPage extends React.Component {
                         if (!t || !t.contains) return false;
                         const tType = bm.getContainsType(t.contains);
                         const cObj = typeof t.contains === 'object' ? t.contains : null;
+                        // Towers never fire on monsters
+                        if (tType === 'monster' || tType === 'monsters' || cObj?.type === 'monster') return false;
                         const tAff = (cObj?.affiliation || t.affiliation || cObj?.territory || t.territory || '').toLowerCase();
                         const isAllied = cObj?.isAllied || cObj?.faction === 'player' || cObj?.placedBy === 'player' || tAff === 'friendly' || tAff === 'player' || (userAffiliation && (tAff === userAffiliation || tAff.includes(userAffiliation)));
-                        const isEnemy = tType === 'pygmies' || tType === 'monster' || cObj?.isHostile || cObj?.faction === 'wild' || cObj?.faction === 'hostile';
-                        if (!isEnemy) return false;
+                        const isEnemy = tType === 'pygmies' || cObj?.isHostile || cObj?.faction === 'hostile';
+                        if (!isEnemy || isAllied) return false;
                         if (contiguousTerritory) return contiguousTerritory.has(t.id);
                         const dist = Math.abs(Math.floor(outpost.id / 15) - Math.floor(t.id / 15)) + Math.abs((outpost.id % 15) - (t.id % 15));
                         return dist <= 4;
@@ -19495,59 +19935,89 @@ class DungeonPage extends React.Component {
                     return;
                 }
 
-                // Neutral / Hostile Outposts shoot at unaffiliated units
-                if (clan) {
-                    const isPlayerInTerritory = contiguousTerritory ? contiguousTerritory.has(playerTileIdx) : false;
-                    const isPlayerAffiliated = userAffiliation && (userAffiliation === clan || clan.includes(userAffiliation));
-                    if (isPlayerInTerritory && !isPlayerAffiliated) {
-                        outpost._lastFiredAt = now;
-                        const firedTargetTileIdx = playerTileIdx;
+                // Neutral / Hostile Outposts shoot ONLY at player units (player avatar or player summoned units like the mech walker)
+                // Towers NEVER fire on monsters!
+                const isPlayerAffiliated = userAffiliation && clan && (userAffiliation === clan || clan.includes(userAffiliation));
+                if (isPlayerAffiliated) return;
+
+                const rowO = Math.floor(outpost.id / 15), colO = outpost.id % 15;
+                const playerCandidates = [];
+
+                // 1. Check Player Avatar
+                const isPlayerInTerritory = contiguousTerritory ? contiguousTerritory.has(playerTileIdx) : false;
+                const rowP = Math.floor(playerTileIdx / 15), colP = playerTileIdx % 15;
+                const distP = Math.abs(rowO - rowP) + Math.abs(colO - colP);
+                if (isPlayerInTerritory || (!clan && distP <= 4)) {
+                    playerCandidates.push({
+                        type: 'player',
+                        tileIdx: playerTileIdx,
+                        dist: distP
+                    });
+                }
+
+                // 2. Check Player Summoned Units (e.g. Mech Walker)
+                if (this.state.activeDungeonWalker && this.state.activeDungeonWalker.active && !this.state.activeDungeonWalker.destroyed && (this.state.activeDungeonWalker.hp || 0) > 0) {
+                    const walkerLoc = this.state.activeDungeonWalker.location;
+                    if (Array.isArray(walkerLoc)) {
+                        const [wRow, wCol] = walkerLoc;
+                        const walkerTileIdx = wRow * 15 + wCol;
+                        const distW = Math.abs(rowO - wRow) + Math.abs(colO - wCol);
+                        const isWalkerInTerritory = contiguousTerritory ? contiguousTerritory.has(walkerTileIdx) : false;
+                        if (isWalkerInTerritory || (!clan && distW <= 4)) {
+                            playerCandidates.push({
+                                type: 'walker',
+                                tileIdx: walkerTileIdx,
+                                dist: distW
+                            });
+                        }
+                    }
+                }
+
+                // Also check board tiles for any player summoned units or walker tiles
+                sourceTiles.forEach(t => {
+                    if (!t || !t.contains || t.id === playerTileIdx) return;
+                    const cObj = typeof t.contains === 'object' ? t.contains : null;
+                    const tType = bm.getContainsType(t.contains);
+                    if (tType === 'monster' || tType === 'monsters' || cObj?.type === 'monster') return;
+                    const isWalkerTile = t.building === 'walker' || t.isWalker || cObj?.building === 'walker' || cObj?.isWalker || cObj?.subtype === 'walker';
+                    const isPlayerSummon = isWalkerTile || cObj?.isPlayerSummon || (cObj?.placedBy === 'player' && cObj?.type !== 'building');
+                    if (!isPlayerSummon) return;
+                    const tRow = Math.floor(t.id / 15), tCol = t.id % 15;
+                    const distT = Math.abs(rowO - tRow) + Math.abs(colO - tCol);
+                    const inTerritory = contiguousTerritory ? contiguousTerritory.has(t.id) : false;
+                    if (inTerritory || (!clan && distT <= 4)) {
+                        if (!playerCandidates.some(c => c.tileIdx === t.id)) {
+                            playerCandidates.push({
+                                type: 'walker',
+                                tileIdx: t.id,
+                                dist: distT
+                            });
+                        }
+                    }
+                });
+
+                if (playerCandidates.length > 0) {
+                    // Target closest player unit
+                    playerCandidates.sort((a, b) => a.dist - b.dist);
+                    const target = playerCandidates[0];
+                    outpost._lastFiredAt = now;
+
+                    if (target.type === 'player') {
+                        const firedTargetTileIdx = target.tileIdx;
                         if (this.projectileCanvasRef && this.projectileCanvasRef.current) {
-                            this.projectileCanvasRef.current.fireProjectile(outpost.id, playerTileIdx, () => {
+                            this.projectileCanvasRef.current.fireProjectile(outpost.id, firedTargetTileIdx, () => {
                                 this.handleProjectileHitPlayer(firedTargetTileIdx);
                             }, 'fireball', { aimedAtPlayer: true, isOutpost: true });
                         }
-                        return;
-                    }
-
-                    // Also fire on any non-clan enemy/pygmy units inside territory
-                    const nonClanTargets = sourceTiles.filter(t => {
-                        if (!t || !t.contains) return false;
-                        const cObj = typeof t.contains === 'object' ? t.contains : null;
-                        const tAff = (cObj?.affiliation || t.affiliation || cObj?.territory || t.territory || '').toLowerCase();
-                        if (tAff.includes(clan)) return false;
-                        const tType = bm.getContainsType(t.contains);
-                        const isUnit = tType === 'pygmies' || tType === 'monster' || cObj?.isHostile || cObj?.faction === 'wild';
-                        if (!isUnit) return false;
-                        if (contiguousTerritory) return contiguousTerritory.has(t.id);
-                        return false;
-                    });
-                    if (nonClanTargets.length > 0) {
-                        const targetTile = nonClanTargets[0];
-                        outpost._lastFiredAt = now;
+                    } else if (target.type === 'walker') {
+                        const firedTargetTileIdx = target.tileIdx;
                         if (this.projectileCanvasRef && this.projectileCanvasRef.current) {
-                            this.projectileCanvasRef.current.fireProjectile(outpost.id, targetTile.id, () => {
-                                if (typeof bm.removePygmyTile === 'function' && bm.getContainsType(targetTile.contains) === 'pygmies') {
-                                    bm.removePygmyTile(targetTile.id, () => this.setState({ tiles: [...bm.tiles] }));
-                                }
+                            this.projectileCanvasRef.current.fireProjectile(outpost.id, firedTargetTileIdx, () => {
+                                this.handleProjectileHitWalker(firedTargetTileIdx);
                             }, 'fireball', { isOutpost: true });
                         }
-                        return;
                     }
-                } else {
-                    const rowO = Math.floor(outpost.id / 15), colO = outpost.id % 15;
-                    const rowP = Math.floor(playerTileIdx / 15), colP = playerTileIdx % 15;
-                    const dist = Math.abs(rowO - rowP) + Math.abs(colO - colP);
-                    if (dist > 1) {
-                        return;
-                    }
-                    outpost._lastFiredAt = now;
-                    const firedTargetTileIdx = playerTileIdx;
-                    if (this.projectileCanvasRef && this.projectileCanvasRef.current) {
-                        this.projectileCanvasRef.current.fireProjectile(outpost.id, playerTileIdx, () => {
-                            this.handleProjectileHitPlayer(firedTargetTileIdx);
-                        }, 'fireball', { aimedAtPlayer: true, isOutpost: true });
-                    }
+                    return;
                 }
             });
         } catch (e) {
@@ -20136,6 +20606,53 @@ class DungeonPage extends React.Component {
             }
         } catch (e) {
             console.error('Error handling projectile hit player:', e);
+        }
+    };
+
+    handleProjectileHitWalker = (targetTileIdx) => {
+        try {
+            const dmg = Math.floor(Math.random() * 3) + 2; // 2-4 damage
+            if (this.state.activeDungeonWalker && this.state.activeDungeonWalker.active && !this.state.activeDungeonWalker.destroyed) {
+                const walker = this.state.activeDungeonWalker;
+                const [wRow, wCol] = walker.location || [0, 0];
+                const curTileIdx = wRow * 15 + wCol;
+                if (targetTileIdx !== undefined && targetTileIdx !== null && curTileIdx !== targetTileIdx) {
+                    this.displayMessage('💨 Outpost projectile missed your Combat Walker!');
+                    return;
+                }
+                const newHp = Math.max(0, (walker.hp || 30) - dmg);
+                const isDestroyed = newHp <= 0;
+                const newDmgNum = { id: `dmg_${Date.now()}_${Math.random()}`, value: dmg, isMonster: false, createdAt: Date.now() };
+                this.setState(prev => ({
+                    activeDungeonWalker: prev.activeDungeonWalker ? {
+                        ...prev.activeDungeonWalker,
+                        hp: newHp,
+                        destroyed: isDestroyed,
+                        damageNumbers: [...(prev.activeDungeonWalker.damageNumbers || []), newDmgNum]
+                    } : null
+                }));
+                this.displayMessage(`⚠️ An enemy Outpost fired at your Combat Walker for ${dmg} damage! (HP: ${newHp}/30)`);
+                if (isDestroyed) {
+                    this._dungeonWalkerDestroyTimeout = setTimeout(() => {
+                        this.dismissDungeonWalker(false, 'destroyed');
+                    }, 750);
+                }
+            }
+            const bm = this.props.boardManager;
+            if (bm && bm.tiles && targetTileIdx != null && bm.tiles[targetTileIdx]) {
+                const tile = bm.tiles[targetTileIdx];
+                if (tile.contains && typeof tile.contains === 'object' && (tile.contains.isWalker || tile.contains.subtype === 'walker')) {
+                    const curHp = tile.contains.hp || 30;
+                    tile.contains.hp = Math.max(0, curHp - dmg);
+                    if (tile.contains.hp <= 0) {
+                        tile.contains = null;
+                        tile.image = null;
+                        if (typeof bm.refreshTiles === 'function') bm.refreshTiles();
+                    }
+                }
+            }
+        } catch (e) {
+            console.error('Error handling projectile hit walker:', e);
         }
     };
 
@@ -22272,6 +22789,46 @@ class DungeonPage extends React.Component {
                                         >
                                         </Tile>
                                         {(() => {
+                                            const activeCurse = member && (member.curse || (Array.isArray(member.curses) && member.curses[0]));
+                                            if (!activeCurse) return null;
+                                            const iconKey = activeCurse.icon || activeCurse.id;
+                                            const curseIcon = (iconKey && (images[iconKey] || images[iconKey]?.default)) || images.curse_doll;
+                                            const curseIconSrc = curseIcon?.default || curseIcon;
+                                            return (
+                                                <div
+                                                    className="crew-curse-badge"
+                                                    title={`Afflicted by ${activeCurse.name || 'Curse'}! ${activeCurse.desc || ''}\nVisit the Hex Doctor to purge this curse.`}
+                                                    style={{
+                                                        position: 'absolute',
+                                                        top: '2px',
+                                                        right: '2px',
+                                                        width: '22px',
+                                                        height: '22px',
+                                                        borderRadius: '50%',
+                                                        backgroundColor: '#3b0764',
+                                                        border: '2px solid #a855f7',
+                                                        boxShadow: '0 0 8px rgba(168, 85, 247, 0.95), inset 0 0 4px rgba(168, 85, 247, 0.6)',
+                                                        zIndex: 35,
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        pointerEvents: 'auto',
+                                                        cursor: 'pointer'
+                                                    }}
+                                                >
+                                                    {curseIconSrc ? (
+                                                        <img
+                                                            src={curseIconSrc}
+                                                            alt={activeCurse.name}
+                                                            style={{ width: '14px', height: '14px', objectFit: 'contain' }}
+                                                        />
+                                                    ) : (
+                                                        <span style={{ fontSize: '11px', lineHeight: 1 }}>💀</span>
+                                                    )}
+                                                </div>
+                                            );
+                                        })()}
+                                        {(() => {
                                             const mStr = String(
                                                 member?.type || member?.role || member?.class || member?.image || member?.portrait || member?.name || member?.job || member?.subtype || ''
                                             ).toLowerCase();
@@ -22506,6 +23063,46 @@ class DungeonPage extends React.Component {
                                                     cursor={(isDetached || isDead) ? 'not-allowed' : 'pointer'}
                                                 >
                                                 </Tile>
+                                                {(() => {
+                                                    const activeCurse = member && (member.curse || (Array.isArray(member.curses) && member.curses[0]));
+                                                    if (!activeCurse) return null;
+                                                    const iconKey = activeCurse.icon || activeCurse.id;
+                                                    const curseIcon = (iconKey && (images[iconKey] || images[iconKey]?.default)) || images.curse_doll;
+                                                    const curseIconSrc = curseIcon?.default || curseIcon;
+                                                    return (
+                                                        <div
+                                                            className="crew-curse-badge"
+                                                            title={`Afflicted by ${activeCurse.name || 'Curse'}! ${activeCurse.desc || ''}\nVisit the Hex Doctor to purge this curse.`}
+                                                            style={{
+                                                                position: 'absolute',
+                                                                top: '2px',
+                                                                right: '2px',
+                                                                width: '22px',
+                                                                height: '22px',
+                                                                borderRadius: '50%',
+                                                                backgroundColor: '#3b0764',
+                                                                border: '2px solid #a855f7',
+                                                                boxShadow: '0 0 8px rgba(168, 85, 247, 0.95), inset 0 0 4px rgba(168, 85, 247, 0.6)',
+                                                                zIndex: 35,
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center',
+                                                                pointerEvents: 'auto',
+                                                                cursor: 'pointer'
+                                                            }}
+                                                        >
+                                                            {curseIconSrc ? (
+                                                                <img
+                                                                    src={curseIconSrc}
+                                                                    alt={activeCurse.name}
+                                                                    style={{ width: '14px', height: '14px', objectFit: 'contain' }}
+                                                                />
+                                                            ) : (
+                                                                <span style={{ fontSize: '11px', lineHeight: 1 }}>💀</span>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })()}
                                                 {(() => {
                                                     const mStr = String(
                                                         member?.type || member?.role || member?.class || member?.image || member?.portrait || member?.name || member?.job || member?.subtype || ''
@@ -25900,6 +26497,33 @@ class DungeonPage extends React.Component {
             icon: foodIcon,
             emoji: '🍖',
             name: `+${foodAmount} Food`
+        }, tile);
+    }
+
+    addScrapToSupplies = (tile = null) => {
+        const amount = (tile && tile.contains && typeof tile.contains === 'object' && typeof tile.contains.amount === 'number')
+            ? tile.contains.amount
+            : 1;
+        const meta = getMeta() || {};
+        const prevScrap = getScrap(meta);
+        const total = addScrap(meta, amount);
+        storeMeta(meta);
+        try { updateUserRequest(getUserId(), meta).catch(() => { }); } catch (e) { }
+
+        if (prevScrap >= SCRAP_CAP) {
+            this.displayMessage(`⚙️ You found ${amount} Scrap, but your Scrap is full (${total}/${SCRAP_CAP})!`);
+        } else {
+            this.displayMessage(`⚙️ You found ${amount} Scrap! (${total}/${SCRAP_CAP})`);
+        }
+        this.forceUpdate();
+
+        const scrapIcon = (images && (images.scrap || images.engineer_salvage)) || null;
+        this.triggerLootRadialArc({
+            type: 'currency',
+            id: 'scrap_' + Math.random(),
+            icon: scrapIcon,
+            emoji: '⚙️',
+            name: `+${amount} Scrap`
         }, tile);
     }
     establishAnimationCallback = () => {
@@ -32738,22 +33362,53 @@ class DungeonPage extends React.Component {
 
     activateEngineerSalvage = (member) => {
         const bm = this.props.boardManager;
-        if (!bm || !bm.playerTile || !Array.isArray(bm.tiles)) return;
+        if (!bm || !bm.playerTile) return;
+        const tiles = (Array.isArray(bm.tiles) && bm.tiles.length > 0)
+            ? bm.tiles
+            : (this.state.tiles || bm.currentBoard?.tiles || []);
+        if (!Array.isArray(tiles) || tiles.length === 0) return;
         const facing = this.state.playerFacing;
-        const target = findAdjacentSalvageTarget(bm.tiles, bm.playerTile.location, facing);
+        const boardTiles = bm.currentBoard?.tiles || null;
+        const target = findAdjacentSalvageTarget(tiles, bm.playerTile.location, facing, boardTiles);
         if (!target) {
             this.displayMessage('🔧 Salvage: nothing to dismantle next to you.');
             return;
         }
         salvageTile(target.tile);
-        const boardTile = bm.currentBoard?.tiles?.[target.idx];
+        const boardTile = boardTiles?.[target.idx];
         if (boardTile && boardTile !== target.tile) salvageTile(boardTile);
+        const currentBmTile = bm.tiles?.[target.idx];
+        if (currentBmTile && currentBmTile !== target.tile && currentBmTile !== boardTile) salvageTile(currentBmTile);
+        const stateTile = this.state.tiles?.[target.idx];
+        if (stateTile && stateTile !== target.tile && stateTile !== boardTile && stateTile !== currentBmTile) salvageTile(stateTile);
+        try {
+            if (bm.dungeon && typeof bm.updateDungeon === 'function') {
+                bm.updateDungeon(bm.dungeon);
+            }
+        } catch (e) {}
         const meta = getMeta() || {};
         const gained = computeSalvageYield(member?.stats?.dex);
         const total = addScrap(meta, gained);
         storeMeta(meta);
+        try {
+            if (typeof updateUserRequest === 'function' && typeof getUserId === 'function') {
+                updateUserRequest(getUserId(), meta).catch(() => {});
+            }
+        } catch (e) {}
         if (typeof bm.refreshTiles === 'function') bm.refreshTiles();
-        this.setState({ tiles: [...bm.tiles] });
+        this.setState({ tiles: bm.tiles ? [...bm.tiles] : this.state.tiles });
+        try {
+            const scrapIcon = (images && (images.scrap || images.engineer_salvage)) || null;
+            if (typeof this.triggerLootRadialArc === 'function') {
+                this.triggerLootRadialArc({
+                    type: 'currency',
+                    id: 'scrap_' + Math.random(),
+                    icon: scrapIcon,
+                    emoji: '⚙️',
+                    name: `+${gained} Scrap`
+                }, target.tile);
+            }
+        } catch (e) {}
         this.displayMessage(`🔧 Salvage: +${gained} ⚙️ Scrap (${total}/${SCRAP_CAP}).`);
     }
 
@@ -36627,6 +37282,8 @@ class DungeonPage extends React.Component {
             case 'Merchant':
             case 'Alchemist':
             case 'Dream Den':
+            case 'War Camp':
+            case 'Hex Doctor':
                 this.setState({ showModal: false, keysLocked: false }, () => this._cleanupModalBodyClass())
                 break;
             default: break;
@@ -36696,6 +37353,8 @@ class DungeonPage extends React.Component {
             } catch (e) { }
         } else if (normalized === 'dream_den' || normalized === 'dream den') {
             modalType = 'Dream Den';
+        } else if (normalized === 'hex_doctor' || normalized === 'hex doctor') {
+            modalType = 'Hex Doctor';
         }
 
         const targetTileId = tile?.id !== undefined ? tile.id : (typeof tile === 'number' ? tile : this.state.illuminatedTileId);
@@ -41233,6 +41892,7 @@ class DungeonPage extends React.Component {
             cosmic_locus: { key: 'cosmic_locus', name: 'Cosmic Locus', category: 'arcane', imageKey: 'cosmic_locus', fallbackImageKey: 'cosmic_locus', costs: { stone: 15, slate: 12, dust: 6 }, buildTime: 120, tag: 'ARCANE' },
             infernal_tower: { key: 'infernal_tower', name: 'Infernal Tower', category: 'obscure', imageKey: 'infernal_tower', fallbackImageKey: 'infernal_tower', costs: { wood: 25, stone: 25, slate: 10 }, buildTime: 180, tag: 'OBSCURE' },
             infernal_pit: { key: 'infernal_pit', name: 'Infernal Pit', category: 'obscure', imageKey: 'infernal_pit', fallbackImageKey: 'infernal_pit', costs: { wood: 30, stone: 30, slate: 15 }, buildTime: 220, tag: 'OBSCURE' },
+            hex_doctor: { key: 'hex_doctor', name: 'Hex Doctor', category: 'vendors', imageKey: 'buildable_hex_doctor', fallbackImageKey: 'hex_doctor', costs: { wood: 30, stone: 20, ore: 15, slate: 10 }, buildTime: 120, tag: 'VENDOR' },
         };
     };
 
@@ -43520,7 +44180,7 @@ class DungeonPage extends React.Component {
                         </div>
                     );
                 })()}
-                <CModal className={this.state.modalType === 'PrepComplete' ? 'prep-complete-modal' : this.state.modalType === 'RitualComplete' ? 'ritual-complete-modal' : this.state.modalType === 'Magic' ? 'ritual-encounter-modal' : this.state.modalType === 'FoodComplete' ? 'food-complete-modal' : this.state.modalType === 'Merchant' ? 'merchant-modal' : this.state.modalType === 'Alchemist' ? 'alchemist-modal' : this.state.modalType === 'Dream Den' ? 'dream-den-modal' : this.state.modalType === 'War Camp' ? 'war-camp-modal' : this.state.modalType === 'SharpenBladesDetails' ? 'sharpen-blades-details-modal' : ''} alignment="center" visible={this.state.showModal} onClose={() => this.onUpdateModalClosed()}>
+                <CModal className={this.state.modalType === 'PrepComplete' ? 'prep-complete-modal' : this.state.modalType === 'RitualComplete' ? 'ritual-complete-modal' : this.state.modalType === 'Magic' ? 'ritual-encounter-modal' : this.state.modalType === 'FoodComplete' ? 'food-complete-modal' : this.state.modalType === 'Merchant' ? 'merchant-modal' : this.state.modalType === 'Alchemist' ? 'alchemist-modal' : this.state.modalType === 'Dream Den' ? 'dream-den-modal' : this.state.modalType === 'War Camp' ? 'war-camp-modal' : this.state.modalType === 'SharpenBladesDetails' ? 'sharpen-blades-details-modal' : this.state.modalType === 'Hex Doctor' ? 'hex-doctor-modal' : ''} alignment="center" visible={this.state.showModal} onClose={() => this.onUpdateModalClosed()}>
                     {this.state.modalType === 'Merchant' && (
                         <div className="merchant-modal-bg" style={{
                             position: 'absolute',
@@ -43557,7 +44217,19 @@ class DungeonPage extends React.Component {
                             pointerEvents: 'none'
                         }} />
                     )}
-                    {(this.state.modalType === 'Merchant' || this.state.modalType === 'Alchemist' || this.state.modalType === 'Dream Den' || this.state.modalType === 'War Camp') && (
+                    {this.state.modalType === 'Hex Doctor' && (
+                        <div className="hex-doctor-modal-bg" style={{
+                            position: 'absolute',
+                            top: 0, left: 0, right: 0, bottom: 0,
+                            backgroundImage: `url(${images.hex_doctor_bg?.default || images.hex_doctor_bg})`,
+                            backgroundSize: 'cover',
+                            backgroundPosition: 'center',
+                            opacity: 0.18,
+                            zIndex: 0,
+                            pointerEvents: 'none'
+                        }} />
+                    )}
+                    {(this.state.modalType === 'Merchant' || this.state.modalType === 'Alchemist' || this.state.modalType === 'Dream Den' || this.state.modalType === 'War Camp' || this.state.modalType === 'Hex Doctor') && (
                         <CModalHeader closeButton={false} style={{ position: 'relative', zIndex: 2 }}>
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', position: 'relative', zIndex: 2 }}>
                                 <CModalTitle>{this.state.modalType}</CModalTitle>

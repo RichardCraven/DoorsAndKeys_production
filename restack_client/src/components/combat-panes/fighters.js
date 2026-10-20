@@ -44,6 +44,18 @@ const getActiveEffects = (combatant, combatManager) => {
         list.push({ key: 'polymorphed', icon: images.polymorph, border: '#22c55e' });
     }
 
+    if (liveUnit.curse || (Array.isArray(liveUnit.curses) && liveUnit.curses.length > 0)) {
+        const curse = liveUnit.curse || liveUnit.curses[0];
+        const iconKey = curse.icon || curse.id;
+        const curseIcon = (iconKey && (images[iconKey] || images[iconKey]?.default)) || images.curse_doll;
+        list.push({
+            key: 'curse',
+            icon: curseIcon,
+            border: '#a855f7',
+            title: `Curse: ${curse.name || 'Cursed'} (${curse.desc || 'Persists until lifted by Hex Doctor'})`
+        });
+    }
+
     return list;
 };
 
@@ -248,6 +260,7 @@ export default function FightersCombatGrid(props) {
                                                 <div
                                                     key={eff.key}
                                                     className="effect-icon-active"
+                                                    title={eff.title || eff.key}
                                                     style={{
                                                         width: '20px',
                                                         height: '20px',
@@ -302,6 +315,7 @@ export default function FightersCombatGrid(props) {
                                                 details?.dispelPulse ? 'dispel-pulse' : '',
                                                 details?.bleed ? 'bleeding' : '',
                                                 details?.frozen ? 'frozen' : '',
+                                                getLiveCombatant(fighter.id)?.curse ? 'cursed-portrait' : '',
                                                 // ── Redux AI visual states ───────────────────────
                                                 getLiveCombatant(fighter.id)?.astralBeingActive ? 'astral-being' : '',
                                                 getLiveCombatant(fighter.id)?.astralProjectionActive ? 'astral-projection-active' : '',
